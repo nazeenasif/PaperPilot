@@ -90,6 +90,9 @@ FRONT_MATTER = "Front Matter"
 # Blocks shorter than this (page numbers, running headers) are dropped unless a heading.
 MIN_BLOCK_CHARS = 25
 MAX_HEADING_WORDS = 8
+# Metadata titles that say nothing about the paper.
+_GENERIC_TITLE = re.compile(r"^(?:untitled|microsoft word\b.*|.*\.(?:pdf|dvi|docx?|tex))$", re.IGNORECASE)
+MIN_TITLE_WORDS, MAX_TITLE_WORDS = 4, 30
 # A numbered heading may skip at most one missed heading (e.g. 3 then 5).
 MAX_NUMBER_STEP = 2
 
@@ -163,6 +166,22 @@ def build_sections(blocks: list[Block]) -> list[Section]:
     if current:
         sections.append(Section(name, current))
     return sections
+
+
+def choose_title(meta_title: str | None, page1_blocks: list[str], file_stem: str) -> str:
+    """Pick a title: PDF metadata, else the first title-like block on page 1, else the file stem."""
+    meta = (meta_title or "").strip()
+    if len(meta) > 3 and not _GENERIC_TITLE.match(meta):
+        return meta
+    for text in page1_blocks:
+        text = clean(text)
+        if (
+            MIN_TITLE_WORDS <= len(text.split()) <= MAX_TITLE_WORDS
+            and not text.lower().startswith("arxiv")
+            and "@" not in text
+        ):
+            return text
+    return file_stem
 
 
 def order_blocks(blocks: Sequence[tuple], page_width: float) -> list[tuple]:

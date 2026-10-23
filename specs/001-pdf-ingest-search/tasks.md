@@ -149,7 +149,7 @@ longer returns it.
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T045 Run `pytest` and every command in `specs/001-pdf-ingest-search/quickstart.md` on a fresh `LIBRARY_DIR` with the 5 test papers; fix any drift in `specs/001-pdf-ingest-search/quickstart.md` and record timings in the PHR
+- [X] T045 Run `pytest` and every command in `specs/001-pdf-ingest-search/quickstart.md` on a fresh `LIBRARY_DIR` with the 5 test papers; fix any drift in `specs/001-pdf-ingest-search/quickstart.md` and record timings in the PHR
 - [ ] T046 Pin exact versions of the direct dependencies in `requirements.txt` (`==` from `pip freeze`) and write `docs/known-limitations.md` covering: regex heading detection (missed unnumbered non-standard headings, occasional false numbered headings), heuristic titles, messy equations/tables, scanned PDFs (no OCR), two-column band heuristic (three-column or sidebar layouts, narrow figures inside one column), heading sequence guard can skip a heading after a gap larger than 2, hyphenated compounds at line ends, appendices after References excluded, revised paper versions get a new ID, hard crash during write may leave a partial paper (delete and re-add), score band is a guide not a threshold (FR-020, SC-009)
 
 ---

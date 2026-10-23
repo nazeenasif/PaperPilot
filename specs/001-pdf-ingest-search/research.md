@@ -204,3 +204,8 @@ decision given in the `/sp.plan` input because the input as written would break 
 - **Finding**: `docs/paperpilot-guide.pdf` is not present locally, so this plan could not be
   checked against it. Decisions above come from the `/sp.plan` input and the spec. Place the
   guide in `docs/` (`*.pdf` is gitignored) before `/sp.tasks` if a cross-check is wanted.
+
+## Open items
+
+- If evaluation shows retrieval failures caused by table/figure text in prose passages,
+  implement line-level block splitting.

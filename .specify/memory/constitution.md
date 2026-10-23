@@ -1,55 +1,146 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: 1.0.0 → 1.1.0 (MINOR: Principle II module list materially expanded)
+- Modified principles:
+  - II. Modular Package with a Single LLM Boundary: added `errors` (shared exception
+    hierarchy) and `library` (paper-library operations); `service` now explicitly calls
+    `library`. LLM boundary unchanged.
+- Added sections: none
+- Removed sections: none
+- Templates requiring updates:
+  - ✅ .specify/templates/plan-template.md (no module names referenced; no change)
+  - ✅ .specify/templates/spec-template.md (no change)
+  - ✅ .specify/templates/tasks-template.md (no module names referenced; no change)
+  - ✅ .claude/commands/*.md (no module names referenced; no change)
+  - ✅ specs/001-pdf-ingest-search/plan.md (Constitution Check and Complexity Tracking
+       updated: `library`/`errors` no longer deviations)
+- Follow-up TODOs (carried from 1.0.0):
+  - docs/paperpilot-guide.pdf is referenced but not present locally; keep it untracked.
+  - .gitignore does not exist yet; created by Feature 1 (see Principle VI).
+  - The exact "not found" fallback string is to be taken from the guide and defined once
+    in prompts.py.
+-->
+
+# PaperPilot Constitution
+
+PaperPilot is an AI research-paper assistant built with Retrieval-Augmented Generation (RAG),
+implemented by following `docs/paperpilot-guide.pdf`.
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Plain, Typed Python
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+- Code MUST target Python 3.12.
+- Code MUST be plain Python; LangChain (and similar orchestration frameworks) MUST NOT be used.
+- Every public function MUST have type hints and a short docstring.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+Rationale: plain code keeps every RAG step visible, debuggable, and explainable.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Modular Package with a Single LLM Boundary
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+- The package MUST be split into these modules: `config`, `errors`, `ingest`, `store`,
+  `library`, `prompts`, `llm`, `service`.
+- Each module has one responsibility: `config` loads settings; `errors` defines the shared
+  exception hierarchy; `ingest` reads and chunks papers; `store` embeds and queries the vector
+  store; `library` holds paper-library operations (add, search, list, delete); `prompts` builds
+  prompts; `llm` calls the model; `service` orchestrates the answer flow and calls `library`.
+- Only `llm.py` MAY talk to an LLM. No other module may import an LLM SDK or make LLM calls.
 
-### [PRINCIPLE_6_NAME]
+Rationale: a single boundary makes the provider swappable and the rest of the code testable
+without network access.
 
+### III. Swappable Free-Tier LLM Provider
 
-[PRINCIPLE__DESCRIPTION]
+- The LLM MUST be a free-tier provider (Gemini or Groq).
+- Provider and model MUST be selected via the `LLM_PROVIDER` and `LLM_MODEL` environment
+  variables, read through `config`.
+- Switching provider or model MUST require no code changes outside `llm.py` (and none at all
+  when the provider is already supported).
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Rationale: free tiers change; the project must survive a provider swap with a config edit.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. Local Embeddings, Persistent Vector Store
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- Embeddings MUST be computed locally with `BAAI/bge-small-en-v1.5`.
+- Vectors MUST be stored in a persistent ChromaDB collection on disk.
+- Re-running the app MUST NOT require re-embedding already ingested papers.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+Rationale: local embeddings cost nothing and avoid sending paper text to a third party for
+indexing; persistence keeps startup fast.
+
+### V. Grounded Answers Only (NON-NEGOTIABLE)
+
+- Every answer MUST be built only from retrieved chunks and MUST cite them with numbered
+  citations (e.g. `[1]`, `[2]`) that map to specific retrieved sources.
+- Citations in the model output MUST be validated: any citation number that does not
+  correspond to a retrieved chunk makes the answer invalid.
+- When the context does not support an answer (or validation fails), the system MUST return
+  the exact "not found" fallback message, defined once as a constant in `prompts`.
+- The system MUST NOT invent facts, sources, or citations.
+
+Rationale: a research assistant is only useful if every claim can be traced to the paper.
+
+### VI. Secrets and Data Hygiene
+
+- Secrets (API keys) MUST come only from a `.env` file loaded by `config`; they MUST NOT be
+  hard-coded or logged.
+- `.env` MUST be gitignored; an `.env.example` with placeholder values SHOULD be committed.
+- PDFs, API keys, and the local ChromaDB data directory MUST NOT be committed.
+
+Rationale: keys leak through history; papers may be copyrighted and are large binaries.
+
+### VII. Testable Checkpoints and Measured Quality
+
+- Every feature MUST end with a testable checkpoint: a command or script whose output proves
+  the feature works.
+- Pure logic (chunking, prompt building, citation parsing/validation, config parsing) MUST have
+  pytest tests that run offline without an LLM or network.
+- Answer quality MUST be measured with an eval harness (a fixed question set scored for
+  groundedness, citation validity, and correct "not found" behavior); changes to prompts,
+  retrieval, or models SHOULD be compared against the previous eval run.
+
+Rationale: RAG regressions are silent; tests catch logic bugs and evals catch quality drift.
+
+### VIII. Simplicity and Small Commits
+
+- Prefer the simplest solution that can be explained in a few sentences over clever ones.
+- New dependencies or abstractions MUST be justified by a current need, not a future one.
+- Commits MUST be small and meaningful: one logical change per commit with a descriptive
+  message.
+
+Rationale: the project is a learning-friendly, explainable codebase; small steps keep it so.
+
+## Technology Stack and Constraints
+
+- Language: Python 3.12.
+- LLM: Gemini or Groq free tier, accessed only from `llm.py`.
+- Embeddings: `BAAI/bge-small-en-v1.5`, run locally.
+- Vector store: ChromaDB, persistent mode.
+- Testing: pytest for unit tests; a project eval harness for answer quality.
+- Configuration: environment variables via `.env` (`LLM_PROVIDER`, `LLM_MODEL`, provider
+  API key).
+- Excluded: LangChain and comparable RAG frameworks; hosted embedding APIs; paid LLM tiers.
+
+## Development Workflow and Quality Gates
+
+- Work follows Spec-Driven Development: spec → plan → tasks → implement, guided by
+  `docs/paperpilot-guide.pdf`.
+- A feature is done only when:
+  - its testable checkpoint passes;
+  - `pytest` passes;
+  - the eval harness has been run if the feature affects retrieval, prompts, or the LLM;
+  - no secrets, PDFs, or vector-store data are staged.
+- Each plan's Constitution Check MUST verify Principles I–VIII; any violation MUST be recorded
+  in the plan's Complexity Tracking table with a justification.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- This constitution supersedes other project practices; where guidance conflicts, it wins.
+- Amendments are made through `/sp.constitution`, MUST include a Sync Impact Report, and MUST
+  propagate changes to dependent templates in the same commit.
+- Versioning follows semantic versioning: MAJOR for removed or redefined principles; MINOR for
+  added principles or materially expanded guidance; PATCH for clarifications and wording.
+- Every plan and code review MUST check compliance with these principles.
+- Runtime agent guidance lives in `CLAUDE.md`.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.1.0 | **Ratified**: 2026-10-23 | **Last Amended**: 2026-10-23

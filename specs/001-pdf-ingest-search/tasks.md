@@ -103,7 +103,7 @@ unchanged.
 
 - [X] T032 [US2] Add failing tests to `tests/test_library.py`: second `add_paper` of the same file returns `already_present=True` with the same `paper_id` and passage count, and the collection count is unchanged; a byte-identical copy under another file name is also `already_present=True`
 - [X] T033 [US2] In `paperpilot/library.py`, make `add_paper` compute `paper_id_for(bytes)` first and return `AddResult(already_present=True, ...)` via `store.has_paper()` before parsing or embedding (FR-004); make T032 pass
-- [ ] T034 [US2] Extend `scripts/checkpoint_3_search.py` with a duplicate section: re-add every PDF, print `PASS`/`FAIL` that each returns `already_present=True` and the total passage count is unchanged — **Checkpoint 3, US2 part** (SC-007)
+- [X] T034 [US2] Extend `scripts/checkpoint_3_search.py` with a duplicate section: re-add every PDF, print `PASS`/`FAIL` that each returns `already_present=True` and the total passage count is unchanged — **Checkpoint 3, US2 part** (SC-007)
 
 ---
 

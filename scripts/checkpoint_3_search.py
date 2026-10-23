@@ -64,9 +64,25 @@ def main() -> int:
         print(f"      section: {r.section}, page {r.page}")
         print(f"      {r.text[:PREVIEW_CHARS]}...")
 
+    print("\nRe-adding papers (duplicate check):")
+    count_before = store.get_collection().count()
+    all_already_present = True
+    for path in papers:
+        try:
+            again = add_paper(path)
+        except PaperPilotError as error:
+            print(f"  FAIL {path.name}: {error}")
+            all_already_present = False
+            continue
+        print(f"  {path.name}: already_present={again.already_present}, {again.passage_count} passages")
+        all_already_present = all_already_present and again.already_present
+    count_after = store.get_collection().count()
+
     scores = [r.score for r in results]
     print()
     checks = [
+        (all_already_present, "every re-added paper is reported as already present (SC-007)"),
+        (count_after == count_before, f"total passages unchanged by re-adding ({count_before} -> {count_after})"),
         (0 < len(results) <= settings.top_k, f"1 to {settings.top_k} results (got {len(results)})"),
         (scores == sorted(scores, reverse=True), "scores in descending order"),
         (all(0.0 <= s <= 1.0 for s in scores), "all scores between 0 and 1"),

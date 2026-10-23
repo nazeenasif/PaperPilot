@@ -7,7 +7,7 @@ decision given in the `/sp.plan` input because the input as written would break 
 
 ## R1. PDF text extraction
 
-- **Decision**: PyMuPDF (`import fitz`), `page.get_text("blocks", sort=True)`, keep only text
+- **Decision**: PyMuPDF (`import pymupdf`; the old `fitz` name is deprecated in PyMuPDF 2.0), `page.get_text("blocks", sort=True)`, keep only text
   blocks (block type 0).
 - **Rationale**: Fast, pure-wheel install on Windows, returns block bounding boxes needed for
   column ordering and page numbers.

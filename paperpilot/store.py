@@ -98,6 +98,11 @@ def has_paper(paper_id: str) -> bool:
     return bool(get_collection().get(where={"paper_id": paper_id}, limit=1)["ids"])
 
 
+def paper_metadata(paper_id: str) -> list[dict]:
+    """Return the metadata of every stored passage of a paper (empty if not stored)."""
+    return get_collection().get(where={"paper_id": paper_id}, include=["metadatas"])["metadatas"]
+
+
 def upsert_passages(
     passages: list[Passage], embeddings: list[list[float]], source_file: str, page_count: int
 ) -> None:

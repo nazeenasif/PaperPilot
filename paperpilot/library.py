@@ -7,7 +7,7 @@ from pathlib import Path
 
 from paperpilot import ingest, store
 from paperpilot.config import load_settings
-from paperpilot.errors import EmptyQueryError, NoTextError, StorageError
+from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,20 @@ class SearchResult:
 def add_paper(path: str | Path) -> AddResult:
     """Parse, chunk, embed and store a PDF; nothing is stored if any step fails.
 
-    Raises PdfReadError, NoTextError or StorageError.
+    A file whose content is already in the library is not processed again: the result has
+    already_present=True (FR-004). Raises PdfReadError, NoTextError or StorageError.
     """
+    path = Path(path)
+    try:
+        paper_id = ingest.paper_id_for(path.read_bytes())
+    except OSError as error:
+        raise PdfReadError(f"Cannot read {path}: {error.strerror or error}") from error
+    stored_metadata = store.paper_metadata(paper_id)
+    if stored_metadata:
+        title = stored_metadata[0]["title"]
+        logger.info("%s is already in the library as %s", path.name, paper_id)
+        return AddResult(paper_id, title, len(stored_metadata), True, {"parse": 0.0, "embed": 0.0, "store": 0.0})
+
     settings = load_settings()
     start = time.perf_counter()
     paper = ingest.parse_pdf(path)

@@ -59,4 +59,4 @@ All user-facing failures raise a subclass of `PaperPilotError` with a readable m
 
 - `load_model() -> float` (loads the model if needed; returns load seconds, 0.0 if already loaded)
 - `embed_passages(texts: list[str]) -> list[list[float]]`, `embed_query(text: str) -> list[float]`
-- `has_paper`, `upsert_passages`, `delete_paper_passages`, `query`, `all_metadata`
+- `has_paper`, `paper_metadata`, `upsert_passages`, `delete_paper_passages`, `query`, `all_metadata`

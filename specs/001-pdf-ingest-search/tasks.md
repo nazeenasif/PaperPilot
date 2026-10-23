@@ -115,7 +115,7 @@ unchanged.
 
 - [X] T035 [US3] Add failing test to `tests/test_library.py`: add a paper, run a search, call `store.reset_cache()` (simulates a restart: new client on the same directory), run the same search, and assert the same passage IDs in the same order and that `has_paper` is still True
 - [X] T036 [US3] In `paperpilot/store.py`, make `get_collection()` create `settings.library_dir` with `parents=True, exist_ok=True` and cache one client per resolved path so `reset_cache()` followed by `get_collection()` reopens the on-disk data; make T035 pass
-- [ ] T037 [US3] Extend `scripts/checkpoint_3_search.py`: after the search, save `{query, passage_ids, scores}` to `data/checkpoint3_last.json`; when run with no `papers_dir` argument, add nothing, rerun the query and print `PASS`/`FAIL` that passage IDs and order match the saved file — **Checkpoint 3, US3 part** (SC-006)
+- [X] T037 [US3] Extend `scripts/checkpoint_3_search.py`: after the search, save `{query, passage_ids, scores}` to `data/checkpoint3_last.json`; when run with no `papers_dir` argument, add nothing, rerun the query and print `PASS`/`FAIL` that passage IDs and order match the saved file — **Checkpoint 3, US3 part** (SC-006)
 
 **Checkpoint (MVP complete)**: US1–US3 pass `pytest` and Checkpoint 3 (both runs).
 

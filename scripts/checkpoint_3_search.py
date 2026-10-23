@@ -1,8 +1,12 @@
-"""Checkpoint 3: add papers and search them by meaning (SC-004, SC-010, SC-011).
+"""Checkpoint 3: add papers and search them by meaning (SC-004, SC-006, SC-007, SC-010, SC-011).
 
-Usage: python scripts/checkpoint_3_search.py <papers_dir>
+With a folder, adds every PDF, searches, checks duplicates and saves the results. Without
+one, adds nothing and checks that the saved search gives the same results (persistence).
+
+Usage: python scripts/checkpoint_3_search.py [papers_dir]
 """
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -20,10 +24,41 @@ MAX_ADD_SECONDS = 60.0  # SC-010, warm model
 MAX_SEARCH_SECONDS = 2.0  # SC-011, warm model
 SCORE_BAND = (0.45, 0.8)  # SC-004 sanity band, not a pass/fail threshold
 PREVIEW_CHARS = 200
+SAVED_RESULTS = Path(__file__).resolve().parents[1] / "data" / "checkpoint3_last.json"
+
+
+def check_persistence() -> int:
+    """Rerun the saved search on the existing library; PASS if the same passages come back in order."""
+    print("Checkpoint 3: persistence (nothing is added)")
+    if not SAVED_RESULTS.is_file():
+        print(f"FAIL: {SAVED_RESULTS} not found; run with a papers folder first")
+        return 1
+    saved = json.loads(SAVED_RESULTS.read_text(encoding="utf-8"))
+    papers = {m["paper_id"] for m in store.all_metadata()}
+    print(f"Library: {load_settings().library_dir}   papers stored: {len(papers)}")
+    print(f"Model load: {store.load_model():.1f} s")
+
+    results = search(saved["query"])
+    ids = [r.passage_id for r in results]
+    query = saved["query"]
+    print(f'\nSearch: "{query}"')
+    print("  rank  saved passage        now passage          saved score  now score")
+    for rank in range(max(len(ids), len(saved["passage_ids"]))):
+        saved_id = saved["passage_ids"][rank] if rank < len(saved["passage_ids"]) else "-"
+        saved_score = f"{saved['scores'][rank]:.3f}" if rank < len(saved["scores"]) else "-"
+        now_id = ids[rank] if rank < len(ids) else "-"
+        now_score = f"{results[rank].score:.3f}" if rank < len(results) else "-"
+        print(f"  #{rank + 1:<4} {saved_id:<20} {now_id:<20} {saved_score:<12} {now_score}")
+
+    passed = ids == saved["passage_ids"]
+    print(f"\n{'PASS' if passed else 'FAIL'}: same passages in the same order after restart (SC-006)")
+    return 0 if passed else 1
 
 
 def main() -> int:
     """Add every PDF, run the evaluation query, print results and PASS/FAIL lines; 0 if all pass."""
+    if len(sys.argv) == 1:
+        return check_persistence()
     if len(sys.argv) != 2:
         print(__doc__.strip().splitlines()[-1])
         return 2
@@ -59,6 +94,11 @@ def main() -> int:
     start = time.perf_counter()
     results = search(QUERY)
     search_seconds = time.perf_counter() - start
+    SAVED_RESULTS.parent.mkdir(parents=True, exist_ok=True)
+    SAVED_RESULTS.write_text(
+        json.dumps({"query": QUERY, "passage_ids": [r.passage_id for r in results], "scores": [r.score for r in results]}),
+        encoding="utf-8",
+    )
     for r in results:
         print(f"\n  #{r.rank}  score {r.score:.3f}  {r.title}")
         print(f"      section: {r.section}, page {r.page}")
@@ -102,6 +142,7 @@ def main() -> int:
     print(f"INFO: top score {top:.3f} is {in_band} the {low}-{high} sanity band (ranking matters more)")
     print(f"\n{'PASS' if all_passed else 'FAIL'}: checkpoint 3 automated checks")
     print("Review the results above: they should be about evaluation data (SC-004).")
+    print(f"Saved results to {SAVED_RESULTS}; run again with no argument to check persistence.")
     return 0 if all_passed else 1
 
 

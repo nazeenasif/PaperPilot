@@ -2,9 +2,18 @@
 
 import bisect
 import hashlib
+import logging
 import re
+import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Sequence
+
+import pymupdf
+
+from paperpilot.errors import NoTextError, PdfReadError
+
+logger = logging.getLogger(__name__)
 
 # A block wider than this fraction of the page is a full-width band divider.
 WIDE_FRACTION = 0.6
@@ -210,3 +219,53 @@ def order_blocks(blocks: Sequence[tuple], page_width: float) -> list[tuple]:
         if index < len(dividers):
             ordered.append(dividers[index])
     return ordered
+
+
+def parse_pdf(path: str | Path) -> ParsedPaper:
+    """Read a PDF into a ParsedPaper with ordered, cleaned sections (References excluded).
+
+    Raises PdfReadError if the file cannot be read or opened as a PDF, and NoTextError if
+    it has no extractable text (for example, a scanned document).
+    """
+    path = Path(path)
+    start = time.perf_counter()
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        raise PdfReadError(f"Cannot read {path}: {error.strerror or error}") from error
+    try:
+        doc = pymupdf.open(stream=data, filetype="pdf")
+    except Exception as error:
+        raise PdfReadError(f"{path.name} is not a readable PDF: {error}") from error
+
+    with doc:
+        if doc.needs_pass:
+            raise PdfReadError(f"{path.name} is password-protected")
+        blocks: list[Block] = []
+        page1_texts: list[str] = []
+        for number, page in enumerate(doc, start=1):
+            # Text blocks only (type 0); image blocks are skipped.
+            raw = [b for b in page.get_text("blocks", sort=True) if b[6] == 0 and b[4].strip()]
+            ordered = order_blocks(raw, page.rect.width)
+            if number == 1:
+                page1_texts = [b[4] for b in ordered]
+            blocks += [Block(b[4], number) for b in ordered]
+        meta_title = (doc.metadata or {}).get("title")
+        page_count = doc.page_count
+
+    if not blocks:
+        raise NoTextError(
+            f"{path.name} has no extractable text; it may be a scanned document (OCR is not supported)"
+        )
+    sections = build_sections(blocks)
+    if not sections:
+        raise NoTextError(f"{path.name} has no usable text before its References section")
+    title = choose_title(meta_title, page1_texts, path.stem)
+    logger.info(
+        "Parsed %s in %.2fs: %d pages, %d sections",
+        path.name,
+        time.perf_counter() - start,
+        page_count,
+        len(sections),
+    )
+    return ParsedPaper(paper_id_for(data), title, path.name, page_count, sections)

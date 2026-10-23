@@ -145,3 +145,21 @@ def test_re_add_skips_parsing_and_embedding(paper, monkeypatch):
     monkeypatch.setattr(ingest, "parse_pdf", fail)
     monkeypatch.setattr(store, "embed_passages", fail)
     assert add_paper(paper).already_present is True
+
+
+# --- US3: the library persists across restarts ---
+
+
+def test_library_survives_reopening_from_disk(paper, library_env):
+    result = add_paper(paper)
+    before = [r.passage_id for r in search("which evaluation dataset was used", k=4)]
+    old_collection = store.get_collection()
+
+    store.reset_cache()  # simulate a restart: a new client on the same folder
+
+    assert store.get_collection() is not old_collection
+    assert (library_env / "chroma.sqlite3").is_file()
+    assert store.has_paper(result.paper_id)
+    after = [r.passage_id for r in search("which evaluation dataset was used", k=4)]
+    assert after == before
+    assert add_paper(paper).already_present is True

@@ -56,6 +56,7 @@ Invalid values raise `SettingsError("CHUNK_OVERLAP=300 must be less than CHUNK_W
 | page | int | metadata | page of first non-overlap word |
 | position | int | metadata | n |
 | word_count | int | metadata | |
+| kind | str | metadata | `"text"` (prose) or `"table"` (table-like block and its caption) |
 | source_file | str | metadata | for listing |
 | page_count | int | metadata | for listing |
 

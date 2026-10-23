@@ -3,6 +3,7 @@
 import bisect
 import hashlib
 import logging
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -59,6 +60,7 @@ class Passage:
     position: int
     word_count: int
     text: str
+    kind: str = "text"  # "text" or "table"
 
 
 @dataclass(frozen=True)
@@ -378,27 +380,86 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
     return ParsedPaper(paper_id_for(data), title, path.name, page_count, sections)
 
 
+# A block is table-like if it has at least this many tokens and more than this fraction of
+# them are numbers or symbols.
+TABLE_MIN_TOKENS = 10
+TABLE_SYMBOL_FRACTION = 0.5
+_TABLE_CAPTION = re.compile(r"^Table\s+\d+\s*[:.]")
+
+
+def is_table_like(text: str) -> bool:
+    """True for a block that is mostly numbers or symbols, such as a flattened table."""
+    tokens = text.split()
+    if len(tokens) < TABLE_MIN_TOKENS:
+        return False
+    symbolic = sum(1 for t in tokens if t[0].isdigit() or not any(c.isalpha() for c in t))
+    return symbolic > TABLE_SYMBOL_FRACTION * len(tokens)
+
+
+def _units(blocks: list[Block]) -> list[tuple[str, list[Block]]]:
+    """Group a section's blocks into ("text", [block]) and ("table", [caption?, table, caption?]).
+
+    A "Table N:" caption directly before a table joins it; otherwise a caption directly
+    after it does (unless that caption belongs to the next table).
+    """
+    tables = [is_table_like(b.text) for b in blocks]
+    captions = [bool(_TABLE_CAPTION.match(b.text)) for b in blocks]
+    units: list[tuple[str, list[Block]]] = []
+    i = 0
+    while i < len(blocks):
+        if captions[i] and i + 1 < len(blocks) and tables[i + 1]:
+            units.append(("table", [blocks[i], blocks[i + 1]]))
+            i += 2
+        elif tables[i]:
+            group = [blocks[i]]
+            i += 1
+            next_is_own_caption = i < len(blocks) and captions[i] and not (i + 1 < len(blocks) and tables[i + 1])
+            if next_is_own_caption:
+                group.append(blocks[i])
+                i += 1
+            units.append(("table", group))
+        else:
+            units.append(("text", [blocks[i]]))
+            i += 1
+    return units
+
+
 def chunk_sections(sections: list[Section], paper_id: str, title: str, settings: Settings) -> list[Passage]:
     """Split sections into passages of about `chunk_words` words (research R8, ADR-0002).
 
     Whole paragraphs are packed up to the budget, which includes the overlap words carried
     from the previous passage of the same section. Only paragraphs longer than the budget
-    are split. A section's final passage with fewer than `min_chunk_words` new words is
-    dropped. Each passage records the page of its first new (non-overlap) word.
+    are split. Prose with fewer than `min_chunk_words` new words is dropped at the end of a
+    section or before a table. Table-like blocks (with their captions) become their own
+    "table" passages, split evenly if longer than the budget; overlap never crosses them.
+    Each passage records the page of its first new (non-overlap) word.
     """
     budget, overlap = settings.chunk_words, settings.chunk_overlap
     passages: list[Passage] = []
 
-    def emit(words: list[str], page: int, section: str) -> list[str]:
+    def emit(words: list[str], page: int, section: str, kind: str = "text") -> list[str]:
         """Store a passage and return the overlap words that start the next one."""
         n = len(passages)
-        passages.append(Passage(f"{paper_id}-{n}", paper_id, title, section, page, n, len(words), " ".join(words)))
+        passages.append(
+            Passage(f"{paper_id}-{n}", paper_id, title, section, page, n, len(words), " ".join(words), kind)
+        )
         return words[len(words) - overlap :] if overlap else []
 
     for section in sections:
         current: list[str] = []
         new_words, first_page = 0, 0
-        for block in section.blocks:
+        for kind, blocks in _units(section.blocks):
+            if kind == "table":
+                if new_words >= settings.min_chunk_words:
+                    emit(current, first_page, section.name)
+                current, new_words = [], 0
+                table_words = [w for b in blocks for w in b.text.split()]
+                pieces = math.ceil(len(table_words) / budget)
+                size = math.ceil(len(table_words) / pieces)
+                for start in range(0, len(table_words), size):
+                    emit(table_words[start : start + size], blocks[0].page, section.name, "table")
+                continue
+            block = blocks[0]
             pending = block.text.split()
             while pending:
                 if len(current) + len(pending) <= budget or (new_words == 0 and len(pending) <= budget):

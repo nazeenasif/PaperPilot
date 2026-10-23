@@ -30,6 +30,15 @@ def preview(text: str) -> str:
     return f"{text[:HEAD_CHARS]} … {text[-TAIL_CHARS:]}"
 
 
+def show(passage: Passage) -> None:
+    """Print one passage with its location for human review."""
+    print(
+        f"\n  [{passage.passage_id}] {passage.kind}, section: {passage.section}, page {passage.page}, "
+        f"{passage.word_count} words"
+    )
+    print(f"  {preview(passage.text)}")
+
+
 def new_word_count(passages: list[Passage], overlap: int) -> int:
     """Count passage words, excluding overlap repeated from the previous passage of a section."""
     total = 0
@@ -81,9 +90,13 @@ def main() -> int:
         body_words = sum(len(b.text.split()) for s in paper.sections for b in s.blocks)
         coverage = new_word_count(passages, settings.chunk_overlap) / body_words
         expected = body_words / (settings.chunk_words - settings.chunk_overlap)
+        text_passages = [p for p in passages if p.kind == "text"]
+        table_passages = [p for p in passages if p.kind == "table"]
+        text_average = sum(p.word_count for p in text_passages) / len(text_passages) if text_passages else 0.0
         print(f"Title: {paper.title}")
         print(
-            f"Passages: {len(passages)}   words: average {average:.0f}, "
+            f"Passages: {len(passages)} ({len(text_passages)} text, {len(table_passages)} table)   "
+            f"words: average {average:.0f} (text only {text_average:.0f}), "
             f"min {min(counts, default=0)}, max {max(counts, default=0)}   body words: {body_words}"
         )
         checks = [
@@ -99,12 +112,14 @@ def main() -> int:
             print(f"{'PASS' if passed else 'FAIL'}: {description}")
             all_passed = all_passed and passed
 
-        for passage in rng.sample(passages, min(SAMPLES, len(passages))):
-            print(
-                f"\n  [{passage.passage_id}] section: {passage.section}, page {passage.page}, "
-                f"{passage.word_count} words"
-            )
-            print(f"  {preview(passage.text)}")
+        print("\n  Text samples (readability review):")
+        for passage in rng.sample(text_passages, min(SAMPLES, len(text_passages))):
+            show(passage)
+        if table_passages:
+            print("\n  Table sample:")
+            show(rng.choice(table_passages))
+        else:
+            print("\n  Table sample: none (no table passages)")
 
     print("\nChunk timings:")
     for name, seconds in timings:

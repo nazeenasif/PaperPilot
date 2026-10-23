@@ -121,8 +121,19 @@ decision given in the `/sp.plan` input because the input as written would break 
   **same section**. A passage that would contain only overlap words is never emitted. A final
   passage under `MIN_CHUNK_WORDS` is dropped. Each passage records the page of its first new
   (non-overlap) word. Passage IDs: `"{paper_id}-{n}"`, n = 0-based order within the paper.
+- **Tables**: a block is table-like when it has at least 10 tokens and more than 50% of its
+  tokens are numbers or symbols (a token starting with a digit or containing no letter).
+  Table-like blocks are not dropped: each becomes its own passage(s) with `kind = "table"`
+  (prose passages have `kind = "text"`). The prose buffer is flushed before the table (with
+  the same minimum-new-words rule as a section end), no overlap is carried into or out of the
+  table, and the prose after it starts fresh. An adjacent "Table N:" caption block joins the
+  table: the caption directly before it, otherwise the one directly after it (unless that
+  caption belongs to the next table). A table longer than `CHUNK_WORDS` is split into equal
+  pieces without overlap.
 - **Rationale**: Paragraph packing keeps passages readable on their own (SC-003); IDs are
-  deterministic, so re-ingesting gives identical IDs.
+  deterministic, so re-ingesting gives identical IDs. At Checkpoint 2 flattened tables made
+  passages unreadable when mixed with prose; isolating them keeps prose readable while table
+  numbers stay searchable and can be told apart by `kind`.
 - **Alternatives**: fixed word windows (cuts mid-sentence); sentence splitting (extra rules
   for abbreviations, equations).
 

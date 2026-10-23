@@ -8,7 +8,7 @@ paragraph of at most CHUNK_WORDS words is never split.
 import pytest
 
 from paperpilot.config import Settings
-from paperpilot.ingest import Block, Section, chunk_sections
+from paperpilot.ingest import Block, Section, chunk_sections, is_table_like
 
 SETTINGS = Settings(chunk_words=20, chunk_overlap=5, min_chunk_words=4)
 PID = "abcdef123456"
@@ -109,3 +109,59 @@ def test_every_passage_respects_size_limits(n):
     if passages:
         # Words can only be lost from a final leftover under the minimum.
         assert len(set(words("x", n)) - covered) < SETTINGS.min_chunk_words
+
+
+# --- Tables (research R8): table-like blocks become their own passages. ---
+
+TABLE_ROW = "90.6±.0 75.9±2.2 90.3±.1 85.4 RoBbase (LoRA) 0.3M 87.5±.3 95.1±.2 89.7±.7 63.4±1.2"
+PROSE_WITH_NUMBERS = "We trained for 3 epochs on 8 GPUs with batch size 32 and learning rate 5e-5 using Adam"
+
+
+def table(n, page=2):
+    return Block(" ".join(f"{i}.{i}" for i in range(n)), page)
+
+
+def test_numeric_table_row_is_table_like():
+    assert is_table_like(TABLE_ROW)
+
+
+def test_prose_with_a_few_numbers_is_not_table_like():
+    assert not is_table_like(PROSE_WITH_NUMBERS)
+
+
+def test_short_numeric_text_is_not_table_like():
+    assert not is_table_like("1 2 3 4 5 6 7 8 9")  # under 10 tokens
+
+
+def test_text_passages_have_kind_text():
+    (passage,) = chunk(Section("Methods", [para("a", 10)]))
+    assert passage.kind == "text"
+
+
+def test_table_between_paragraphs_gives_three_passages_without_crossing_overlap():
+    passages = chunk(Section("Results", [para("a", 8, page=1), table(12, page=2), para("b", 8, page=3)]))
+    assert [p.kind for p in passages] == ["text", "table", "text"]
+    assert [p.text.split() for p in passages] == [words("a", 8), table(12).text.split(), words("b", 8)]
+    assert [p.page for p in passages] == [1, 2, 3]
+
+
+def test_caption_before_table_stays_with_table():
+    caption = Block("Table 2: Results on the test set.", 2)
+    passages = chunk(Section("Results", [para("a", 8), caption, table(12), para("b", 8)]))
+    assert [p.kind for p in passages] == ["text", "table", "text"]
+    assert passages[1].text == caption.text + " " + table(12).text
+    assert "Table" not in passages[0].text
+
+
+def test_caption_after_table_stays_with_table():
+    caption = Block("Table 3: Ablation results.", 2)
+    passages = chunk(Section("Results", [para("a", 8), table(12), caption, para("b", 8)]))
+    assert passages[1].text == table(12).text + " " + caption.text
+    assert "Table" not in passages[2].text
+
+
+def test_large_table_is_split_into_even_table_passages_without_overlap():
+    passages = chunk(Section("Results", [table(45)]))
+    assert [p.kind for p in passages] == ["table", "table", "table"]
+    assert [p.word_count for p in passages] == [15, 15, 15]
+    assert " ".join(p.text for p in passages) == table(45).text

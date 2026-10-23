@@ -208,6 +208,9 @@ no longer returns passages from the deleted paper.
   everything after it from the stored passages.
 - **FR-010**: The system MUST split each section into passages of about the configured size
   with the configured overlap; a passage MUST NOT span two sections.
+- **FR-010a**: Table-like text (at least 10 tokens, more than half of them numbers or symbols)
+  MUST become its own passage(s), marked as a table, together with an adjacent "Table N:"
+  caption; prose passages MUST NOT share text or overlap with a table passage.
 - **FR-011**: The system MUST drop a final leftover passage shorter than the minimum passage
   size.
 - **FR-012**: Each passage MUST record its paper ID, paper title, section name, and the page
@@ -252,7 +255,7 @@ no longer returns passages from the deleted paper.
   title, source file name, page count, passage count.
 - **Passage**: A contiguous piece of a paper's text used for search. Attributes: passage ID,
   paper ID, paper title, section name, starting page, text, word count, position within the
-  paper. Belongs to exactly one paper and exactly one section.
+  paper, kind (text or table). Belongs to exactly one paper and exactly one section.
 - **Search Result**: A passage returned for a query, together with its similarity score
   (0–1) and rank.
 - **Settings**: Configurable values controlling passage size, overlap, minimum passage size,

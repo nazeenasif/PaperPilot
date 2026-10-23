@@ -128,3 +128,56 @@ def test_two_line_sub_heading_does_not_start_a_section():
         ]
     )
     assert names(sections) == ["Background", "Model Architecture"]
+
+
+def test_unnumbered_canonical_word_in_numbered_paper_is_not_a_heading():
+    # "Method" here is a table column header, not a section heading.
+    sections = build_sections(
+        [
+            Block("1\nIntroduction\n", 1),
+            Block(LONG, 1),
+            Block("2\nBackground\n", 1),
+            Block(LONG, 1),
+            Block("3\nOur Method\n", 2),
+            Block(LONG, 2),
+            Block("Method\n" + LONG, 2),
+            Block(LONG, 3),
+        ]
+    )
+    assert names(sections) == ["Introduction", "Background", "Our Method"]
+    assert len(sections[2].blocks) == 3
+
+
+def test_unnumbered_limitations_after_numbered_conclusion_is_a_heading():
+    sections = build_sections(
+        [
+            Block("1\nIntroduction\n", 1),
+            Block(LONG, 1),
+            Block("6\nConclusion\n", 9),
+            Block(LONG, 9),
+            Block("Limitations", 9),
+            Block(LONG, 10),
+        ]
+    )
+    assert names(sections) == ["Introduction", "Conclusion", "Limitations"]
+
+
+def test_unnumbered_abstract_and_references_still_work_in_numbered_paper():
+    sections = build_sections(
+        [
+            Block("Abstract", 1),
+            Block(LONG, 1),
+            Block("1 Introduction", 1),
+            Block(LONG, 1),
+            Block("References", 9),
+            Block("[1] A. Author. A referenced paper title. Venue, 2020.", 9),
+        ]
+    )
+    assert names(sections) == ["Abstract", "Introduction"]
+
+
+def test_unnumbered_paper_keeps_unnumbered_canonical_headings():
+    sections = build_sections(
+        [Block("Introduction", 1), Block(LONG, 1), Block("Method", 2), Block(LONG, 2)]
+    )
+    assert names(sections) == ["Introduction", "Methods"]

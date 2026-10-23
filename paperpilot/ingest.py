@@ -110,6 +110,9 @@ FRONT_MATTER = "Front Matter"
 # Blocks shorter than this (page numbers, running headers) are dropped unless a heading.
 MIN_BLOCK_CHARS = 25
 MAX_HEADING_WORDS = 8
+# In a paper with numbered sections, these are the only unnumbered canonical headings kept
+# (References/Bibliography always stop the paper).
+UNNUMBERED_ALLOWED = {"Abstract", "Limitations"}
 # Metadata titles that say nothing about the paper.
 _GENERIC_TITLE = re.compile(r"^(?:untitled|microsoft word\b.*|.*\.(?:pdf|dvi|docx?|tex))$", re.IGNORECASE)
 MIN_TITLE_WORDS = 3
@@ -175,17 +178,40 @@ def detect_heading(line: str, last_number: int | None) -> Heading | None:
     return Heading(text, "numbered", number)
 
 
+def _has_numbered_headings(blocks: list[Block]) -> bool:
+    """True if any heading before References carries a section number."""
+    for block in blocks:
+        heading = detect_heading(heading_candidate(block.text)[0], None)
+        if heading is not None:
+            if heading.kind == "stop":
+                return False
+            if heading.number is not None:
+                return True
+    return False
+
+
 def build_sections(blocks: list[Block]) -> list[Section]:
     """Group raw blocks into named sections, stopping at References.
 
     A heading is detected on a block's first line and split off from the rest of the
     block. Text before the first heading is "Front Matter"; empty sections are dropped.
+    If the paper numbers its sections, unnumbered canonical words (e.g. a "Method" table
+    header) are not headings, except those in UNNUMBERED_ALLOWED.
     """
+    numbered_paper = _has_numbered_headings(blocks)
     sections: list[Section] = []
     name, current, last_number = FRONT_MATTER, [], None
     for block in blocks:
         first_line, rest = heading_candidate(block.text)
         heading = detect_heading(first_line, last_number)
+        if (
+            heading is not None
+            and numbered_paper
+            and heading.kind == "canonical"
+            and heading.number is None
+            and heading.name not in UNNUMBERED_ALLOWED
+        ):
+            heading = None
         if heading is None:
             body = clean(block.text)
         else:

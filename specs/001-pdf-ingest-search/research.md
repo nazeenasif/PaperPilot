@@ -87,6 +87,10 @@ decision given in the `/sp.plan` input because the input as written would break 
   its paragraph; if so the heading line is split off). A first line that is only a section
   number ("1", "3.", "III.") is joined with the next line first, because PDFs often put the
   number and title on separate lines.
+  - Numbered-paper rule: if any heading before References carries a section number, an
+    unnumbered canonical heading is ignored unless it is Abstract or Limitations (stop
+    headings are unaffected). At Checkpoint 1 a "Method" table column header in LoRA
+    otherwise started a bogus "Methods" section.
   - Canonical regex (one compiled, case-insensitive, anchored, optional leading number like
     `1`, `1.`, `I.`, `A`): Abstract, Introduction, Related Work, Background,
     Method/Methods/Methodology/Approach (→ "Methods"), Experiments, Results, Discussion,

@@ -198,7 +198,10 @@ no longer returns passages from the deleted paper.
   It MUST also detect numbered top-level headings that stand on their own line (e.g.
   "3 Model Architecture", "5. Training") and label them with their own heading text (e.g.
   "Model Architecture"). Numbered sub-headings (e.g. "3.1 Encoder") MUST NOT start a new
-  section. Text before the first detected heading MUST be labelled "Front Matter".
+  section. In a paper that numbers its sections, an unnumbered canonical word (e.g. a
+  "Method" table column header) MUST NOT start a section, except Abstract and Limitations
+  (References/Bibliography always end the paper). Text before the first detected heading
+  MUST be labelled "Front Matter".
 - **FR-009**: The system MUST exclude the References section (also "Bibliography") and
   everything after it from the stored passages.
 - **FR-010**: The system MUST split each section into passages of about the configured size

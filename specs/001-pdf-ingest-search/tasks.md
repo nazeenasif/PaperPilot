@@ -141,7 +141,7 @@ unchanged.
 longer returns it.
 
 - [X] T041 [US5] Add failing tests to `tests/test_library.py`: `list_papers()` returns one `PaperSummary` per paper sorted by title with correct `passage_count`, `source_file`, `page_count`, and `[]` for an empty library; `delete_paper(id)` returns the number of passages removed, the paper disappears from `list_papers()` and from search results; deleting an unknown ID raises `UnknownPaperError` and changes nothing
-- [ ] T042 [US5] In `paperpilot/library.py`, implement `list_papers()` by aggregating `store.all_metadata()` by `paper_id` into `PaperSummary` (FR-017); make the list tests in T041 pass
+- [X] T042 [US5] In `paperpilot/library.py`, implement `list_papers()` by aggregating `store.all_metadata()` by `paper_id` into `PaperSummary` (FR-017); make the list tests in T041 pass
 - [ ] T043 [US5] In `paperpilot/library.py`, implement `delete_paper(paper_id)` using `store.has_paper()` and `store.delete_paper_passages()` (FR-018); make the remaining T041 tests pass
 - [ ] T044 [US5] Extend `scripts/checkpoint_3_search.py` with a library section: print the `list_papers()` table (ID, title, passages); delete one paper, print `PASS`/`FAIL` that it is gone from the list and from a search, then re-add it and check the counts are restored — **Checkpoint 3, US5 part**
 

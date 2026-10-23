@@ -37,6 +37,32 @@ class SearchResult:
     text: str
 
 
+@dataclass(frozen=True)
+class PaperSummary:
+    """One paper in the library, as shown by list_papers()."""
+
+    paper_id: str
+    title: str
+    source_file: str
+    page_count: int
+    passage_count: int
+
+
+def list_papers() -> list[PaperSummary]:
+    """Return one summary per stored paper, sorted by title (FR-017)."""
+    papers: dict[str, dict] = {}
+    counts: dict[str, int] = {}
+    for metadata in store.all_metadata():
+        paper_id = metadata["paper_id"]
+        papers.setdefault(paper_id, metadata)
+        counts[paper_id] = counts.get(paper_id, 0) + 1
+    summaries = [
+        PaperSummary(paper_id, m["title"], m["source_file"], m["page_count"], counts[paper_id])
+        for paper_id, m in papers.items()
+    ]
+    return sorted(summaries, key=lambda p: p.title.lower())
+
+
 def add_paper(path: str | Path) -> AddResult:
     """Parse, chunk, embed and store a PDF; nothing is stored if any step fails.
 

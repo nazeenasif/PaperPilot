@@ -8,7 +8,7 @@ import pytest
 from paperpilot import ingest, store
 from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError, UnknownPaperError
 from paperpilot.ingest import paper_id_for
-from paperpilot.library import add_paper, search
+from paperpilot.library import add_paper, delete_paper, list_papers, search
 
 
 @pytest.fixture
@@ -199,3 +199,38 @@ def test_unknown_paper_in_filter_raises(three_papers):
     with pytest.raises(UnknownPaperError) as error:
         search("research papers", paper_ids=[three_papers[0], "000000000000"])
     assert "000000000000" in str(error.value)
+
+
+# --- US5: list and delete papers ---
+
+
+def test_list_papers_on_empty_library(library_env, fake_embedder):
+    assert list_papers() == []
+
+
+def test_list_papers_sorted_by_title_with_counts(three_papers):
+    papers = list_papers()
+    assert [p.title for p in papers] == sorted(p.title for p in papers)
+    assert {p.paper_id for p in papers} == set(three_papers)
+    for p in papers:
+        stored = store.paper_metadata(p.paper_id)
+        assert p.passage_count == len(stored) > 0
+        assert p.source_file.endswith(".pdf")
+        assert p.page_count >= 1
+
+
+def test_delete_paper_removes_it_everywhere(three_papers):
+    target = three_papers[0]
+    expected = len(store.paper_metadata(target))
+    assert delete_paper(target) == expected
+    assert target not in {p.paper_id for p in list_papers()}
+    assert all(r.paper_id != target for r in search("research papers search", k=50))
+    assert not store.has_paper(target)
+
+
+def test_delete_unknown_paper_raises_and_changes_nothing(three_papers):
+    count = store.get_collection().count()
+    with pytest.raises(UnknownPaperError):
+        delete_paper("000000000000")
+    assert store.get_collection().count() == count
+    assert len(list_papers()) == 3

@@ -32,11 +32,11 @@ Single package at repo root: `paperpilot/`, `scripts/`, `tests/`, `docs/` (see p
 
 **Purpose**: Python 3.12 environment, repo hygiene, dependencies
 
-- [ ] T001 Install Python 3.12 (`winget install Python.Python.3.12`), create the venv with `py -3.12 -m venv .venv`, activate it, and confirm `python --version` prints 3.12.x (creates `.venv/`, untracked)
-- [ ] T002 [P] Create `.gitignore` ignoring `.env`, `.venv/`, `__pycache__/`, `*.pyc`, `.pytest_cache/`, `*.pdf`, `papers/`, `data/` (Principle VI)
-- [ ] T003 [P] Create `requirements.txt` listing `pymupdf`, `chromadb`, `sentence-transformers`, `python-dotenv`, `pytest` (unpinned for now) and run `pip install -r requirements.txt` inside `.venv`
-- [ ] T004 [P] Create `pyproject.toml` with only a `[tool.pytest.ini_options]` section (`testpaths = ["tests"]`, `pythonpath = ["."]`), plus empty `paperpilot/__init__.py`, `scripts/` and `tests/` directories
-- [ ] T005 [P] Create `.env.example` documenting `CHUNK_WORDS=220`, `CHUNK_OVERLAP=40`, `MIN_CHUNK_WORDS=30`, `TOP_K=6`, `LIBRARY_DIR=data/library`, `EMBED_MODEL=BAAI/bge-small-en-v1.5`, one comment line each
+- [X] T001 Install Python 3.12 (`winget install Python.Python.3.12`), create the venv with `py -3.12 -m venv .venv`, activate it, and confirm `python --version` prints 3.12.x (creates `.venv/`, untracked)
+- [X] T002 [P] Create `.gitignore` ignoring `.env`, `.venv/`, `__pycache__/`, `*.pyc`, `.pytest_cache/`, `*.pdf`, `papers/`, `data/` (Principle VI)
+- [X] T003 [P] Create `requirements.txt` listing `pymupdf`, `chromadb`, `sentence-transformers`, `python-dotenv`, `pytest` (unpinned for now) and run `pip install -r requirements.txt` inside `.venv`
+- [X] T004 [P] Create `pyproject.toml` with only a `[tool.pytest.ini_options]` section (`testpaths = ["tests"]`, `pythonpath = ["."]`), plus empty `paperpilot/__init__.py`, `scripts/` and `tests/` directories
+- [X] T005 [P] Create `.env.example` documenting `CHUNK_WORDS=220`, `CHUNK_OVERLAP=40`, `MIN_CHUNK_WORDS=30`, `TOP_K=6`, `LIBRARY_DIR=data/library`, `EMBED_MODEL=BAAI/bge-small-en-v1.5`, one comment line each
 
 ---
 
@@ -44,10 +44,10 @@ Single package at repo root: `paperpilot/`, `scripts/`, `tests/`, `docs/` (see p
 
 **Purpose**: Shared errors and settings used by every story. Ends with Checkpoint 0.
 
-- [ ] T006 [P] Create `paperpilot/errors.py` with `PaperPilotError(Exception)` and subclasses `SettingsError`, `PdfReadError`, `NoTextError`, `UnknownPaperError`, `EmptyQueryError`, `StorageError` (contracts/library-api.md, Errors table)
-- [ ] T007 [P] Write failing tests in `tests/test_settings.py`: defaults when no env vars set (use `monkeypatch.delenv`); env overrides parsed as ints/Path; `SettingsError` whose message contains the variable name and value for a non-integer, zero/negative values, `CHUNK_OVERLAP >= CHUNK_WORDS`, `MIN_CHUNK_WORDS >= CHUNK_WORDS`, empty `EMBED_MODEL`; `Settings` is frozen; `describe()` lists every field
-- [ ] T008 Implement `paperpilot/config.py`: frozen dataclass `Settings` (fields per data-model.md), `load_settings() -> Settings` that calls `dotenv.load_dotenv()` then reads env vars with defaults and validates (raise `SettingsError` naming variable and value), and `Settings.describe() -> str`; make T007 pass
-- [ ] T009 Create `scripts/checkpoint_0_settings.py`: call `load_settings()`, print `describe()`, print `PASS: settings loaded` or `FAIL: <error>` and exit non-zero on failure — **Checkpoint 0** (SC-001)
+- [X] T006 [P] Create `paperpilot/errors.py` with `PaperPilotError(Exception)` and subclasses `SettingsError`, `PdfReadError`, `NoTextError`, `UnknownPaperError`, `EmptyQueryError`, `StorageError` (contracts/library-api.md, Errors table)
+- [X] T007 [P] Write failing tests in `tests/test_settings.py`: defaults when no env vars set (use `monkeypatch.delenv`); env overrides parsed as ints/Path; `SettingsError` whose message contains the variable name and value for a non-integer, zero/negative values, `CHUNK_OVERLAP >= CHUNK_WORDS`, `MIN_CHUNK_WORDS >= CHUNK_WORDS`, empty `EMBED_MODEL`; `Settings` is frozen; `describe()` lists every field
+- [X] T008 Implement `paperpilot/config.py`: frozen dataclass `Settings` (fields per data-model.md), `load_settings() -> Settings` that calls `dotenv.load_dotenv()` then reads env vars with defaults and validates (raise `SettingsError` naming variable and value), and `Settings.describe() -> str`; make T007 pass
+- [X] T009 Create `scripts/checkpoint_0_settings.py`: call `load_settings()`, print `describe()`, print `PASS: settings loaded` or `FAIL: <error>` and exit non-zero on failure — **Checkpoint 0** (SC-001)
 
 **Checkpoint**: `pytest tests/test_settings.py` passes and `python scripts/checkpoint_0_settings.py` prints PASS.
 

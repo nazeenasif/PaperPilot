@@ -20,3 +20,6 @@ handle. The full list is completed in task T046.
   rows, which are mostly words, may also stay with the surrounding prose. On the Checkpoint 2
   samples about 12 of 15 text passages read cleanly; the rest contain such fragments. The
   goal (SC-003) remains 9 of 10.
+- **Figure axis labels can become table passages.** A block of axis ticks such as "5 10 20 30
+  40 50 Number of Retrieved Docs" is mostly numbers, so it is classified as a table passage.
+  This is harmless for search, but these passages are not real tables.

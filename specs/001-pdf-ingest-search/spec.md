@@ -197,7 +197,9 @@ no longer returns passages from the deleted paper.
   and label them with a canonical name (e.g. "Methods" for Method / Methodology / Approach).
   It MUST also detect numbered top-level headings that stand on their own line (e.g.
   "3 Model Architecture", "5. Training") and label them with their own heading text (e.g.
-  "Model Architecture"). Numbered sub-headings (e.g. "3.1 Encoder") MUST NOT start a new
+  "Model Architecture"); an ALL-CAPS label of two or more words is converted to title case
+  (e.g. "PROBLEM STATEMENT" → "Problem Statement"), while a single ALL-CAPS word such as
+  "BERT" is kept. Numbered sub-headings (e.g. "3.1 Encoder") MUST NOT start a new
   section. In a paper that numbers its sections, an unnumbered canonical word (e.g. a
   "Method" table column header) MUST NOT start a section, except Abstract and Limitations
   (References/Bibliography always end the paper). Text before the first detected heading

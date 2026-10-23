@@ -141,3 +141,20 @@ def test_number_on_its_own_line_is_detected_as_numbered_heading():
 def test_sub_heading_on_two_lines_is_still_rejected():
     line, _ = heading_candidate("3.1\nEncoder and Decoder Stacks")
     assert detect_heading(line, 3) is None
+
+
+@pytest.mark.parametrize(
+    ("line", "last_number", "name"),
+    [
+        ("2 PROBLEM STATEMENT", 1, "Problem Statement"),
+        ("3 AREN’T EXISTING SOLUTIONS GOOD ENOUGH?", 2, "Aren’t Existing Solutions Good Enough?"),
+        ("5 UNDERSTANDING THE LOW-RANK UPDATES", 4, "Understanding the Low-Rank Updates"),
+        ("7 CONCLUSION AND FUTURE WORK", 6, "Conclusion and Future Work"),
+        ("3 BERT", 2, "BERT"),  # single-word label: likely an acronym, kept as is
+        ("3 Model Architecture", 2, "Model Architecture"),  # mixed case unchanged
+    ],
+)
+def test_all_caps_numbered_labels_become_title_case(line, last_number, name):
+    heading = detect_heading(line, last_number)
+    assert heading is not None
+    assert heading.name == name

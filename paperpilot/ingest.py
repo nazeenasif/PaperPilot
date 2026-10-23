@@ -110,6 +110,8 @@ FRONT_MATTER = "Front Matter"
 # Blocks shorter than this (page numbers, running headers) are dropped unless a heading.
 MIN_BLOCK_CHARS = 25
 MAX_HEADING_WORDS = 8
+# Words kept lowercase (except first) when converting ALL-CAPS labels to title case.
+_SMALL_WORDS = {"a", "an", "and", "as", "at", "but", "by", "for", "in", "of", "on", "or", "the", "to", "vs", "with"}
 # In a paper with numbered sections, these are the only unnumbered canonical headings kept
 # (References/Bibliography always stop the paper).
 UNNUMBERED_ALLOWED = {"Abstract", "Limitations"}
@@ -154,6 +156,24 @@ def heading_candidate(text: str) -> tuple[str, str]:
     return first, rest.strip()
 
 
+def title_case(label: str) -> str:
+    """Convert an ALL-CAPS label of 2+ words to title case; leave anything else unchanged.
+
+    Single words such as "BERT" are kept, since they are usually acronyms.
+    """
+    words = label.split()
+    if not label.isupper() or sum(any(c.isalpha() for c in w) for w in words) < 2:
+        return label
+    result = []
+    for index, word in enumerate(words):
+        word = word.lower()
+        if index > 0 and word in _SMALL_WORDS:
+            result.append(word)
+        else:
+            result.append("-".join(part[:1].upper() + part[1:] for part in word.split("-")))
+    return " ".join(result)
+
+
 def detect_heading(line: str, last_number: int | None) -> Heading | None:
     """Return the heading on this line, or None.
 
@@ -175,7 +195,7 @@ def detect_heading(line: str, last_number: int | None) -> Heading | None:
         return None
     if not previous < number <= previous + MAX_NUMBER_STEP:
         return None
-    return Heading(text, "numbered", number)
+    return Heading(title_case(text), "numbered", number)
 
 
 def _has_numbered_headings(blocks: list[Block]) -> bool:

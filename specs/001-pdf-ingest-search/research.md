@@ -91,6 +91,9 @@ decision given in the `/sp.plan` input because the input as written would break 
     unnumbered canonical heading is ignored unless it is Abstract or Limitations (stop
     headings are unaffected). At Checkpoint 1 a "Method" table column header in LoRA
     otherwise started a bogus "Methods" section.
+  - Labels: an ALL-CAPS numbered heading of 2+ words is converted to title case (small words
+    such as "and", "of", "the" lowercase after the first word; each part of a hyphenated word
+    capitalised). Single ALL-CAPS words are kept because they are usually acronyms ("BERT").
   - Canonical regex (one compiled, case-insensitive, anchored, optional leading number like
     `1`, `1.`, `I.`, `A`): Abstract, Introduction, Related Work, Background,
     Method/Methods/Methodology/Approach (→ "Methods"), Experiments, Results, Discussion,

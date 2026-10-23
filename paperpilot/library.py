@@ -63,6 +63,18 @@ def list_papers() -> list[PaperSummary]:
     return sorted(summaries, key=lambda p: p.title.lower())
 
 
+def delete_paper(paper_id: str) -> int:
+    """Delete a paper and all its passages; return the number removed (FR-018).
+
+    Raises UnknownPaperError if the paper is not in the library.
+    """
+    if not store.has_paper(paper_id):
+        raise UnknownPaperError(f"Paper {paper_id} is not in the library")
+    removed = store.delete_paper_passages(paper_id)
+    logger.info("Deleted %s: %d passages", paper_id, removed)
+    return removed
+
+
 def add_paper(path: str | Path) -> AddResult:
     """Parse, chunk, embed and store a PDF; nothing is stored if any step fails.
 

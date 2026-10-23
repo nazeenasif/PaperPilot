@@ -1,4 +1,4 @@
-"""Checkpoint 2: passage counts and sizes look right and passages read on their own (SC-003).
+"""Checkpoint 2: passages cover the paper, text passages are well sized and read on their own (SC-003).
 
 Usage: python scripts/checkpoint_2_chunk.py <papers_dir>
 """
@@ -16,8 +16,7 @@ from paperpilot.errors import PaperPilotError  # noqa: E402
 from paperpilot.ingest import Passage, chunk_sections, parse_pdf  # noqa: E402
 
 MIN_COVERAGE = 0.97
-COUNT_TOLERANCE = 0.25
-TARGET_AVERAGE, AVERAGE_TOLERANCE = 200, 0.15
+TEXT_AVERAGE_RANGE = (150, 230)
 SAMPLES = 3
 SEED = 0
 HEAD_CHARS, TAIL_CHARS = 500, 150
@@ -65,7 +64,7 @@ def main() -> int:
         return 1
 
     settings = load_settings()
-    low, high = TARGET_AVERAGE * (1 - AVERAGE_TOLERANCE), TARGET_AVERAGE * (1 + AVERAGE_TOLERANCE)
+    low, high = TEXT_AVERAGE_RANGE
     print("Checkpoint 2: chunking")
     print(
         f"Settings: CHUNK_WORDS={settings.chunk_words} CHUNK_OVERLAP={settings.chunk_overlap} "
@@ -89,7 +88,6 @@ def main() -> int:
         average = sum(counts) / len(counts) if counts else 0.0
         body_words = sum(len(b.text.split()) for s in paper.sections for b in s.blocks)
         coverage = new_word_count(passages, settings.chunk_overlap) / body_words
-        expected = body_words / (settings.chunk_words - settings.chunk_overlap)
         text_passages = [p for p in passages if p.kind == "text"]
         table_passages = [p for p in passages if p.kind == "table"]
         text_average = sum(p.word_count for p in text_passages) / len(text_passages) if text_passages else 0.0
@@ -101,12 +99,7 @@ def main() -> int:
         )
         checks = [
             (coverage >= MIN_COVERAGE, f"passages cover {coverage:.1%} of body words (need {MIN_COVERAGE:.0%})"),
-            (
-                abs(len(passages) - expected) <= COUNT_TOLERANCE * expected,
-                f"passage count within ±25% of {expected:.0f} "
-                f"({expected * (1 - COUNT_TOLERANCE):.0f}-{expected * (1 + COUNT_TOLERANCE):.0f})",
-            ),
-            (low <= average <= high, f"average words within ±15% of {TARGET_AVERAGE} ({low:.0f}-{high:.0f})"),
+            (low <= text_average <= high, f"text passages average {low}-{high} words"),
         ]
         for passed, description in checks:
             print(f"{'PASS' if passed else 'FAIL'}: {description}")

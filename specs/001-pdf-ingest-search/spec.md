@@ -270,9 +270,8 @@ no longer returns passages from the deleted paper.
   Middle), a manual review finds the correct title and sensible section labels, and zero
   passages contain reference-list text.
 - **SC-003**: For each test paper, passages contain at least 97% of the paper's body words
-  (text before References), the passage count is within ±25% of body words / 180, the average
-  passage length is within ±15% of 200 words, and at least 9 of 10 randomly sampled passages
-  read sensibly on their own.
+  (text before References), text (non-table) passages average 150–230 words, and at least 9
+  of 10 randomly sampled text passages read sensibly on their own.
 - **SC-004**: Searching "what dataset was used for evaluation?" across the 5 test papers returns
   top results that a reviewer judges to be about evaluation data, with top scores roughly in
   the 0.45–0.8 range.

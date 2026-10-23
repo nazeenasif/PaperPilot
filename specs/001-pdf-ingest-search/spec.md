@@ -138,8 +138,10 @@ no longer returns passages from the deleted paper.
 ### Edge Cases
 
 - PDF has no title metadata, or the metadata title is empty or generic (e.g. "Untitled",
-  "Microsoft Word - ..."): title falls back to the first suitable text on page 1, then to the
+  "Microsoft Word - ..."): title falls back to the largest-font text on page 1, then to the
   file name.
+- Page 1 has a rotated arXiv stamp in the margin printed larger than the title: the stamp is
+  ignored.
 - Paper has no recognised section headings: all text is labelled "Front Matter".
 - Paper uses a non-standard numbered top-level heading (e.g. "4 Why Self-Attention"): it starts
   a new section labelled "Why Self-Attention".
@@ -181,7 +183,9 @@ no longer returns passages from the deleted paper.
   an add fails partway, any partially stored data for that paper MUST be removed, and a later
   add of the same file MUST ingest it fully.
 - **FR-005**: The system MUST determine the paper title from PDF metadata; if missing or
-  unsuitable, from the first suitable line of text on page 1; otherwise from the file name.
+  unsuitable, from the largest-font text on page 1 (consecutive lines within 0.5 pt of that
+  size joined; rotated text, text starting with "arXiv:", and candidates under 3 words
+  ignored); otherwise from the file name.
 - **FR-006**: The system MUST clean extracted text by joining words hyphenated across line
   breaks and normalising whitespace.
 - **FR-007**: The system MUST read two-column pages in natural reading order (left column then

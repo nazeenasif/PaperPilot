@@ -69,6 +69,15 @@ class Heading:
     number: int | None
 
 
+@dataclass(frozen=True)
+class Span:
+    """A run of same-size text on one PDF line; direction is (1, 0) for horizontal text."""
+
+    size: float
+    text: str
+    direction: tuple[float, float]
+
+
 # Optional heading number: "1", "1.", "III.", "A.".
 _PREFIX = r"(?:(?P<num>\d{1,2})\.?|[IVXLC]{1,6}\.?|[A-Z]\.)\s+"
 _CANONICAL = re.compile(
@@ -103,7 +112,9 @@ MIN_BLOCK_CHARS = 25
 MAX_HEADING_WORDS = 8
 # Metadata titles that say nothing about the paper.
 _GENERIC_TITLE = re.compile(r"^(?:untitled|microsoft word\b.*|.*\.(?:pdf|dvi|docx?|tex))$", re.IGNORECASE)
-MIN_TITLE_WORDS, MAX_TITLE_WORDS = 4, 30
+MIN_TITLE_WORDS = 3
+# Consecutive title lines may differ in font size by at most this many points.
+TITLE_SIZE_TOLERANCE = 0.5
 # A numbered heading may skip at most one missed heading (e.g. 3 then 5).
 MAX_NUMBER_STEP = 2
 
@@ -193,20 +204,51 @@ def build_sections(blocks: list[Block]) -> list[Section]:
     return sections
 
 
-def choose_title(meta_title: str | None, page1_blocks: list[str], file_stem: str) -> str:
-    """Pick a title: PDF metadata, else the first title-like block on page 1, else the file stem."""
+def choose_title(meta_title: str | None, page1_spans: list[Span], file_stem: str) -> str:
+    """Pick a title: PDF metadata, else the largest-font text on page 1, else the file stem.
+
+    Consecutive page-1 lines within 0.5 pt of each other's size are joined. Rotated text,
+    "arXiv:" stamps and candidates under 3 words are ignored.
+    """
     meta = (meta_title or "").strip()
     if len(meta) > 3 and not _GENERIC_TITLE.match(meta):
         return meta
-    for text in page1_blocks:
-        text = clean(text)
-        if (
-            MIN_TITLE_WORDS <= len(text.split()) <= MAX_TITLE_WORDS
-            and not text.lower().startswith("arxiv")
-            and "@" not in text
-        ):
-            return text
+
+    runs: list[tuple[float, list[str]]] = []  # (size of first line, lines)
+    for span in page1_spans:
+        text = span.text.strip()
+        horizontal = span.direction[0] > 0 and abs(span.direction[1]) < 0.01
+        if not text or not horizontal or text.lower().startswith("arxiv:"):
+            continue
+        if runs and abs(span.size - runs[-1][0]) <= TITLE_SIZE_TOLERANCE:
+            runs[-1][1].append(text)
+        else:
+            runs.append((span.size, [text]))
+
+    # Largest first; sorted() is stable, so equal sizes keep page order.
+    for _, lines in sorted(runs, key=lambda run: -run[0]):
+        title = clean(" ".join(lines))
+        if len(title.split()) >= MIN_TITLE_WORDS:
+            return title
     return file_stem
+
+
+def page_spans(page: pymupdf.Page) -> list[Span]:
+    """Return a page's text as Spans: same-size text on one line merged, in content order."""
+    spans: list[Span] = []
+    for block in page.get_text("dict")["blocks"]:
+        if block.get("type") != 0:
+            continue
+        for line in block["lines"]:
+            direction = (float(line["dir"][0]), float(line["dir"][1]))
+            merged: list[list] = []  # [size, text] pairs
+            for span in line["spans"]:
+                if merged and abs(span["size"] - merged[-1][0]) < 0.01:
+                    merged[-1][1] += span["text"]
+                else:
+                    merged.append([span["size"], span["text"]])
+            spans += [Span(round(size, 2), text, direction) for size, text in merged]
+    return spans
 
 
 def order_blocks(blocks: Sequence[tuple], page_width: float) -> list[tuple]:
@@ -258,13 +300,11 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
         if doc.needs_pass:
             raise PdfReadError(f"{path.name} is password-protected")
         blocks: list[Block] = []
-        page1_texts: list[str] = []
+        page1_spans = page_spans(doc[0]) if doc.page_count else []
         for number, page in enumerate(doc, start=1):
             # Text blocks only (type 0); image blocks are skipped.
             raw = [b for b in page.get_text("blocks", sort=True) if b[6] == 0 and b[4].strip()]
             ordered = order_blocks(raw, page.rect.width)
-            if number == 1:
-                page1_texts = [b[4] for b in ordered]
             blocks += [Block(b[4], number) for b in ordered]
         meta_title = (doc.metadata or {}).get("title")
         page_count = doc.page_count
@@ -276,7 +316,7 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
     sections = build_sections(blocks)
     if not sections:
         raise NoTextError(f"{path.name} has no usable text before its References section")
-    title = choose_title(meta_title, page1_texts, path.stem)
+    title = choose_title(meta_title, page1_spans, path.stem)
     logger.info(
         "Parsed %s in %.2fs: %d pages, %d sections",
         path.name,

@@ -64,18 +64,26 @@ decision given in the `/sp.plan` input because the input as written would break 
 
 - **Decision**: (1) PDF metadata `title` if non-empty, longer than 3 characters, and not generic
   (case-insensitive match on "untitled", starts with "microsoft word", ends with ".dvi"/".pdf"/
-  ".doc"); (2) else the first block on page 1 with 4–30 words that does not start with
-  "arXiv" or contain "@" (author emails); (3) else the file name stem.
-- **Rationale**: Implements FR-005 with simple, explainable rules; arXiv PDFs often have empty
-  or junk metadata.
-- **Known limitation**: heuristic; may pick a conference banner or author line.
+  ".doc"); (2) else the largest-font text on page 1, read from PyMuPDF spans
+  (`page.get_text("dict")`): consecutive lines within 0.5 pt of each other's size are joined;
+  non-horizontal spans (e.g. the rotated arXiv stamp), spans starting with "arXiv:", and
+  candidates under 3 words are ignored, falling back to the next-largest text; (3) else the
+  file name stem.
+- **Rationale**: Implements FR-005. All 5 test papers have empty metadata, and a text-only
+  "first suitable block" rule picked a permission notice (Attention), an author line (RAG)
+  and half a title (BERT) at Checkpoint 1. The title is almost always the largest text on
+  page 1, which is simple to explain and needs no per-paper rules.
+- **Alternatives**: more text rules (skip notices, symbols, merge blocks) — brittle and
+  per-paper.
+- **Known limitation**: heuristic; a large banner or logo text of 3+ words would win, and a
+  title line with a different-size part (e.g. a large first letter) may be cut.
 
 ## R7. Heading detection
 
 - **Decision**: Applied to the **first line** of each block (a heading may share a block with
   its paragraph; if so the heading line is split off). A first line that is only a section
-    number ("1", "3.", "III.") is joined with the next line first, because PDFs often put the
-    number and title on separate lines.
+  number ("1", "3.", "III.") is joined with the next line first, because PDFs often put the
+  number and title on separate lines.
   - Canonical regex (one compiled, case-insensitive, anchored, optional leading number like
     `1`, `1.`, `I.`, `A`): Abstract, Introduction, Related Work, Background,
     Method/Methods/Methodology/Approach (→ "Methods"), Experiments, Results, Discussion,

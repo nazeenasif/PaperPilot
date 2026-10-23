@@ -5,7 +5,7 @@ Uses the conftest fixtures: a temporary library, the fake embedder, and generate
 
 import pytest
 
-from paperpilot import store
+from paperpilot import ingest, store
 from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError
 from paperpilot.ingest import paper_id_for
 from paperpilot.library import add_paper, search
@@ -111,3 +111,37 @@ def test_failed_write_is_cleaned_up_and_retry_succeeds(paper, monkeypatch):
     assert result.already_present is False
     assert result.passage_count > 0
     assert store.has_paper(paper_id)
+
+
+# --- US2: adding the same paper twice never duplicates data ---
+
+
+def test_adding_same_file_twice_stores_nothing_new(paper):
+    first = add_paper(paper)
+    count = store.get_collection().count()
+    second = add_paper(paper)
+    assert second.already_present is True
+    assert second.paper_id == first.paper_id
+    assert second.title == first.title
+    assert second.passage_count == first.passage_count
+    assert store.get_collection().count() == count
+
+
+def test_renamed_copy_is_recognised_as_same_paper(paper, tmp_path):
+    first = add_paper(paper)
+    copy = tmp_path / "renamed-copy.pdf"
+    copy.write_bytes(paper.read_bytes())
+    second = add_paper(copy)
+    assert second.already_present is True
+    assert second.paper_id == first.paper_id
+
+
+def test_re_add_skips_parsing_and_embedding(paper, monkeypatch):
+    add_paper(paper)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("should not be called for a paper already in the library")
+
+    monkeypatch.setattr(ingest, "parse_pdf", fail)
+    monkeypatch.setattr(store, "embed_passages", fail)
+    assert add_paper(paper).already_present is True

@@ -69,6 +69,7 @@ def get_collection() -> chromadb.Collection:
     library_dir = load_settings().library_dir.resolve()
     collection = _collections.get(library_dir)
     if collection is None:
+        library_dir.mkdir(parents=True, exist_ok=True)
         client = chromadb.PersistentClient(path=library_dir, settings=ChromaSettings(anonymized_telemetry=False))
         collection = client.get_or_create_collection(COLLECTION, metadata={"hnsw:space": "cosine"})
         _collections[library_dir] = collection

@@ -6,7 +6,7 @@ Uses the conftest fixtures: a temporary library, the fake embedder, and generate
 import pytest
 
 from paperpilot import ingest, store
-from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError
+from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError, UnknownPaperError
 from paperpilot.ingest import paper_id_for
 from paperpilot.library import add_paper, search
 
@@ -163,3 +163,39 @@ def test_library_survives_reopening_from_disk(paper, library_env):
     after = [r.passage_id for r in search("which evaluation dataset was used", k=4)]
     assert after == before
     assert add_paper(paper).already_present is True
+
+
+# --- US4: search within selected papers ---
+
+
+@pytest.fixture
+def three_papers(tmp_path, make_pdf, library_env, fake_embedder):
+    """Three different papers added to an empty temporary library; returns their IDs."""
+    titles = ["A Study of Searching Research Papers by Meaning", "Second Paper on Search", "Third Paper on Search"]
+    return [add_paper(make_pdf(tmp_path / f"p{i}.pdf", title=t)).paper_id for i, t in enumerate(titles)]
+
+
+def test_filter_to_one_paper(three_papers):
+    target = three_papers[1]
+    results = search("research papers search", k=20, paper_ids=[target])
+    assert results
+    assert {r.paper_id for r in results} == {target}
+
+
+def test_filter_to_two_papers(three_papers):
+    targets = three_papers[:2]
+    results = search("research papers search", k=20, paper_ids=targets)
+    assert results
+    assert {r.paper_id for r in results} <= set(targets)
+
+
+def test_empty_filter_searches_whole_library(three_papers):
+    everything = [r.passage_id for r in search("research papers search", k=20)]
+    assert [r.passage_id for r in search("research papers search", k=20, paper_ids=[])] == everything
+    assert len({pid.rsplit("-", 1)[0] for pid in everything}) == 3
+
+
+def test_unknown_paper_in_filter_raises(three_papers):
+    with pytest.raises(UnknownPaperError) as error:
+        search("research papers", paper_ids=[three_papers[0], "000000000000"])
+    assert "000000000000" in str(error.value)

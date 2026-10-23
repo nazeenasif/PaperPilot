@@ -72,7 +72,7 @@ def main() -> int:
     print(f"Library: {settings.library_dir}   TOP_K={settings.top_k}")
     print(f"Model load: {store.load_model():.1f} s (excluded from timing checks)")
 
-    all_passed, add_seconds = True, []
+    all_passed, add_seconds, added = True, [], []  # added: (paper_id, title)
     print("\nAdding papers:")
     for path in papers:
         start = time.perf_counter()
@@ -84,6 +84,7 @@ def main() -> int:
             continue
         seconds = time.perf_counter() - start
         add_seconds.append(seconds)
+        added.append((result.paper_id, result.title))
         t = result.timings
         print(
             f"  {path.name}: {result.title} | {result.passage_count} passages | "
@@ -110,6 +111,16 @@ def main() -> int:
         print(f"      section: {r.section}, page {r.page}")
         print(f"      {r.text[:PREVIEW_CHARS]}...")
 
+    print("\nFiltered search (one paper at a time):")
+    all_filtered_ok = True
+    for paper_id, title in added:
+        filtered = search(QUERY, paper_ids=[paper_id])
+        only_this_paper = bool(filtered) and all(r.paper_id == paper_id for r in filtered)
+        all_filtered_ok = all_filtered_ok and only_this_paper
+        top = filtered[0] if filtered else None
+        top_text = f"top: {top.score:.3f} {top.section}, page {top.page}" if top else "no results"
+        print(f"  {paper_id} {title[:45]}: {len(filtered)} results, all from this paper: {only_this_paper} | {top_text}")
+
     print("\nRe-adding papers (duplicate check):")
     count_before = store.get_collection().count()
     all_already_present = True
@@ -127,6 +138,7 @@ def main() -> int:
     scores = [r.score for r in results]
     print()
     checks = [
+        (all_filtered_ok, "every paper-filtered search returns only that paper (SC-005)"),
         (all_already_present, "every re-added paper is reported as already present (SC-007)"),
         (count_after == count_before, f"total passages unchanged by re-adding ({count_before} -> {count_after})"),
         (0 < len(results) <= settings.top_k, f"1 to {settings.top_k} results (got {len(results)})"),

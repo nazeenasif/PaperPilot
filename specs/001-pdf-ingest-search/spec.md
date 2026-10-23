@@ -276,6 +276,10 @@ no longer returns passages from the deleted paper.
 - **SC-004**: Searching "what dataset was used for evaluation?" across the 5 test papers returns
   top results that a reviewer judges to be about evaluation data, with top scores roughly in
   the 0.45–0.8 range.
+  *Status (2026-10-24): partially met.* At Checkpoint 3 about half of the top 6 were about
+  evaluation data; a 5-query probe gave hit@6 = 3/5 and MRR@6 ≈ 0.30
+  (`eval/probe_notes.md`). Retrieval quality is owned by the evaluation feature, which will
+  measure improvements against this baseline.
 - **SC-005**: 100% of results from a paper-filtered search come from the selected paper(s).
 - **SC-006**: After a restart, 100% of previously added papers are listed and the same query
   returns the same passages in the same order.

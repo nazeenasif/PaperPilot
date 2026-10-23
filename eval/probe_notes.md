@@ -23,9 +23,22 @@ from the same query run with k=60.
 - Scores cluster tightly within a query (e.g. Q2 0.796–0.844), so small embedding
   differences decide the order.
 
-## Ideas to test later (not implemented)
+## Baseline
 
-- Embed passages with a short context header (paper title and section name) so that
-  "BERT … pre-training tasks" matches the "Pre-training BERT" section better.
-- Evaluate k > 6 for the answer step, or rerank the top 20–30 candidates.
-- Track these 5 queries in the eval harness as a regression baseline.
+Configuration: library-wide search, k=6, `BAAI/bge-small-en-v1.5`, chunking 220/40.
+
+| Metric | Value |
+|---|---|
+| hit@6 | 3/5 (one partial: Q1) |
+| MRR@6 | ≈ 0.30 (ranks 2, –, 2, –, 2 → (0.5 + 0 + 0.5 + 0 + 0.5) / 5) |
+
+Five queries are too few for conclusions; treat this as a smoke test, not a benchmark.
+
+## Candidate experiments (for the evaluation feature, in this order)
+
+1. Cross-encoder reranking of the top 20 vector results.
+2. Hybrid search: BM25 keyword scores combined with vector scores.
+3. Paper title and section name prepended to passage text before embedding.
+
+Each should be measured against this baseline on the same queries (extended into the eval
+harness), one change at a time.

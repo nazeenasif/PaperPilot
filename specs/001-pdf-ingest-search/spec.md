@@ -183,9 +183,10 @@ no longer returns passages from the deleted paper.
   an add fails partway, any partially stored data for that paper MUST be removed, and a later
   add of the same file MUST ingest it fully.
 - **FR-005**: The system MUST determine the paper title from PDF metadata; if missing or
-  unsuitable, from the largest-font text on page 1 (consecutive lines within 0.5 pt of that
-  size joined; rotated text, text starting with "arXiv:", and candidates under 3 words
-  ignored); otherwise from the file name.
+  unsuitable, from the largest-font text on page 1 (a line's size is its largest text;
+  consecutive lines within 0.5 pt of that size joined; rotated text, text starting with
+  "arXiv:", candidates under 3 words and candidates containing "@" ignored); otherwise from
+  the file name.
 - **FR-006**: The system MUST clean extracted text by joining words hyphenated across line
   breaks and normalising whitespace.
 - **FR-007**: The system MUST read two-column pages in natural reading order (left column then

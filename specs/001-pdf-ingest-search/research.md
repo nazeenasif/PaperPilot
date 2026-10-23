@@ -64,11 +64,13 @@ decision given in the `/sp.plan` input because the input as written would break 
 
 - **Decision**: (1) PDF metadata `title` if non-empty, longer than 3 characters, and not generic
   (case-insensitive match on "untitled", starts with "microsoft word", ends with ".dvi"/".pdf"/
-  ".doc"); (2) else the largest-font text on page 1, read from PyMuPDF spans
-  (`page.get_text("dict")`): consecutive lines within 0.5 pt of each other's size are joined;
-  non-horizontal spans (e.g. the rotated arXiv stamp), spans starting with "arXiv:", and
-  candidates under 3 words are ignored, falling back to the next-largest text; (3) else the
-  file name stem.
+  ".doc"); (2) else the largest-font text on page 1, read line by line from PyMuPDF
+  (`page.get_text("dict")`). A line's size is the size of its largest span, so small-caps
+  titles (alternating 17.2/13.8 pt letters, as in LoRA) count as one size. Consecutive lines
+  within 0.5 pt of each other's size are joined with newlines, so `clean()` rejoins a word
+  hyphenated across title lines. Non-horizontal lines (e.g. the rotated arXiv stamp), lines
+  starting with "arXiv:", and candidates under 3 words or containing "@" (author lines) are
+  ignored, falling back to the next-largest text; (3) else the file name stem.
 - **Rationale**: Implements FR-005. All 5 test papers have empty metadata, and a text-only
   "first suitable block" rule picked a permission notice (Attention), an author line (RAG)
   and half a title (BERT) at Checkpoint 1. The title is almost always the largest text on
@@ -76,7 +78,8 @@ decision given in the `/sp.plan` input because the input as written would break 
 - **Alternatives**: more text rules (skip notices, symbols, merge blocks) — brittle and
   per-paper.
 - **Known limitation**: heuristic; a large banner or logo text of 3+ words would win, and a
-  title line with a different-size part (e.g. a large first letter) may be cut.
+  title split into lines of clearly different sizes is cut to its largest part; a genuine
+  hyphen at a title line end is dropped (same rule as body text).
 
 ## R7. Heading detection
 

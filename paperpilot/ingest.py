@@ -71,7 +71,7 @@ class Heading:
 
 @dataclass(frozen=True)
 class Span:
-    """A run of same-size text on one PDF line; direction is (1, 0) for horizontal text."""
+    """One PDF line of text, sized by its largest part; direction is (1, 0) for horizontal text."""
 
     size: float
     text: str
@@ -208,7 +208,7 @@ def choose_title(meta_title: str | None, page1_spans: list[Span], file_stem: str
     """Pick a title: PDF metadata, else the largest-font text on page 1, else the file stem.
 
     Consecutive page-1 lines within 0.5 pt of each other's size are joined. Rotated text,
-    "arXiv:" stamps and candidates under 3 words are ignored.
+    "arXiv:" stamps, candidates under 3 words and candidates containing "@" are ignored.
     """
     meta = (meta_title or "").strip()
     if len(meta) > 3 and not _GENERIC_TITLE.match(meta):
@@ -227,27 +227,31 @@ def choose_title(meta_title: str | None, page1_spans: list[Span], file_stem: str
 
     # Largest first; sorted() is stable, so equal sizes keep page order.
     for _, lines in sorted(runs, key=lambda run: -run[0]):
-        title = clean(" ".join(lines))
-        if len(title.split()) >= MIN_TITLE_WORDS:
+        # Newlines let clean() rejoin a word hyphenated across title lines.
+        title = clean("\n".join(lines))
+        if len(title.split()) >= MIN_TITLE_WORDS and "@" not in title:
             return title
     return file_stem
 
 
+def merge_line(parts: list[tuple[float, str]], direction: tuple[float, float]) -> Span:
+    """Merge one PDF line's (size, text) parts into a Span sized by its largest part.
+
+    Small-caps titles alternate sizes within a line ("L" 17.2 pt, "ORA" 13.8 pt).
+    """
+    return Span(round(max(size for size, _ in parts), 2), "".join(text for _, text in parts), direction)
+
+
 def page_spans(page: pymupdf.Page) -> list[Span]:
-    """Return a page's text as Spans: same-size text on one line merged, in content order."""
+    """Return a page's text lines as Spans, in content order."""
     spans: list[Span] = []
     for block in page.get_text("dict")["blocks"]:
         if block.get("type") != 0:
             continue
         for line in block["lines"]:
-            direction = (float(line["dir"][0]), float(line["dir"][1]))
-            merged: list[list] = []  # [size, text] pairs
-            for span in line["spans"]:
-                if merged and abs(span["size"] - merged[-1][0]) < 0.01:
-                    merged[-1][1] += span["text"]
-                else:
-                    merged.append([span["size"], span["text"]])
-            spans += [Span(round(size, 2), text, direction) for size, text in merged]
+            parts = [(span["size"], span["text"]) for span in line["spans"]]
+            if parts:
+                spans.append(merge_line(parts, (float(line["dir"][0]), float(line["dir"][1]))))
     return spans
 
 

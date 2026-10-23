@@ -6,7 +6,7 @@ direction is the PDF line direction (1, 0) for normal horizontal text.
 
 import pytest
 
-from paperpilot.ingest import Span, choose_title
+from paperpilot.ingest import Span, choose_title, merge_line
 
 H = (1.0, 0.0)  # horizontal
 UP = (0.0, -1.0)  # rotated 90 degrees, like the arXiv stamp in the margin
@@ -87,3 +87,31 @@ def test_falls_back_to_file_stem():
     assert choose_title(None, [Span(20.0, "Short", H), Span(10.0, "Two words", H)], "my-paper") == "my-paper"
     assert choose_title(None, [Span(20.0, "arXiv:1234.5678 stamp text here", UP)], "my-paper") == "my-paper"
     assert choose_title(None, [], "my-paper") == "my-paper"
+
+
+SMALL_CAPS_TITLE = [
+    merge_line(
+        [(17.2, "L"), (13.8, "O"), (17.2, "RA: L"), (13.8, "OW"), (17.2, "-R"), (13.8, "ANK"), (17.2, " A"),
+         (13.8, "DAPTATION OF"), (17.2, " L"), (13.8, "ARGE"), (17.2, " L"), (13.8, "AN-")],
+        H,
+    ),
+    merge_line([(17.2, "G"), (13.8, "UAGE"), (17.2, " M"), (13.8, "ODELS")], H),
+    merge_line([(10.0, "Edward Hu"), (7.0, "*"), (10.0, " Yelong Shen Phillip Wallis Zeyuan Allen-Zhu")], H),
+]
+
+
+def test_merge_line_uses_largest_span_size_and_keeps_spacing():
+    line = merge_line([(17.2, "L"), (13.8, "O"), (17.2, "RA: L"), (13.8, "OW")], UP)
+    assert line == Span(17.2, "LORA: LOW", UP)
+
+
+def test_small_caps_title_is_found_and_hyphen_rejoined():
+    assert choose_title(None, SMALL_CAPS_TITLE, "2106.09685") == "LORA: LOW-RANK ADAPTATION OF LARGE LANGUAGE MODELS"
+
+
+def test_candidate_with_at_sign_is_rejected():
+    spans = [
+        Span(12.0, "Jane Doe and John Roe jane@example.com", H),
+        Span(11.0, "A Real Paper Title", H),
+    ]
+    assert choose_title(None, spans, "x") == "A Real Paper Title"

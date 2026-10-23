@@ -73,7 +73,9 @@ decision given in the `/sp.plan` input because the input as written would break 
 ## R7. Heading detection
 
 - **Decision**: Applied to the **first line** of each block (a heading may share a block with
-  its paragraph; if so the heading line is split off).
+  its paragraph; if so the heading line is split off). A first line that is only a section
+    number ("1", "3.", "III.") is joined with the next line first, because PDFs often put the
+    number and title on separate lines.
   - Canonical regex (one compiled, case-insensitive, anchored, optional leading number like
     `1`, `1.`, `I.`, `A`): Abstract, Introduction, Related Work, Background,
     Method/Methods/Methodology/Approach (→ "Methods"), Experiments, Results, Discussion,

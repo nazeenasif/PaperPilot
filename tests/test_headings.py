@@ -2,7 +2,7 @@
 
 import pytest
 
-from paperpilot.ingest import detect_heading
+from paperpilot.ingest import detect_heading, heading_candidate
 
 
 @pytest.mark.parametrize(
@@ -112,3 +112,32 @@ def test_stop_headings(line):
     heading = detect_heading(line, 5)
     assert heading is not None
     assert heading.kind == "stop"
+
+
+@pytest.mark.parametrize(
+    ("text", "line", "rest"),
+    [
+        ("1\nIntroduction\nBody text.", "1 Introduction", "Body text."),
+        ("3.\nTraining\n", "3. Training", ""),
+        ("III.\nMETHODOLOGY", "III. METHODOLOGY", ""),
+        ("3.1\nEncoder and Decoder Stacks", "3.1 Encoder and Decoder Stacks", ""),
+        ("Abstract\nWe propose a model.", "Abstract", "We propose a model."),
+        ("12", "12", ""),  # a lone number with nothing after it stays as it is
+        ("The model has\n6 layers", "The model has", "6 layers"),
+    ],
+)
+def test_heading_candidate_joins_a_number_only_first_line(text, line, rest):
+    assert heading_candidate(text) == (line, rest)
+
+
+def test_number_on_its_own_line_is_detected_as_numbered_heading():
+    line, _ = heading_candidate("3\nModel Architecture\n")
+    heading = detect_heading(line, 2)
+    assert heading is not None
+    assert heading.kind == "numbered"
+    assert heading.name == "Model Architecture"
+
+
+def test_sub_heading_on_two_lines_is_still_rejected():
+    line, _ = heading_candidate("3.1\nEncoder and Decoder Stacks")
+    assert detect_heading(line, 3) is None

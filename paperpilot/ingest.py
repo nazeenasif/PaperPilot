@@ -76,6 +76,8 @@ _CANONICAL = re.compile(
     r"|methodology|approach|experiments|results|discussion|limitations|conclusions?)\s*[.:]?$",
     re.IGNORECASE,
 )
+# A line holding only a section number: "1", "3.", "3.1", "III.", "A.".
+_NUMBER_ONLY = re.compile(r"^(?:\d{1,2}(?:\.\d{1,2})*\.?|[IVXLC]{1,6}\.|[A-Z]\.)$")
 _STOP = re.compile(rf"^(?:{_PREFIX})?(?:references|bibliography)\s*[.:]?$", re.IGNORECASE)
 # A numbered top-level heading: number, then a capitalised title with no period.
 _NUMBERED = re.compile(r"^(?P<num>\d{1,2})\.?\s+(?P<text>[A-Z][A-Za-z][^.]{0,60})$")
@@ -124,6 +126,20 @@ def _number(match: re.Match) -> int | None:
     return int(match["num"]) if match["num"] else None
 
 
+def heading_candidate(text: str) -> tuple[str, str]:
+    """Split a block into the line to test as a heading and the rest of the block.
+
+    PDFs often put a section number and its title on separate lines ("1\\nIntroduction");
+    a first line that is only a number is joined with the next line.
+    """
+    first, _, rest = text.strip().partition("\n")
+    first = first.strip()
+    if _NUMBER_ONLY.match(first) and rest.strip():
+        second, _, rest = rest.strip().partition("\n")
+        first = f"{first} {second.strip()}"
+    return first, rest.strip()
+
+
 def detect_heading(line: str, last_number: int | None) -> Heading | None:
     """Return the heading on this line, or None.
 
@@ -157,7 +173,7 @@ def build_sections(blocks: list[Block]) -> list[Section]:
     sections: list[Section] = []
     name, current, last_number = FRONT_MATTER, [], None
     for block in blocks:
-        first_line, _, rest = block.text.strip().partition("\n")
+        first_line, rest = heading_candidate(block.text)
         heading = detect_heading(first_line, last_number)
         if heading is None:
             body = clean(block.text)

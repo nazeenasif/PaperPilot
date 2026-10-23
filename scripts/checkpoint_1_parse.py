@@ -13,7 +13,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pymupdf  # noqa: E402
 
 from paperpilot.errors import PaperPilotError  # noqa: E402
-from paperpilot.ingest import ParsedPaper, clean, detect_heading, order_blocks, parse_pdf  # noqa: E402
+from paperpilot.ingest import (  # noqa: E402
+    ParsedPaper,
+    clean,
+    detect_heading,
+    heading_candidate,
+    order_blocks,
+    parse_pdf,
+)
 
 SAMPLE_CHARS = 300
 REFERENCE_PROBE_BLOCKS = 5
@@ -28,7 +35,7 @@ def text_after_references(path: Path) -> tuple[int | None, list[str]]:
             raw = [b for b in page.get_text("blocks", sort=True) if b[6] == 0 and b[4].strip()]
             ordered = order_blocks(raw, page.rect.width)
             for index, block in enumerate(ordered):
-                first_line, _, rest = block[4].strip().partition("\n")
+                first_line, rest = heading_candidate(block[4])
                 heading = detect_heading(first_line, None)
                 if heading is not None and heading.kind == "stop":
                     after = [clean(rest)] + [clean(b[4]) for b in ordered[index + 1 :]]

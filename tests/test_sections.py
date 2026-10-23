@@ -101,3 +101,30 @@ def test_empty_sections_are_dropped():
 
 def test_no_blocks():
     assert build_sections([]) == []
+
+
+def test_number_and_title_on_separate_lines_are_detected_and_split():
+    sections = build_sections([Block("1\nIntroduction\n" + LONG, 1)])
+    assert names(sections) == ["Introduction"]
+    assert sections[0].blocks == [Block(LONG, 1)]
+
+
+def test_numbered_heading_on_two_lines():
+    sections = build_sections(
+        [Block("2\nBackground\n", 1), Block(LONG, 1), Block("3\nModel Architecture\n", 2), Block(LONG, 2)]
+    )
+    assert names(sections) == ["Background", "Model Architecture"]
+
+
+def test_two_line_sub_heading_does_not_start_a_section():
+    sections = build_sections(
+        [
+            Block("2\nBackground\n", 1),
+            Block(LONG, 1),
+            Block("3\nModel Architecture\n", 2),
+            Block(LONG, 2),
+            Block("3.1\nEncoder and Decoder Stacks\n", 2),
+            Block(LONG, 3),
+        ]
+    )
+    assert names(sections) == ["Background", "Model Architecture"]

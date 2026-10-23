@@ -1,8 +1,13 @@
 """Read research-paper PDFs and turn them into sections and passages."""
 
+import bisect
 import hashlib
 import re
 from dataclasses import dataclass
+from typing import Sequence
+
+# A block wider than this fraction of the page is a full-width band divider.
+WIDE_FRACTION = 0.6
 
 
 @dataclass(frozen=True)
@@ -68,3 +73,31 @@ def clean(text: str) -> str:
 def paper_id_for(data: bytes) -> str:
     """Return a stable paper ID: the first 12 hex chars of the SHA-1 of the file bytes."""
     return hashlib.sha1(data).hexdigest()[:12]
+
+
+def order_blocks(blocks: Sequence[tuple], page_width: float) -> list[tuple]:
+    """Order a page's blocks for reading: (x0, y0, x1, y1, text, ...) tuples.
+
+    Full-width blocks split the page into horizontal bands. Within each band the left
+    column is read top to bottom, then the right column, then the full-width block below.
+    """
+    middle = page_width / 2
+
+    def is_wide(block: tuple) -> bool:
+        return block[2] - block[0] > WIDE_FRACTION * page_width
+
+    dividers = sorted((b for b in blocks if is_wide(b)), key=lambda b: (b[1], b[0]))
+    divider_tops = [b[1] for b in dividers]
+    bands: list[list[tuple]] = [[] for _ in range(len(dividers) + 1)]
+    for block in blocks:
+        if not is_wide(block):
+            bands[bisect.bisect_right(divider_tops, block[1])].append(block)
+
+    ordered: list[tuple] = []
+    for index, band in enumerate(bands):
+        left = sorted((b for b in band if b[0] < middle), key=lambda b: (b[1], b[0]))
+        right = sorted((b for b in band if b[0] >= middle), key=lambda b: (b[1], b[0]))
+        ordered += left + right
+        if index < len(dividers):
+            ordered.append(dividers[index])
+    return ordered

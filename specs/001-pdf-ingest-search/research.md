@@ -191,6 +191,10 @@ decision given in the `/sp.plan` input because the input as written would break 
   store and search; model load time logged separately the first time the model loads.
   `store.load_model()` returns the load time so checkpoint scripts can warm the model before
   any timed add or search; SC-010 and SC-011 are checked on warm timings only.
+- **One-time startup costs**: opening a stored library (ChromaDB client, collection and
+  vector index, ~1–2 s) and loading the embedding model (~2–8 s on a laptop CPU) happen once
+  per process. Checkpoint 3 runs one untimed warm-up search and reports the cold time
+  separately. The UI feature must do both at startup, before the first user search.
   Checkpoint scripts configure logging to stdout and print timings.
 
 ## R14. Python 3.12 on this machine — **Blocker**

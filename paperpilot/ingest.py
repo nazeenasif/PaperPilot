@@ -397,30 +397,35 @@ def is_table_like(text: str) -> bool:
 
 
 def _units(blocks: list[Block]) -> list[tuple[str, list[Block]]]:
-    """Group a section's blocks into ("text", [block]) and ("table", [caption?, table, caption?]).
+    """Group a section's blocks into ("text", [block]) and ("table", [caption?, rows..., caption?]).
 
-    A "Table N:" caption directly before a table joins it; otherwise a caption directly
-    after it does (unless that caption belongs to the next table).
+    Consecutive table-like blocks form one table. A "Table N:" caption directly before the
+    table joins it; otherwise a caption directly after it does (unless that caption belongs
+    to a following table).
     """
     tables = [is_table_like(b.text) for b in blocks]
     captions = [bool(_TABLE_CAPTION.match(b.text)) for b in blocks]
+    n = len(blocks)
     units: list[tuple[str, list[Block]]] = []
     i = 0
-    while i < len(blocks):
-        if captions[i] and i + 1 < len(blocks) and tables[i + 1]:
-            units.append(("table", [blocks[i], blocks[i + 1]]))
-            i += 2
-        elif tables[i]:
-            group = [blocks[i]]
+    while i < n:
+        group: list[Block] = []
+        caption_before = captions[i] and i + 1 < n and tables[i + 1]
+        if caption_before:
+            group.append(blocks[i])
             i += 1
-            next_is_own_caption = i < len(blocks) and captions[i] and not (i + 1 < len(blocks) and tables[i + 1])
-            if next_is_own_caption:
-                group.append(blocks[i])
-                i += 1
-            units.append(("table", group))
-        else:
+        if not tables[i]:
             units.append(("text", [blocks[i]]))
             i += 1
+            continue
+        while i < n and tables[i]:
+            group.append(blocks[i])
+            i += 1
+        caption_after = i < n and captions[i] and not (i + 1 < n and tables[i + 1])
+        if caption_after and not caption_before:
+            group.append(blocks[i])
+            i += 1
+        units.append(("table", group))
     return units
 
 

@@ -210,7 +210,8 @@ no longer returns passages from the deleted paper.
   with the configured overlap; a passage MUST NOT span two sections.
 - **FR-010a**: Table-like text (at least 10 tokens, more than half of them numbers or symbols)
   MUST become its own passage(s), marked as a table, together with an adjacent "Table N:"
-  caption; prose passages MUST NOT share text or overlap with a table passage.
+  caption; consecutive table-like blocks MUST be merged into one table passage of up to the
+  configured passage size, split evenly if longer; prose passages MUST NOT share text or overlap with a table passage.
 - **FR-011**: The system MUST drop a final leftover passage shorter than the minimum passage
   size.
 - **FR-012**: Each passage MUST record its paper ID, paper title, section name, and the page

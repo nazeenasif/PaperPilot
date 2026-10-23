@@ -165,3 +165,31 @@ def test_large_table_is_split_into_even_table_passages_without_overlap():
     assert [p.kind for p in passages] == ["table", "table", "table"]
     assert [p.word_count for p in passages] == [15, 15, 15]
     assert " ".join(p.text for p in passages) == table(45).text
+
+
+WIDE = Settings(chunk_words=60, chunk_overlap=5, min_chunk_words=4)
+
+
+def row(label, page=2):
+    return Block(f"{label} " + " ".join(f"{i}.{i}" for i in range(10)), page)
+
+
+def test_consecutive_table_blocks_and_caption_become_one_table_passage():
+    caption = Block("Table 1: Results on three tasks.", 2)
+    blocks = [para("a", 8), caption, row("r1"), row("r2"), row("r3"), para("b", 8)]
+    passages = chunk_sections([Section("Results", blocks)], PID, TITLE, WIDE)
+    assert [p.kind for p in passages] == ["text", "table", "text"]
+    assert passages[1].text == " ".join(b.text for b in [caption, row("r1"), row("r2"), row("r3")])
+
+
+def test_merged_table_longer_than_budget_is_split_evenly():
+    passages = chunk(Section("Results", [row("r1"), row("r2"), row("r3")]))  # 33 tokens, budget 20
+    assert [p.kind for p in passages] == ["table", "table"]
+    assert [p.word_count for p in passages] == [17, 16]
+
+
+def test_caption_between_tables_starts_a_new_table():
+    caption = Block("Table 2: Second table.", 2)
+    passages = chunk_sections([Section("Results", [row("r1"), caption, row("r2")])], PID, TITLE, WIDE)
+    assert [p.kind for p in passages] == ["table", "table"]
+    assert passages[1].text.startswith("Table 2:")

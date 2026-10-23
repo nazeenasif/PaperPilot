@@ -7,7 +7,7 @@ from pathlib import Path
 
 from paperpilot import ingest, store
 from paperpilot.config import load_settings
-from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError
+from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError, UnknownPaperError
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +81,17 @@ def search(query: str, k: int | None = None, paper_ids: list[str] | None = None)
     """Return up to k passages most similar to the query, best first.
 
     k defaults to TOP_K; an empty paper_ids searches the whole library.
-    Raises EmptyQueryError for an empty or whitespace query.
+    Raises EmptyQueryError for an empty or whitespace query and UnknownPaperError if a
+    paper ID in paper_ids is not in the library.
     """
     if not query or not query.strip():
         raise EmptyQueryError("The search query is empty")
     k = load_settings().top_k if k is None else k
     if k < 1:
         raise ValueError(f"k must be at least 1, got {k}")
+    for paper_id in paper_ids or []:
+        if not store.has_paper(paper_id):
+            raise UnknownPaperError(f"Paper {paper_id} is not in the library")
     hits = store.query(store.embed_query(query.strip()), k, paper_ids)
     return [
         SearchResult(

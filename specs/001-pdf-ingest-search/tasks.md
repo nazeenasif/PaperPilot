@@ -128,7 +128,7 @@ unchanged.
 **Independent Test**: With ≥ 2 papers, a search filtered to one paper returns only that paper.
 
 - [X] T038 [US4] Add failing tests to `tests/test_library.py`: filter to one paper → every result has that `paper_id`; filter to two papers → every result is from one of them; `paper_ids=[]` behaves like no filter; an unknown ID raises `UnknownPaperError` whose message names the ID
-- [ ] T039 [US4] In `paperpilot/library.py`, make `search` validate each ID in `paper_ids` with `store.has_paper()` (raise `UnknownPaperError`) and pass `paper_ids` to `store.query` (which uses `build_where`, never an empty `$in`) (FR-016); make T038 pass
+- [X] T039 [US4] In `paperpilot/library.py`, make `search` validate each ID in `paper_ids` with `store.has_paper()` (raise `UnknownPaperError`) and pass `paper_ids` to `store.query` (which uses `build_where`, never an empty `$in`) (FR-016); make T038 pass
 - [ ] T040 [US4] Extend `scripts/checkpoint_3_search.py` with a filtered search for each paper: print `PASS`/`FAIL` that 100% of results come from that paper — **Checkpoint 3, US4 part** (SC-005)
 
 ---

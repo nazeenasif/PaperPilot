@@ -27,7 +27,7 @@ python-dotenv; exact versions pinned in `requirements.txt` after install
 download (SC-010); search over 5–20 papers < 2 s (SC-011)
 **Constraints**: fully local and offline after the one-time model download; no LLM; no
 LangChain; telemetry disabled
-**Scale/Scope**: personal library of tens of papers, ~40–120 passages each (a few thousand
+**Scale/Scope**: personal library of tens of papers, ~25–50 passages each (about one per 180 body words) (a few thousand
 vectors)
 
 ## Constitution Check

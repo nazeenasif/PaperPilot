@@ -13,9 +13,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from paperpilot.config import load_settings  # noqa: E402
 from paperpilot.errors import PaperPilotError  # noqa: E402
-from paperpilot.ingest import chunk_sections, parse_pdf  # noqa: E402
+from paperpilot.ingest import Passage, chunk_sections, parse_pdf  # noqa: E402
 
-MIN_PASSAGES, MAX_PASSAGES = 40, 120
+MIN_COVERAGE = 0.97
+COUNT_TOLERANCE = 0.25
 TARGET_AVERAGE, AVERAGE_TOLERANCE = 200, 0.15
 SAMPLES = 3
 SEED = 0
@@ -27,6 +28,21 @@ def preview(text: str) -> str:
     if len(text) <= HEAD_CHARS + TAIL_CHARS:
         return text
     return f"{text[:HEAD_CHARS]} … {text[-TAIL_CHARS:]}"
+
+
+def new_word_count(passages: list[Passage], overlap: int) -> int:
+    """Count passage words, excluding overlap repeated from the previous passage of a section."""
+    total = 0
+    for previous, current in zip([None, *passages[:-1]], passages):
+        words, shared = current.text.split(), 0
+        if previous is not None and previous.section == current.section:
+            previous_words = previous.text.split()
+            for k in range(min(overlap, len(previous_words), len(words)), 0, -1):
+                if previous_words[-k:] == words[:k]:
+                    shared = k
+                    break
+        total += len(words) - shared
+    return total
 
 
 def main() -> int:
@@ -62,13 +78,21 @@ def main() -> int:
 
         counts = [p.word_count for p in passages]
         average = sum(counts) / len(counts) if counts else 0.0
+        body_words = sum(len(b.text.split()) for s in paper.sections for b in s.blocks)
+        coverage = new_word_count(passages, settings.chunk_overlap) / body_words
+        expected = body_words / (settings.chunk_words - settings.chunk_overlap)
         print(f"Title: {paper.title}")
         print(
             f"Passages: {len(passages)}   words: average {average:.0f}, "
-            f"min {min(counts, default=0)}, max {max(counts, default=0)}"
+            f"min {min(counts, default=0)}, max {max(counts, default=0)}   body words: {body_words}"
         )
         checks = [
-            (MIN_PASSAGES <= len(passages) <= MAX_PASSAGES, f"{MIN_PASSAGES}-{MAX_PASSAGES} passages"),
+            (coverage >= MIN_COVERAGE, f"passages cover {coverage:.1%} of body words (need {MIN_COVERAGE:.0%})"),
+            (
+                abs(len(passages) - expected) <= COUNT_TOLERANCE * expected,
+                f"passage count within ±25% of {expected:.0f} "
+                f"({expected * (1 - COUNT_TOLERANCE):.0f}-{expected * (1 + COUNT_TOLERANCE):.0f})",
+            ),
             (low <= average <= high, f"average words within ±15% of {TARGET_AVERAGE} ({low:.0f}-{high:.0f})"),
         ]
         for passed, description in checks:

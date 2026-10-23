@@ -11,6 +11,7 @@ from typing import Sequence
 
 import pymupdf
 
+from paperpilot.config import Settings
 from paperpilot.errors import NoTextError, PdfReadError
 
 logger = logging.getLogger(__name__)
@@ -375,3 +376,47 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
         len(sections),
     )
     return ParsedPaper(paper_id_for(data), title, path.name, page_count, sections)
+
+
+def chunk_sections(sections: list[Section], paper_id: str, title: str, settings: Settings) -> list[Passage]:
+    """Split sections into passages of about `chunk_words` words (research R8, ADR-0002).
+
+    Whole paragraphs are packed up to the budget, which includes the overlap words carried
+    from the previous passage of the same section. Only paragraphs longer than the budget
+    are split. A section's final passage with fewer than `min_chunk_words` new words is
+    dropped. Each passage records the page of its first new (non-overlap) word.
+    """
+    budget, overlap = settings.chunk_words, settings.chunk_overlap
+    passages: list[Passage] = []
+
+    def emit(words: list[str], page: int, section: str) -> list[str]:
+        """Store a passage and return the overlap words that start the next one."""
+        n = len(passages)
+        passages.append(Passage(f"{paper_id}-{n}", paper_id, title, section, page, n, len(words), " ".join(words)))
+        return words[len(words) - overlap :] if overlap else []
+
+    for section in sections:
+        current: list[str] = []
+        new_words, first_page = 0, 0
+        for block in section.blocks:
+            pending = block.text.split()
+            while pending:
+                if len(current) + len(pending) <= budget or (new_words == 0 and len(pending) <= budget):
+                    # Fits, or a paragraph within the budget that is never split.
+                    if new_words == 0:
+                        first_page = block.page
+                    current += pending
+                    new_words += len(pending)
+                    pending = []
+                elif new_words > 0:
+                    current = emit(current, first_page, section.name)
+                    new_words = 0
+                else:
+                    # Oversized paragraph: fill this passage and carry the rest.
+                    take = budget - len(current)
+                    current += pending[:take]
+                    pending = pending[take:]
+                    current = emit(current, block.page, section.name)
+        if new_words >= settings.min_chunk_words:
+            emit(current, first_page, section.name)
+    return passages

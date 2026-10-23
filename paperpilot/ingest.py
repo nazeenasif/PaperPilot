@@ -86,6 +86,9 @@ _CANONICAL_NAMES = {
     "conclusion": "Conclusion",
     "conclusions": "Conclusion",
 }
+FRONT_MATTER = "Front Matter"
+# Blocks shorter than this (page numbers, running headers) are dropped unless a heading.
+MIN_BLOCK_CHARS = 25
 MAX_HEADING_WORDS = 8
 # A numbered heading may skip at most one missed heading (e.g. 3 then 5).
 MAX_NUMBER_STEP = 2
@@ -131,6 +134,35 @@ def detect_heading(line: str, last_number: int | None) -> Heading | None:
     if not previous < number <= previous + MAX_NUMBER_STEP:
         return None
     return Heading(text, "numbered", number)
+
+
+def build_sections(blocks: list[Block]) -> list[Section]:
+    """Group raw blocks into named sections, stopping at References.
+
+    A heading is detected on a block's first line and split off from the rest of the
+    block. Text before the first heading is "Front Matter"; empty sections are dropped.
+    """
+    sections: list[Section] = []
+    name, current, last_number = FRONT_MATTER, [], None
+    for block in blocks:
+        first_line, _, rest = block.text.strip().partition("\n")
+        heading = detect_heading(first_line, last_number)
+        if heading is None:
+            body = clean(block.text)
+        else:
+            if heading.kind == "stop":
+                break
+            if current:
+                sections.append(Section(name, current))
+            name, current = heading.name, []
+            if heading.number is not None:
+                last_number = heading.number
+            body = clean(rest)
+        if len(body) >= MIN_BLOCK_CHARS:
+            current.append(Block(body, block.page))
+    if current:
+        sections.append(Section(name, current))
+    return sections
 
 
 def order_blocks(blocks: Sequence[tuple], page_width: float) -> list[tuple]:

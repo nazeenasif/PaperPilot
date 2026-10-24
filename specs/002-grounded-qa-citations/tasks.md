@@ -133,7 +133,7 @@ warning; uncited sentences produce a warning only.
 - [X] T032 Extend `scripts/checkpoint_5_conversation.py`: ask the five probe questions from `eval/probe_notes.md` (no history), write `eval/probe_answers.md` with question, answer, citation report, passage list (title, section, page, score), warning, word count, LLM requests used, and an empty "Reviewer verdict" column; print PASS/FAIL for no invalid citation returned, and the word count as INFO or WARN above 165 (never FAIL); print INFO for Q2/Q4 reminding the reviewer that not-found or a limited partial answer is the correct outcome (FR-019, SC-006)
 - [X] T033 Add a secret check to `scripts/checkpoint_4_answer.py`: run `git grep --untracked -F -q <LLM_API_KEY value> -- . ":!.env"` and confirm `describe()` hides the key; print only PASS/FAIL, never the key; also confirm `.env` is ignored by git (`git check-ignore .env`) (SC-007)
 - [X] T034 [P] Add a "Question answering" section to `docs/known-limitations.md`: citation validation proves citations point to provided passages, not that they support the claim; threshold needs recalibration when papers, chunking or the model change; free models change and can be removed; free-tier limits (20/min, 50/day without credits) make repeated runs and evaluation impractical without credits; the uncited-sentence splitter can be noisy around abbreviations
-- [ ] T035 Run `pytest`, `python scripts/calibrate_threshold.py`, `python scripts/checkpoint_4_answer.py` and `python scripts/checkpoint_5_conversation.py` per `specs/002-grounded-qa-citations/quickstart.md`; fix any drift in the quickstart; record total LLM requests, timings and SC results (including SC-008 typical answer time) in the PHR, and update `RELEVANCE_THRESHOLD`'s default in `paperpilot/config.py`, `.env.example` and research R8 if calibration suggests a different value (R8 keeps stating it is calibrated for bge-small-en-v1.5 on this library)
+- [X] T035 Run `pytest`, `python scripts/calibrate_threshold.py`, `python scripts/checkpoint_4_answer.py` and `python scripts/checkpoint_5_conversation.py` per `specs/002-grounded-qa-citations/quickstart.md`; fix any drift in the quickstart; record total LLM requests, timings and SC results (including SC-008 typical answer time) in the PHR, and update `RELEVANCE_THRESHOLD`'s default in `paperpilot/config.py`, `.env.example` and research R8 if calibration suggests a different value (R8 keeps stating it is calibrated for bge-small-en-v1.5 on this library)
 
 ---
 
@@ -190,8 +190,9 @@ T005 tests/fake_llm.py         (scripted fake OpenAI client)
 | Script | Model requests (no retries) |
 |---|---|
 | calibrate_threshold.py | 0 |
-| checkpoint_4_answer.py | 2 (US1 question, US3 filtered question; France and the citation check use none) |
-| checkpoint_5_conversation.py | 8 (LoRA, follow-up rewrite + answer, 5 probe questions) |
+| checkpoint_4_answer.py | 6 (US1 question, 2 US3 filtered questions, 3 near-miss questions; France, the citation check and the secret check use none) |
+| checkpoint_5_conversation.py | 10 (LoRA, 2 follow-ups × rewrite + answer, 5 probe questions) |
+| **Full run** | **16**, plus any retries (each retry is a request) |
 
 ## Notes
 

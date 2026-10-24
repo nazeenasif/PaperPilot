@@ -32,9 +32,16 @@ python scripts/calibrate_threshold.py   # writes eval/threshold_calibration.md
 ## 3. Checkpoints
 
 ```powershell
-python scripts/checkpoint_4_answer.py        # cited answer, not-found, filter, citation checks, secrets
+python scripts/checkpoint_4_answer.py        # cited answer, not-found, filter, citation checks, near-misses, secrets
 python scripts/checkpoint_5_conversation.py  # follow-up rewrite, probe questions -> eval/probe_answers.md
 ```
+
+A full run uses about 16 model requests (checkpoint 4: 6, checkpoint 5: 10); each retry after a
+rate limit or provider error counts as one more, and a checkpoint fails if it goes over its
+budget. Parts can be run alone to save requests, e.g.
+`python scripts/checkpoint_4_answer.py us5 secrets` (no requests) or
+`python scripts/checkpoint_5_conversation.py conversation` (5 requests). The scripts print
+UTF-8 themselves; `PYTHONIOENCODING` is not needed.
 
 Free models allow 20 requests/minute and 50 requests/day (1,000/day after $10 of lifetime
 credits). Waits of up to a minute between calls are expected; one full checkpoint run fits

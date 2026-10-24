@@ -155,6 +155,15 @@ TEST_API_KEY = "sk-test-key-123"
 
 
 @pytest.fixture(autouse=True)
+def isolated_library_dir(tmp_path_factory, monkeypatch):
+    """Every test gets its own LIBRARY_DIR, so nothing (e.g. usage.sqlite3) touches data/library.
+
+    library_env and other fixtures set their own folder on top of this.
+    """
+    monkeypatch.setenv("LIBRARY_DIR", str(tmp_path_factory.mktemp("library")))
+
+
+@pytest.fixture(autouse=True)
 def no_real_llm_client(monkeypatch):
     """Fail any test that tries to create a real LLM client (unit tests never call the API)."""
     import openai

@@ -267,7 +267,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
     - A stub failure keeps the local count with source `local`.
     - With a non-OpenRouter provider, the key endpoint is skipped.
   - **Reporting:** `usage()` gives `remaining` and `resets_at` as the next 00:00 UTC.
-- [ ] T031 [P] [US5] Add failing tests to `tests/test_llm.py`, for FR-023a–c:
+- [X] T031 [P] [US5] Add failing tests to `tests/test_llm.py`, for FR-023a–c:
   - **Long waits:**
     - `Retry-After: 120` raises `RateLimitedError` after exactly one request, with the message "rate limited until …" and a correct `until`.
     - `Retry-After: 60` is retried.

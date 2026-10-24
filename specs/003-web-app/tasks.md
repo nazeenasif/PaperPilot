@@ -320,7 +320,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - The endpoint never parses (spy on `ingest.parse_pdf`).
   - `GET /api/papers/{id}/pdf` returns `200 application/pdf` inline with the stored bytes. `pdf_missing` and `unknown_paper` give 404.
 - [X] T038 [US2] Implement both endpoints in `api/routes.py`, with their models in `api/schemas.py`, so T037 passes.
-- [ ] T039 [US2] Add part `viewer` to `scripts/checkpoint_6_web.py` (0 requests).
+- [X] T039 [US2] Add part `viewer` to `scripts/checkpoint_6_web.py` (0 requests).
   - It takes the passages from part `ask`'s answer when `ask` ran, otherwise from `POST /api/search` (added in T047) for "What is LoRA?".
   - For each passage it fetches `/api/passages/{id}` and `/api/papers/{paper}/pdf`.
   - PASS if: every PDF opens and the cited page is within `page_count` (SC-001); and at least 90% of passages have regions on their cited page (SC-002). It reports passages without regions with their reason.

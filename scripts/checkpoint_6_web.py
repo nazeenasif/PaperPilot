@@ -5,12 +5,13 @@ states its planned model requests; the run fails on unplanned requests or when a
 retries included, exceed twice the plan (scripts/request_budget.py, Feature 2 budget rule).
 
 Usage: python scripts/checkpoint_6_web.py [part ...]   (default: every part)
-Parts: boundary, ask
+Parts: boundary, ask, viewer (viewer opens the citations of part ask)
 
 Start the servers first (quickstart): `python -m api` and `npm --prefix frontend run dev`.
 """
 
 import json
+import re
 import socket
 import sys
 import time
@@ -236,9 +237,88 @@ def part_ask(run: Run, client: httpx.Client) -> None:
         run.info(f"not-found answer ({answer['fallback_reason']}): no citations to open in part viewer")
 
 
+HIGHLIGHT_TARGET = 0.90  # SC-002
+_WORD = re.compile(r"[\w-]+")
+
+
+def words_under_regions(pdf_bytes: bytes, page: int, regions: list[dict]) -> list[str]:
+    """The PDF words whose centres fall inside any region on that page, in reading order."""
+    import pymupdf  # engine dependency; only needed to verify highlights
+
+    with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+        words = doc[page - 1].get_text("words")
+    boxes = [r for r in regions if r["page"] == page]
+    inside = []
+    for x0, y0, x1, y1, text, *_ in words:
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        if any(b["x0"] <= cx <= b["x1"] and b["y0"] <= cy <= b["y1"] for b in boxes):
+            inside.append(text)
+    return inside
+
+
+def part_viewer(run: Run, client: httpx.Client) -> None:
+    """US2: every cited passage opens its paper at the cited page, highlighted (SC-001, SC-002). 0 requests."""
+    import pymupdf
+
+    if run.answer is None:
+        run.check(False, "part viewer needs part ask in the same run (it opens that answer's citations)")
+        return
+    passages = {p["number"]: p for p in run.answer["passages"]}
+    numbers = run.answer["citations"]["valid"]
+    if not numbers:
+        numbers = sorted(passages)
+        run.info("the answer cites nothing; checking every passage it read instead")
+    pdfs: dict[str, bytes] = {}
+    opened = highlighted = 0
+    precisions: list[float] = []
+    for number in numbers:
+        passage = passages[number]
+        response = client.get(f"/api/passages/{passage['passage_id']}")
+        if response.status_code != 200:
+            print(f"  [{number}] {passage['passage_id']}: GET passage answered {response.status_code}")
+            continue
+        view = response.json()
+        if view["paper_id"] not in pdfs:
+            pdf = client.get(f"/api/papers/{view['paper_id']}/pdf")
+            pdfs[view["paper_id"]] = pdf.content if pdf.status_code == 200 and pdf.content.startswith(b"%PDF") else b""
+        pdf_bytes = pdfs[view["paper_id"]]
+        page_ok = False
+        if pdf_bytes:
+            with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+                page_ok = 1 <= view["page"] <= doc.page_count == view["page_count"]
+        opened += page_ok
+        layout = view["layout"]
+        on_page = [r for r in layout["regions"] if r["page"] == view["page"]] if layout else []
+        line = f"  [{number}] {view['title'][:40]} — {view['section']}, page {view['page']} of {view['page_count']}: "
+        if not page_ok:
+            print(line + "PDF or page missing")
+            continue
+        if not on_page:
+            print(line + f"opens, not highlighted ({view['layout_reason']})")
+            continue
+        highlighted += 1
+        under = words_under_regions(pdf_bytes, view["page"], on_page)
+        passage_words = {w.lower() for w in _WORD.findall(view["text"])}
+        found = [w for w in under if any(t.lower() in passage_words for t in _WORD.findall(w))]
+        precision = len(found) / len(under) if under else 0.0
+        precisions.append(precision)
+        print(line + f"highlighted ({len(on_page)} line boxes, {len(under)} words; "
+                     f"{precision:.0%} of them belong to the passage)")
+
+    total = len(numbers)
+    rate = highlighted / total if total else 0.0
+    print(f"\nHighlight success rate: {highlighted} of {total} cited passages ({rate:.0%}); target {HIGHLIGHT_TARGET:.0%}")
+    run.check(total > 0 and opened == total, f"every cited passage opens its PDF at the cited page ({opened}/{total}, SC-001)")
+    run.check(total > 0 and rate >= HIGHLIGHT_TARGET, f"at least 90% of cited passages are highlighted ({rate:.0%}, SC-002)")
+    if precisions:
+        average = sum(precisions) / len(precisions)
+        run.check(average >= 0.9, f"highlighted words belong to their passage ({average:.0%} on average)")
+
+
 PARTS: dict[str, Part] = {
     "boundary": Part(plan=0, run=part_boundary),
     "ask": Part(plan=1, run=part_ask),
+    "viewer": Part(plan=0, run=part_viewer),
 }
 
 

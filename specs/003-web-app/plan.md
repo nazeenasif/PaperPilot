@@ -163,6 +163,10 @@ under the existing `tests/` tree so one `pytest` run covers the engine and the A
 
 ## Key Decisions (rationale in research.md)
 
+ADRs: [ADR-0005 Web Stack and Progress Transport](../../history/adr/0005-web-stack-and-progress-transport.md) (1–3, 9–12),
+[ADR-0006 Citation Highlight Geometry](../../history/adr/0006-citation-highlight-geometry.md) (4–5),
+[ADR-0007 LLM Request Accounting and Long Waits](../../history/adr/0007-llm-request-accounting-and-long-waits.md) (7–8; amends ADR-0003).
+
 1. **Exact pins:** each is the newest release at least 14 days old. TypeScript 6.0.3 rather
    than 7, and react-pdf's own pdfjs-dist version (R1).
 2. **Progress transport:** SSE, using FastAPI's built-in support. `POST /api/ask` streams

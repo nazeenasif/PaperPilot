@@ -396,7 +396,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 **Independent test**: with a mocked API, ask a question and see the progress steps, then the
 revealed answer with numbered chips and the verified badge.
 
-- [ ] T049 [P] [US1] Create failing tests in `frontend/tests/reveal.test.ts`:
+- [X] T049 [P] [US1] Create failing tests in `frontend/tests/reveal.test.ts`:
   - `splitSentences` in `lib/sentences.ts` matches the engine's rule: it keeps citations with their sentence, including after the full stop.
   - `revealPlan(sentenceCount)` in `lib/reveal.ts` returns delays: 40 ms apart, 160 ms per fade, chips after the last sentence and the badge last, with the total at most 450 ms for any length.
   - With reduced motion, every delay is 0.

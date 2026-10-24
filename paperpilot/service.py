@@ -13,7 +13,7 @@ from paperpilot.config import load_settings
 from paperpilot.errors import EmptyQueryError, LLMError
 from paperpilot.prompts import CitationReport, NumberedPassage, Turn
 
-__all__ = ["Answer", "Turn", "ask"]
+__all__ = ["Answer", "Turn", "ask", "review_reply"]
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,33 @@ def _number(results: list[library.SearchResult]) -> list[NumberedPassage]:
     ]
 
 
+def review_reply(
+    text: str, passage_count: int
+) -> tuple[str, CitationReport, str | None, str | None, str | None]:
+    """Check a model reply's citations against passages 1..passage_count (FR-008a, FR-009).
+
+    Returns (answer_text, citations, warning, rejected_answer, fallback_reason). Invalid or
+    missing citations replace the answer with NOT_FOUND and keep the original as
+    rejected_answer; uncited sentences in an otherwise valid answer only produce a warning.
+    """
+    text = text.strip()
+    if prompts.is_not_found(text):
+        return prompts.NOT_FOUND, NO_CITATIONS, None, None, "model_not_found"
+    citations = prompts.check_citations(text, passage_count)
+    if citations.invalid:
+        numbers = ", ".join(f"[{n}]" for n in citations.invalid)
+        warning = (f"The answer was rejected: it cited {numbers}, but only passages "
+                   f"[1]-[{passage_count}] were provided.")
+        return prompts.NOT_FOUND, citations, warning, text, "invalid_citations"
+    if not citations.valid:
+        warning = "The answer was rejected: it had no citations to the provided passages."
+        return prompts.NOT_FOUND, citations, warning, text, "no_citations"
+    warning = None
+    if citations.uncited_sentences:
+        warning = "Sentences without a citation: " + " | ".join(citations.uncited_sentences)
+    return text, citations, warning, None, None
+
+
 def ask(
     question: str,
     paper_ids: list[str] | None = None,
@@ -89,7 +116,13 @@ def ask(
     llm_calls = 0
     standalone, rewrite_applied, rewrite_fallback_reason = question, False, None
 
-    def finish(text: str, citations: CitationReport, fallback_reason: str | None = None) -> Answer:
+    def finish(
+        text: str,
+        citations: CitationReport,
+        fallback_reason: str | None = None,
+        warning: str | None = None,
+        rejected_answer: str | None = None,
+    ) -> Answer:
         logger.info("Answered (%s) with %d passages in %.2f s",
                     fallback_reason or "answer", len(passages), sum(timings.values()))
         return Answer(
@@ -100,8 +133,8 @@ def ask(
             not_found=text == prompts.NOT_FOUND,
             passages=passages,
             citations=citations,
-            warning=None,
-            rejected_answer=None,
+            warning=warning,
+            rejected_answer=rejected_answer,
             fallback_reason=fallback_reason,
             rewrite_fallback_reason=rewrite_fallback_reason,
             word_count=prompts.word_count(text),
@@ -146,7 +179,7 @@ def ask(
     llm_calls += 1
     _add_tokens(tokens, reply)
 
-    text = reply.text.strip()
-    if prompts.is_not_found(text):
-        return finish(prompts.NOT_FOUND, NO_CITATIONS, "model_not_found")
-    return finish(text, prompts.check_citations(text, len(passages)))
+    text, citations, warning, rejected_answer, fallback_reason = review_reply(reply.text, len(passages))
+    if rejected_answer is not None:
+        logger.warning("%s", warning)
+    return finish(text, citations, fallback_reason, warning, rejected_answer)

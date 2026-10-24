@@ -12,7 +12,7 @@ memory; the library from Feature 1 is read only.
 | llm_provider | `LLM_PROVIDER` | str | `openrouter` | label; selects the default base URL and appears in error messages |
 | llm_base_url | `LLM_BASE_URL` | str | `""` → `https://openrouter.ai/api/v1` for `openrouter` | required (explicitly) for any other provider label |
 | llm_api_key | `LLM_API_KEY` | str | `""` | required when asking; `repr=False`; `describe()` shows `set (hidden)` / `not set` |
-| llm_model | `LLM_MODEL` | str | `google/gemma-4-31b-it:free` | non-empty |
+| llm_model | `LLM_MODEL` | str | `nvidia/nemotron-3-ultra-550b-a55b:free` | non-empty |
 | relevance_threshold | `RELEVANCE_THRESHOLD` | float | `0.60` | 0 ≤ value ≤ 1 |
 | llm_reasoning_effort | `LLM_REASONING_EFFORT` | str | `""` | optional; sent as `reasoning.effort` when set |
 

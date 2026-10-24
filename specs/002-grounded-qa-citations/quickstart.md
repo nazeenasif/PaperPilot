@@ -12,7 +12,7 @@ Windows, PowerShell, repo root, venv active, Feature 1 library populated
 LLM_PROVIDER=openrouter
 LLM_BASE_URL=https://openrouter.ai/api/v1
 LLM_API_KEY=<your key>
-LLM_MODEL=google/gemma-4-31b-it:free
+LLM_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free   # alternative: google/gemma-4-31b-it:free
 # optional
 RELEVANCE_THRESHOLD=0.60
 LLM_REASONING_EFFORT=

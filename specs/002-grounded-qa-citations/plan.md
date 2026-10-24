@@ -10,7 +10,7 @@ It optionally rewrites a follow-up into a standalone question (last 6 turns), re
 k passages with Feature 1 search, drops passages below a calibrated relevance threshold
 (provisional 0.60), and — only if passages remain — asks the model through one
 OpenAI-compatible client (`llm.py`, the single LLM boundary; default OpenRouter with the
-pinned free model `google/gemma-4-31b-it:free`) to answer from numbered, tag-delimited
+pinned free model `nvidia/nemotron-3-ultra-550b-a55b:free`) to answer from numbered, tag-delimited
 passages with [n] citations. Replies are
 checked in code: not-found detection, citation validation (invalid or missing → exact
 not-found sentence plus warning), and an uncited-sentence warning. Retries honour the
@@ -107,7 +107,7 @@ ADRs: [ADR-0003 LLM Boundary and Retry Policy](../../history/adr/0003-llm-bounda
 [ADR-0004 Grounding and Citation Validation](../../history/adr/0004-grounding-and-citation-validation.md) (4–8).
 
 1. One `openai` client (`max_retries=0`), base URL/key/model from settings; default OpenRouter
-   + pinned `google/gemma-4-31b-it:free`; temperature 0, `max_tokens` 2048, optional
+   + pinned `nvidia/nemotron-3-ultra-550b-a55b:free` (alternative `google/gemma-4-31b-it:free` for a later model comparison); temperature 0, `max_tokens` 2048, optional
    `reasoning.effort`; `finish_reason == "length"` → `LLMError` (R1, R2).
 2. Retries: 4 attempts; `Retry-After` else `X-RateLimit-Reset` (≤ 60 s) else 2/4/8 s; only
    408/429/5xx/timeouts and 200-with-error bodies (R3).

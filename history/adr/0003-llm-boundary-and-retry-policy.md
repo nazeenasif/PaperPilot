@@ -23,7 +23,8 @@
   question), `temperature=0`, `max_tokens=2048`.
 - **Configuration**: `LLM_PROVIDER` (label, default `openrouter`), `LLM_BASE_URL` (default
   `https://openrouter.ai/api/v1` for `openrouter`), `LLM_API_KEY`, `LLM_MODEL` (default pinned
-  free model `google/gemma-4-31b-it:free`), optional `LLM_REASONING_EFFORT` sent as
+  free model `nvidia/nemotron-3-ultra-550b-a55b:free` since 2026-10-24, after the first real runs; first pin `google/gemma-4-31b-it:free` kept as
+  the alternative for a model comparison), optional `LLM_REASONING_EFFORT` sent as
   `extra_body={"reasoning": {"effort": ...}}`. Any OpenAI-compatible provider (Groq, OpenAI,
   a local server) is used by changing settings only.
 - **Retry policy** (own code, SDK retries off): up to 4 attempts; retry on 408, 429, 500,

@@ -29,9 +29,12 @@ the installed package or official documentation on 2026-10-24.
 
 ## R2. Pinned free model and reasoning tokens
 
-- **Decision**: default `LLM_MODEL=google/gemma-4-31b-it:free` (listed by
-  `https://openrouter.ai/api/v1/models` on 2026-10-24 among 17 `:free` models;
-  instruction-tuned, 262k context). `max_tokens` = 2048. Optional `LLM_REASONING_EFFORT`
+- **Decision**: default `LLM_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free` (listed by
+  `https://openrouter.ai/api/v1/models` on 2026-10-24 among 17 `:free` models; 1M context,
+  reasoning). Chosen after the first real Checkpoint 4 runs: a correct answer citing the right
+  passage, ~178 reasoning tokens (well under the 2048 budget) and 3–5 s generation. The first
+  pin, `google/gemma-4-31b-it:free` (instruction-tuned, 262k context), is kept as the alternative for a later
+  model-comparison experiment; switching is a `LLM_MODEL` change only. `max_tokens` = 2048. Optional `LLM_REASONING_EFFORT`
   (empty = model default; e.g. `low`, `none`) is sent as `extra_body={"reasoning":
   {"effort": ...}}`. Checkpoint 4 verifies that the configured model is still listed.
 - **Verified** (OpenRouter docs): all 17 current free models support reasoning; the output
@@ -191,3 +194,6 @@ the installed package or official documentation on 2026-10-24.
   calibration which needs none) fit in 50/day once; repeated runs or any evaluation harness
   run (dozens of questions, several configurations) need the 1,000/day limit. The retry
   policy handles the per-minute limit; the daily limit ends a run with a clear message.
+- **Model comparison**: comparing the default (`nvidia/nemotron-3-ultra-550b-a55b:free`) with the alternative (`google/gemma-4-31b-it:free`) on the
+  same questions doubles the requests per run, so it belongs to the evaluation feature and
+  needs the 1,000/day limit.

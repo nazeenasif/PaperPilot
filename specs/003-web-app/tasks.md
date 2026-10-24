@@ -251,7 +251,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - `already_present` reports only `ready`.
   - `list_papers()` fills `text_passages`, `table_passages`, `section_count`, `arxiv_id`, `has_pdf` and `highlights` (`exact`, `mismatch` or `no_pdf`).
   - `arxiv_id` is read from the stored page-1 passages when there is no layout, covering papers ingested before this feature.
-- [ ] T029 [US3] Implement batch progress in `paperpilot/store.py`, and the `on_progress` phases plus the extended `PaperSummary` in `paperpilot/library.py`, so T027, T028 and the full `pytest` pass.
+- [X] T029 [US3] Implement batch progress in `paperpilot/store.py`, and the `on_progress` phases plus the extended `PaperSummary` in `paperpilot/library.py`, so T027, T028 and the full `pytest` pass.
 
 ### US5 (P2): request accounting and the long-wait rule (ADR-0007)
 

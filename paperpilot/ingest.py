@@ -386,6 +386,12 @@ def order_blocks(blocks: Sequence[tuple], page_width: float) -> list[tuple]:
 _ARXIV = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5})(?:v\d+)?")
 
 
+def find_arxiv_id(text: str) -> str | None:
+    """The arXiv identifier of an "arXiv:NNNN.NNNNN[vN]" stamp in the text, without the version."""
+    match = _ARXIV.search(text)
+    return match.group(1) if match else None
+
+
 def _words_by_block(page: pymupdf.Page) -> dict[int, tuple[Word, ...]]:
     """A page's words grouped by PyMuPDF block number, in reading order within each block."""
     grouped: dict[int, list[tuple]] = {}
@@ -419,7 +425,7 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
             raise PdfReadError(f"{path.name} is password-protected")
         blocks: list[Block] = []
         page1_spans = page_spans(doc[0]) if doc.page_count else []
-        arxiv = _ARXIV.search(doc[0].get_text()) if doc.page_count else None
+        arxiv_id = find_arxiv_id(doc[0].get_text()) if doc.page_count else None
         page_sizes = tuple((round(page.rect.width, 2), round(page.rect.height, 2)) for page in doc)
         for number, page in enumerate(doc, start=1):
             # Text blocks only (type 0); image blocks are skipped.
@@ -446,7 +452,7 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
         len(sections),
     )
     return ParsedPaper(
-        paper_id_for(data), title, path.name, page_count, sections, page_sizes, arxiv.group(1) if arxiv else None
+        paper_id_for(data), title, path.name, page_count, sections, page_sizes, arxiv_id
     )
 
 

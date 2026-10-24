@@ -193,7 +193,7 @@ def test_reprocess_failure_leaves_the_paper_unchanged(library_env, fake_embedder
     first = library.add_paper(paper_file)
     before = store.paper_metadata(first.paper_id)
 
-    def broken(texts):
+    def broken(texts, on_progress=None):
         raise RuntimeError("embedding failed")
 
     monkeypatch.setattr(store, "embed_passages", broken)

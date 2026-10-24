@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -53,13 +54,27 @@ def load_model() -> float:
     return seconds
 
 
-def embed_passages(texts: list[str]) -> list[list[float]]:
-    """Embed passage texts as normalised vectors (no instruction prefix)."""
+def embed_passages(
+    texts: list[str], on_progress: Callable[[int, int], None] | None = None
+) -> list[list[float]]:
+    """Embed passage texts as normalised vectors (no instruction prefix).
+
+    `on_progress(done, total)`, if given, is called after each batch (upload progress, FR-017).
+    """
     load_model()
     start = time.perf_counter()
-    vectors = _model.encode(texts, batch_size=BATCH_SIZE, normalize_embeddings=True, show_progress_bar=False)
+    if on_progress is None:
+        vectors = _model.encode(texts, batch_size=BATCH_SIZE, normalize_embeddings=True, show_progress_bar=False)
+        result = vectors.tolist()
+    else:
+        result = []
+        for first in range(0, len(texts), BATCH_SIZE):
+            batch = texts[first : first + BATCH_SIZE]
+            vectors = _model.encode(batch, batch_size=BATCH_SIZE, normalize_embeddings=True, show_progress_bar=False)
+            result.extend(vectors.tolist())
+            on_progress(first + len(batch), len(texts))
     logger.info("Embedded %d passages in %.2fs", len(texts), time.perf_counter() - start)
-    return vectors.tolist()
+    return result
 
 
 def embed_query(text: str) -> list[float]:
@@ -192,3 +207,9 @@ def query(embedding: list[float], k: int, paper_ids: list[str] | None = None) ->
 def all_metadata() -> list[dict]:
     """Return the metadata of every stored passage."""
     return get_collection().get(include=["metadatas"])["metadatas"]
+
+
+def all_passages() -> list[tuple[str, str, dict]]:
+    """Return (passage_id, text, metadata) for every stored passage."""
+    result = get_collection().get(include=["documents", "metadatas"])
+    return list(zip(result["ids"], result["documents"], result["metadatas"]))

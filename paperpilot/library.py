@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -135,20 +136,40 @@ class PaperSummary:
     source_file: str
     page_count: int
     passage_count: int
+    text_passages: int = 0
+    table_passages: int = 0
+    section_count: int = 0
+    arxiv_id: str | None = None
+    has_pdf: bool = False
+    highlights: str = "no_pdf"  # "exact", "mismatch" or "no_pdf"
 
 
 def list_papers() -> list[PaperSummary]:
-    """Return one summary per stored paper, sorted by title (FR-017)."""
+    """Return one summary per stored paper with its card statistics, sorted by title (FR-019).
+
+    Counts come from the stored passage metadata; the arXiv identifier from the stored page-1
+    passages, so papers added before Feature 3 have it too without re-parsing.
+    """
     papers: dict[str, dict] = {}
-    counts: dict[str, int] = {}
-    for metadata in store.all_metadata():
+    counts: dict[str, dict] = {}
+    for _, text, metadata in store.all_passages():
         paper_id = metadata["paper_id"]
         papers.setdefault(paper_id, metadata)
-        counts[paper_id] = counts.get(paper_id, 0) + 1
-    summaries = [
-        PaperSummary(paper_id, m["title"], m["source_file"], m["page_count"], counts[paper_id])
-        for paper_id, m in papers.items()
-    ]
+        stats = counts.setdefault(paper_id, {"passages": 0, "tables": 0, "sections": set(), "arxiv": None})
+        stats["passages"] += 1
+        stats["tables"] += metadata.get("kind") == "table"
+        stats["sections"].add(metadata["section"])
+        if stats["arxiv"] is None and metadata["page"] == 1:
+            stats["arxiv"] = ingest.find_arxiv_id(text)
+    summaries = []
+    for paper_id, m in papers.items():
+        stats = counts[paper_id]
+        summaries.append(PaperSummary(
+            paper_id, m["title"], m["source_file"], m["page_count"], stats["passages"],
+            text_passages=stats["passages"] - stats["tables"], table_passages=stats["tables"],
+            section_count=len(stats["sections"]), arxiv_id=stats["arxiv"],
+            has_pdf=_pdf_file(paper_id).exists(), highlights=_highlights(paper_id),
+        ))
     return sorted(summaries, key=lambda p: p.title.lower())
 
 
@@ -165,13 +186,29 @@ def delete_paper(paper_id: str) -> int:
     return removed
 
 
-def add_paper(path: str | Path) -> AddResult:
+Progress = Callable[[str, int | None], None]
+
+
+def _no_progress(phase: str, percent: int | None) -> None:
+    pass
+
+
+def _embed_with_progress(texts: list[str], report: Progress) -> list[list[float]]:
+    """Embed passages, reporting the "embedding" phase from 0 to 100 percent."""
+    report("embedding", 0)
+    return store.embed_passages(texts, on_progress=lambda done, total: report("embedding", round(100 * done / total)))
+
+
+def add_paper(path: str | Path, on_progress: Progress | None = None) -> AddResult:
     """Parse, chunk, embed and store a PDF with its PDF copy and highlight layout.
 
     Nothing is stored if any step fails. Content already in the library is never embedded
     again (FR-018): with its PDF stored it is "already_present"; without, the PDF is attached
-    and its layout mapped (parse and chunk only). Raises PdfReadError, NoTextError or StorageError.
+    and its layout mapped (parse and chunk only). `on_progress(phase, percent)` reports
+    "parsing", "chunking", "embedding" (percent), "mapping" and "ready" (FR-017).
+    Raises PdfReadError, NoTextError or StorageError.
     """
+    report = on_progress or _no_progress
     path = Path(path)
     try:
         data = path.read_bytes()
@@ -183,20 +220,23 @@ def add_paper(path: str | Path) -> AddResult:
         title = stored_metadata[0]["title"]
         if _pdf_file(paper_id).exists():
             logger.info("%s is already in the library as %s", path.name, paper_id)
+            report("ready", None)
             return AddResult(paper_id, title, len(stored_metadata), True, NO_TIMINGS, "already_present",
                              _highlights(paper_id))
-        return _attach_pdf(path, data, paper_id, title, len(stored_metadata))
+        return _attach_pdf(path, data, paper_id, title, len(stored_metadata), report)
 
     settings = load_settings()
     start = time.perf_counter()
+    report("parsing", None)
     paper = ingest.parse_pdf(path)
+    report("chunking", None)
     passages = ingest.chunk_sections(paper.sections, paper.paper_id, paper.title, settings)
     if not passages:
         raise NoTextError(f"{paper.source_file} has no passages long enough to store")
     parsed = time.perf_counter()
 
     # All slow, failure-prone work happens before the writes (research R11).
-    embeddings = store.embed_passages([p.text for p in passages])
+    embeddings = _embed_with_progress([p.text for p in passages], report)
     embedded = time.perf_counter()
     try:
         store.upsert_passages(passages, embeddings, paper.source_file, paper.page_count)
@@ -210,14 +250,18 @@ def add_paper(path: str | Path) -> AddResult:
 
     timings = {"parse": parsed - start, "embed": embedded - parsed, "store": stored - embedded}
     logger.info("Added %s: %d passages in %.2fs", paper.source_file, len(passages), stored - start)
+    report("ready", None)
     return AddResult(paper.paper_id, paper.title, len(passages), False, timings, "added", "exact")
 
 
-def _attach_pdf(path: Path, data: bytes, paper_id: str, title: str, passage_count: int) -> AddResult:
+def _attach_pdf(
+    path: Path, data: bytes, paper_id: str, title: str, passage_count: int, report: Progress = _no_progress
+) -> AddResult:
     """Store the PDF of a paper already in the library, then map its highlights without
     embedding: the layout is kept only if every regenerated passage id and text matches."""
     settings = load_settings()
     start = time.perf_counter()
+    report("mapping", None)
     _write_atomic(_pdf_file(paper_id), data)
     try:
         paper = ingest.parse_pdf(path)
@@ -235,10 +279,11 @@ def _attach_pdf(path: Path, data: bytes, paper_id: str, title: str, passage_coun
         highlights = "mismatch"
     logger.info("Attached the PDF of %s (%s); highlights %s", paper_id, path.name, highlights)
     timings = {"parse": time.perf_counter() - start, "embed": 0.0, "store": 0.0}
+    report("ready", None)
     return AddResult(paper_id, title, passage_count, True, timings, "pdf_attached", highlights)
 
 
-def reprocess_paper(paper_id: str) -> AddResult:
+def reprocess_paper(paper_id: str, on_progress: Progress | None = None) -> AddResult:
     """Rebuild a paper from its stored PDF: parse, chunk, embed and lay out again (FR-018a).
 
     The old passages are replaced only after the new ones are embedded, so a failure leaves
@@ -247,16 +292,19 @@ def reprocess_paper(paper_id: str) -> AddResult:
     stored_metadata = store.paper_metadata(paper_id)
     if not stored_metadata:
         raise UnknownPaperError(f"Paper {paper_id} is not in the library")
+    report = on_progress or _no_progress
     source = pdf_path(paper_id)
     source_file = stored_metadata[0]["source_file"]
     settings = load_settings()
     start = time.perf_counter()
+    report("parsing", None)
     paper = ingest.parse_pdf(source)
+    report("chunking", None)
     passages = ingest.chunk_sections(paper.sections, paper.paper_id, paper.title, settings)
     if not passages:
         raise NoTextError(f"{source_file} has no passages long enough to store")
     parsed = time.perf_counter()
-    embeddings = store.embed_passages([p.text for p in passages])
+    embeddings = _embed_with_progress([p.text for p in passages], report)
     embedded = time.perf_counter()
     with store.write_lock:
         store.delete_paper_passages(paper_id)
@@ -264,6 +312,7 @@ def reprocess_paper(paper_id: str) -> AddResult:
     _write_layout(paper, passages, settings)
     stored = time.perf_counter()
     logger.info("Re-processed %s: %d passages in %.2fs", paper_id, len(passages), stored - start)
+    report("ready", None)
     timings = {"parse": parsed - start, "embed": embedded - parsed, "store": stored - embedded}
     return AddResult(paper_id, paper.title, len(passages), True, timings, "reprocessed", "exact")
 

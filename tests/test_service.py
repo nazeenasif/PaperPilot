@@ -175,3 +175,77 @@ def test_empty_filter_searches_the_whole_library(two_papers, fake_answers):
     empty_filter = ask(QUESTION, k=20, paper_ids=[])
     assert [p.passage_id for p in empty_filter.passages] == [p.passage_id for p in unfiltered.passages]
     assert {p.paper_id for p in unfiltered.passages} == set(two_papers)
+
+
+# --- US4: follow-up questions ---
+
+
+
+@pytest.fixture
+def history():
+    from paperpilot.service import Turn
+
+    return [Turn("user", "What is the evaluation setup?"), Turn("assistant", "A benchmark dataset is used [1].")]
+
+
+@pytest.fixture
+def search_spy(monkeypatch):
+    """Record every query sent to library.search, still running the real search."""
+    from paperpilot import library
+
+    queries: list[str] = []
+    real_search = library.search
+
+    def spy(query, *args, **kwargs):
+        queries.append(query)
+        return real_search(query, *args, **kwargs)
+
+    monkeypatch.setattr(library, "search", spy)
+    return queries
+
+
+def test_no_history_means_no_rewrite_call(answer_env, fake_answers):
+    fake_answers.add("Evaluated on a benchmark [1].")
+    answer = ask(QUESTION)
+    assert answer.llm_calls == 1
+    assert fake_answers.calls[0][0] == prompts.SYSTEM_INSTRUCTION
+    assert answer.rewrite_applied is False
+    assert answer.rewrite_fallback_reason is None
+
+
+def test_follow_up_is_rewritten_and_used_for_search(answer_env, fake_answers, history, search_spy):
+    standalone = "Which evaluation dataset does the benchmark use?"
+    fake_answers.add(standalone, "Evaluated on a benchmark dataset [1].")
+    answer = ask("Which dataset does it use?", history=history)
+    assert fake_answers.calls[0][0] == prompts.REWRITE_INSTRUCTION
+    assert fake_answers.calls[1][0] == prompts.SYSTEM_INSTRUCTION
+    assert search_spy == [standalone]
+    assert answer.question == "Which dataset does it use?"
+    assert answer.standalone_question == standalone
+    assert answer.rewrite_applied is True
+    assert answer.rewrite_fallback_reason is None
+    assert answer.llm_calls == 2
+    assert answer.timings["rewrite"] > 0
+    assert answer.tokens == {"input": 200, "output": 80}
+    assert fake_answers.calls[1][1].rstrip().endswith(f"Question: {standalone}")
+
+
+def test_failed_rewrite_falls_back_to_the_original_question(answer_env, fake_answers, history, search_spy):
+    from paperpilot.errors import LLMError
+
+    fake_answers.add(LLMError("rate limited"), "Evaluated on a benchmark [1].")
+    answer = ask("Which dataset does it use?", history=history)
+    assert search_spy == ["Which dataset does it use?"]
+    assert answer.standalone_question == "Which dataset does it use?"
+    assert answer.rewrite_applied is False
+    assert answer.rewrite_fallback_reason == "rewrite_failed"
+    assert answer.text == "Evaluated on a benchmark [1]."
+    assert answer.llm_calls == 2
+
+
+def test_empty_rewrite_falls_back_to_the_original_question(answer_env, fake_answers, history, search_spy):
+    fake_answers.add("   ", "Evaluated on a benchmark [1].")
+    answer = ask("Which dataset does it use?", history=history)
+    assert search_spy == ["Which dataset does it use?"]
+    assert answer.rewrite_applied is False
+    assert answer.rewrite_fallback_reason == "rewrite_empty"

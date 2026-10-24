@@ -233,3 +233,25 @@ def test_model_is_not_listed(monkeypatch, llm_env):
     client = f.FakeClient([], model_ids=["other/model:free"])
     monkeypatch.setattr(llm, "_make_client", lambda settings: client)
     assert llm.model_is_listed() is False
+
+
+# --- per-request timeout (SC-008, research R13) ---
+
+
+def test_client_uses_the_configured_timeout(monkeypatch, llm_env):
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "30")
+    created = {}
+    monkeypatch.setattr(openai, "OpenAI", lambda **kwargs: created.update(kwargs) or object())
+    llm._build_client(load_settings())
+    assert created["timeout"] == 30.0
+
+
+def test_persistent_timeouts_give_readable_error_naming_the_limit(fake):
+    client = fake(*[f.timeout() for _ in range(4)])
+    with pytest.raises(LLMError) as error:
+        llm.generate("s", "p")
+    message = str(error.value)
+    assert "60 s" in message
+    assert "LLM_TIMEOUT_SECONDS" in message
+    assert "\n" not in message
+    assert len(client.calls) == 4

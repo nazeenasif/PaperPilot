@@ -305,8 +305,11 @@ passages and confirm [9] is reported as invalid and [2] as valid.
   (Q2, Q4), the answer is the not-found sentence or a correctly limited partial answer.
 - **SC-007**: A search of the repository, logs and error output finds zero occurrences of the
   API key value.
-- **SC-008**: When the provider is not rate-limiting, a typical answer is returned within 15
-  seconds of the question.
+- **SC-008**: In a checkpoint run, the median generate time of answered (non-not-found)
+  questions is at most 15 seconds. Generate times of not-found answers and the maximum
+  generate time are reported, not checked (free endpoints vary widely; see research R13).
+  Each model request is limited by a configurable timeout (default 60 seconds) that ends in a
+  readable error.
 - **SC-009**: Under a simulated persistent provider failure, 100% of attempts end with a
   readable message and no stack trace.
 - **SC-010**: 100% of answers report rewrite, retrieve and generate timings.

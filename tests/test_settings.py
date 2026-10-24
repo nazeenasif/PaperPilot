@@ -22,6 +22,7 @@ ENV_VARS = [
     "LLM_MODEL",
     "RELEVANCE_THRESHOLD",
     "LLM_REASONING_EFFORT",
+    "LLM_TIMEOUT_SECONDS",
 ]
 
 
@@ -168,3 +169,18 @@ def test_api_key_never_in_repr_or_describe(monkeypatch):
 
 def test_describe_says_when_key_is_missing():
     assert "LLM_API_KEY = not set" in load_settings().describe()
+
+
+def test_llm_timeout_default_and_override(monkeypatch):
+    assert load_settings().llm_timeout_seconds == 60
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "30")
+    assert load_settings().llm_timeout_seconds == 30
+
+
+@pytest.mark.parametrize("value", ["0", "-5", "abc"])
+def test_invalid_llm_timeout_names_variable_and_value(monkeypatch, value):
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", value)
+    with pytest.raises(SettingsError) as exc:
+        load_settings()
+    assert "LLM_TIMEOUT_SECONDS" in str(exc.value)
+    assert value in str(exc.value)

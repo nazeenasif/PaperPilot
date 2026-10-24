@@ -22,6 +22,7 @@ _ENV_NAMES = {
     "llm_model": "LLM_MODEL",
     "relevance_threshold": "RELEVANCE_THRESHOLD",
     "llm_reasoning_effort": "LLM_REASONING_EFFORT",
+    "llm_timeout_seconds": "LLM_TIMEOUT_SECONDS",
 }
 # Settings whose values must never be printed.
 _SECRET_FIELDS = {"llm_api_key"}
@@ -43,6 +44,7 @@ class Settings:
     llm_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     relevance_threshold: float = 0.59  # calibrated for bge-small on the test library (research R8)
     llm_reasoning_effort: str = ""  # empty: the model's default
+    llm_timeout_seconds: int = 60  # per model request (research R13)
 
     def describe(self) -> str:
         """Return one 'ENV_NAME = value' line per setting; secrets show only whether they are set."""
@@ -125,4 +127,5 @@ def load_settings() -> Settings:
         llm_model=_read_text("LLM_MODEL", defaults.llm_model),
         relevance_threshold=_read_fraction("RELEVANCE_THRESHOLD", defaults.relevance_threshold),
         llm_reasoning_effort=_read_text("LLM_REASONING_EFFORT", defaults.llm_reasoning_effort),
+        llm_timeout_seconds=_read_int("LLM_TIMEOUT_SECONDS", defaults.llm_timeout_seconds, 1),
     )

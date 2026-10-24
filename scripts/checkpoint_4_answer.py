@@ -7,6 +7,7 @@ Usage: python scripts/checkpoint_4_answer.py [us1] [us2] [nearmiss]   (default: 
 """
 
 import logging
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -21,6 +22,7 @@ from paperpilot.service import Answer, ask  # noqa: E402
 
 REQUEST_BUDGET = 6
 WORD_LIMIT = 165  # 150 + 10% margin (SC-011); reported, never enforced
+MEDIAN_GENERATE_LIMIT = 15.0  # SC-008: median generate time of answered questions
 # Its top passage (Attention, Introduction) contains the paper's own markers such as "[13]".
 US1_QUESTION = "What recurrent models were state of the art for sequence modelling before the Transformer?"
 US2_QUESTION = "What is the capital of France?"
@@ -34,6 +36,31 @@ NEARMISS_QUESTIONS = [
 NEARMISS_BUDGET = 3
 PARTS = ("us1", "us2", "nearmiss")
 PREVIEW_CHARS = 160
+
+
+ANSWERS: list[Answer] = []  # every answer in this run, for the SC-008 timing summary
+
+
+def record(answer: Answer) -> Answer:
+    """Keep an answer for the timing summary and return it."""
+    ANSWERS.append(answer)
+    return answer
+
+
+def timing_summary(results: list[tuple[bool, str]]) -> None:
+    """SC-008: check the median generate time of answered questions; report the rest."""
+    answered = [a.timings["generate"] for a in ANSWERS if not a.not_found]
+    refused = [a.timings["generate"] for a in ANSWERS if a.not_found and a.llm_calls]
+    if refused:
+        print(f"INFO: not-found generate times {', '.join(f'{t:.1f} s' for t in refused)} (reported only)")
+    if not answered:
+        print("INFO: no answered questions in this run; SC-008 median not checked")
+        return
+    print(f"INFO: maximum generate time {max(answered + refused):.1f} s (reported only)")
+    median = statistics.median(answered)
+    check(results, median <= MEDIAN_GENERATE_LIMIT,
+          f"median generate time of {len(answered)} answered question(s) is {median:.1f} s "
+          f"(limit {MEDIAN_GENERATE_LIMIT:.0f} s, SC-008)")
 
 
 def show(answer: Answer) -> None:
@@ -89,7 +116,7 @@ def main() -> int:
 
         if "us1" in parts:
             print(f"\n=== US1: {US1_QUESTION}")
-            answer = ask(US1_QUESTION)
+            answer = record(ask(US1_QUESTION))
             show(answer)
             markers = sum(1 for p in answer.passages if prompts.strip_reference_markers(p.text) != p.text)
             print(f"\nINFO: {markers} of {len(answer.passages)} passages contained the papers' own reference "
@@ -102,7 +129,7 @@ def main() -> int:
         if "us2" in parts:
             print(f"\n=== US2: {US2_QUESTION}")
             before = llm.request_count()
-            answer = ask(US2_QUESTION)
+            answer = record(ask(US2_QUESTION))
             show(answer)
             check(results, answer.text == prompts.NOT_FOUND, "the answer is exactly the not-found sentence")
             check(results, llm.request_count() == before, "no LLM request was made (rejected by the threshold)")
@@ -111,7 +138,7 @@ def main() -> int:
             before = llm.request_count()
             for question in NEARMISS_QUESTIONS:
                 print(f"\n=== Near-miss: {question}")
-                answer = ask(question)
+                answer = record(ask(question))
                 show(answer)
                 if answer.not_found:
                     check(results, True, f"not-found ({answer.fallback_reason}) for: {question}")
@@ -126,6 +153,8 @@ def main() -> int:
     except PaperPilotError as error:
         check(results, False, f"{type(error).__name__}: {error}")
 
+    print()
+    timing_summary(results)
     used = llm.request_count()
     print(f"\nLLM requests: {used} (budget {REQUEST_BUDGET})")
     check(results, used <= REQUEST_BUDGET, "stayed within the request budget")

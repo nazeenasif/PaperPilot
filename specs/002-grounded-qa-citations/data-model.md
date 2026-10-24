@@ -15,6 +15,7 @@ memory; the library from Feature 1 is read only.
 | llm_model | `LLM_MODEL` | str | `nvidia/nemotron-3-ultra-550b-a55b:free` | non-empty |
 | relevance_threshold | `RELEVANCE_THRESHOLD` | float | `0.59` (calibrated) | 0 ≤ value ≤ 1 |
 | llm_reasoning_effort | `LLM_REASONING_EFFORT` | str | `""` | optional; sent as `reasoning.effort` when set |
+| llm_timeout_seconds | `LLM_TIMEOUT_SECONDS` | int | `60` | ≥ 1; per model request (research R13) |
 
 Feature 1 behaviour is unchanged when the LLM settings are absent.
 

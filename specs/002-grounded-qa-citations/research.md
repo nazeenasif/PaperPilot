@@ -215,3 +215,29 @@ the installed package or official documentation on 2026-10-24.
 - **Model comparison**: comparing the default (`nvidia/nemotron-3-ultra-550b-a55b:free`) with the alternative (`google/gemma-4-31b-it:free`) on the
   same questions doubles the requests per run, so it belongs to the evaluation feature and
   needs the 1,000/day limit.
+
+## R13. Latency of the free endpoint
+
+- **Observed** (checkpoint 4, `nvidia/nemotron-3-ultra-550b-a55b:free`, 2026-10-24): generate
+  time varies widely for the same request. The same question "How was GPT-4 trained?" took
+  **10.5 s** in one run and **37.5 s** in the next (no retries in either). Answered questions
+  took 3–5 s; not-found replies 10–38 s, as the model reasons longer before declining.
+- **Decision**: SC-008 checks the **median** generate time of answered questions in a
+  checkpoint run (≤ 15 s); not-found and maximum generate times are reported only. Each
+  request has a timeout, `LLM_TIMEOUT_SECONDS` (default 60), passed to the client; a timed-out
+  request is retried like other transient errors (R3) and persistent timeouts end in a
+  readable `LLMError` naming the limit and the setting.
+- **Rationale**: free endpoints share capacity, so single slow requests say little about the
+  system; the median of answered questions reflects what the researcher usually waits.
+
+## R14. Planned evaluation experiment: reasoning effort
+
+- **Experiment** (evaluation feature, needs the 1,000/day limit): run the same question set
+  with `LLM_REASONING_EFFORT=low` and with the model default. Measure (1) faithfulness:
+  claims supported by the cited passages; (2) correct refusals: not-found on the topic-level
+  near-misses and on unanswerable probe questions, without false not-found on answerable
+  ones; (3) latency: median and maximum generate time, separately for answers and not-found
+  replies; (4) reasoning tokens and `length` cut-offs.
+- **Hypothesis**: low effort cuts latency and reasoning tokens, especially for not-found
+  replies, possibly at the cost of more false refusals or weaker grounding. Adopt it as the
+  default only if faithfulness and correct refusals do not get worse.

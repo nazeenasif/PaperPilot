@@ -20,7 +20,6 @@ DEFAULT_BASE_URLS = {"openrouter": "https://openrouter.ai/api/v1"}
 MAX_ATTEMPTS = 4
 BACKOFF_SECONDS = (2.0, 4.0, 8.0)
 MAX_WAIT_SECONDS = 60.0
-TIMEOUT_SECONDS = 60.0
 # Reasoning tokens count against this limit, so it is generous for a ~150-word answer.
 MAX_OUTPUT_TOKENS = 2048
 RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
@@ -83,7 +82,7 @@ def _build_client(settings: Settings) -> object:
     return openai.OpenAI(
         api_key=settings.llm_api_key,
         base_url=_base_url(settings),
-        timeout=TIMEOUT_SECONDS,
+        timeout=float(settings.llm_timeout_seconds),
         max_retries=0,
     )
 
@@ -156,8 +155,13 @@ def _failure_message(error: Exception, attempts: int, settings: Settings) -> str
         return f"{label} says the account is out of credits. Details: {detail}"
     if status == 404:
         return f"{label} does not know model '{settings.llm_model}' (check LLM_MODEL). Details: {detail}"
-    if isinstance(error, (openai.APITimeoutError, openai.APIConnectionError)):
-        return f"Could not reach {label} after {attempts} attempt(s) ({type(error).__name__})."
+    if isinstance(error, openai.APITimeoutError):
+        return (
+            f"{label} did not answer within {settings.llm_timeout_seconds} s on {attempts} attempt(s); "
+            "try again later or raise LLM_TIMEOUT_SECONDS."
+        )
+    if isinstance(error, openai.APIConnectionError):
+        return f"Could not reach {label} after {attempts} attempt(s); check the network and LLM_BASE_URL."
     return f"{label} request failed (status {status}) after {attempts} attempt(s). Details: {detail}"
 
 

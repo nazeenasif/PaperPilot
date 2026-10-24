@@ -130,13 +130,15 @@ def ask(
 
     start = time.perf_counter()
     results = library.search(standalone, k=k, paper_ids=paper_ids)
-    # Passages below the calibrated threshold never reach the model (research R8).
-    passages = _number([r for r in results if r.score >= settings.relevance_threshold])
     timings["retrieve"] = time.perf_counter() - start
+    passages: list[NumberedPassage] = []
     if not results:
         return finish(prompts.NOT_FOUND, NO_CITATIONS, "no_passages")
-    if not passages:
+    # The threshold was calibrated on top-1 scores, so it gates the question on its best passage;
+    # when that passes, all k passages go to the model unfiltered (research R8).
+    if max(r.score for r in results) < settings.relevance_threshold:
         return finish(prompts.NOT_FOUND, NO_CITATIONS, "below_threshold")
+    passages = _number(results)
 
     start = time.perf_counter()
     reply = llm.generate(prompts.SYSTEM_INSTRUCTION, prompts.build_answer_prompt(standalone, passages))

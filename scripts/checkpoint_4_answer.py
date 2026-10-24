@@ -3,7 +3,7 @@
 Calls the configured model (OpenRouter free tier by default) and prints how many requests
 it used; it stops with FAIL if it exceeds its request budget.
 
-Usage: python scripts/checkpoint_4_answer.py [us1] [us2] [us3] [nearmiss]   (default: all parts)
+Usage: python scripts/checkpoint_4_answer.py [us1] [us2] [us3] [us5] [nearmiss]   (default: all parts)
 """
 
 import logging
@@ -21,7 +21,7 @@ sys.stderr.reconfigure(encoding="utf-8")
 from paperpilot import library, llm, prompts, store  # noqa: E402
 from paperpilot.config import load_settings  # noqa: E402
 from paperpilot.errors import PaperPilotError  # noqa: E402
-from paperpilot.service import Answer, ask  # noqa: E402
+from paperpilot.service import Answer, ask, review_reply  # noqa: E402
 
 REQUEST_BUDGET = 6
 WORD_LIMIT = 165  # 150 + 10% margin (SC-011); reported, never enforced
@@ -44,7 +44,11 @@ US3_QUESTIONS = [
     ("What data was BERT pre-trained on?", True),
 ]
 US3_PAPER_TITLE_PREFIX = "BERT:"
-PARTS = ("us1", "us2", "us3", "nearmiss")
+# Crafted replies for the offline citation check (no LLM request): 6 passages provided.
+US5_PASSAGES = 6
+US5_INVALID = "The Transformer was trained on WMT 2014 English-German [2]. It used 8 P100 GPUs [9]."
+US5_UNCITED = "The Transformer was trained on WMT 2014 English-German. It used 8 P100 GPUs."
+PARTS = ("us1", "us2", "us3", "us5", "nearmiss")
 PREVIEW_CHARS = 160
 
 
@@ -165,6 +169,25 @@ def main() -> int:
                     elif answer.not_found:
                         print("INFO: known false not-found (answer passages rank 13 and 22 within BERT; "
                               "see eval/probe_notes.md)")
+
+        if "us5" in parts:
+            print(f"\n=== US5: offline citation check ({US5_PASSAGES} passages, no LLM request)")
+            before = llm.request_count()
+            for label, reply, reason, problem in (
+                ("invalid citation", US5_INVALID, "invalid_citations", "[9]"),
+                ("no citations", US5_UNCITED, "no_citations", "no citations"),
+            ):
+                text, citations, warning, rejected, fallback = review_reply(reply, US5_PASSAGES)
+                print(f"\nReply ({label}): {reply}")
+                print(f"  -> answer: {text}")
+                print(f"  -> citations: valid {citations.valid}, invalid {citations.invalid}")
+                print(f"  -> warning: {warning}")
+                print(f"  -> fallback reason: {fallback}")
+                check(results, text == prompts.NOT_FOUND and fallback == reason and rejected == reply,
+                      f"{label}: replaced by the not-found sentence ({reason}), original kept")
+                check(results, warning is not None and problem in warning.lower(),
+                      f"{label}: the warning names the problem ({problem})")
+            check(results, llm.request_count() == before, "the citation check made no LLM request")
 
         if "nearmiss" in parts:
             before = llm.request_count()

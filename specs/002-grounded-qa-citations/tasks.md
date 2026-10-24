@@ -124,7 +124,7 @@ warning; uncited sentences produce a warning only.
 
 - [X] T029 [US5] Add failing tests to `tests/test_service.py` for the pure helper `review_reply(text, passage_count) -> (answer_text, citations, warning, rejected_answer, fallback_reason)`: invalid number → `NOT_FOUND`, warning lists the invalid numbers, `rejected_answer` is the original, reason `invalid_citations`; no citations at all → `NOT_FOUND` with a "no citations" warning, reason `no_citations`; not-found replies in tolerant forms (exact, quoted, extra whitespace, no final period) → `NOT_FOUND`, reason `model_not_found`, no warning and never treated as "no citations"; all valid but one uncited sentence → original text kept, warning lists that sentence, `rejected_answer is None`; and through `ask()` with a scripted reply citing [9] of 1 passage → `Answer.text == NOT_FOUND`, `warning` and `rejected_answer` set
 - [X] T030 [US5] Implement `review_reply()` in `paperpilot/service.py` and use it in `ask()` (FR-008a, FR-009, ADR-0004); make T029 pass
-- [ ] T031 [US5] Extend `scripts/checkpoint_4_answer.py` with an offline citation check (no LLM request): run `review_reply()` on a crafted answer citing [2] and [9] with 6 passages and on one with no citations; PASS if both become `NOT_FOUND` with warnings naming the problem — **Checkpoint 4, US5 part** (SC-001)
+- [X] T031 [US5] Extend `scripts/checkpoint_4_answer.py` with an offline citation check (no LLM request): run `review_reply()` on a crafted answer citing [2] and [9] with 6 passages and on one with no citations; PASS if both become `NOT_FOUND` with warnings naming the problem — **Checkpoint 4, US5 part** (SC-001)
 
 ---
 

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { Header } from "@/components/app/Header";
 import { StatusGate, StatusProvider } from "@/components/app/StatusGate";
+import { UsageProvider } from "@/components/app/UsageMeter";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
@@ -24,8 +25,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-screen bg-background font-body text-foreground antialiased">
         <TooltipProvider>
           <StatusProvider>
-            <Header />
-            <StatusGate>{children}</StatusGate>
+            <UsageProvider>
+              <Header />
+              <StatusGate>{children}</StatusGate>
+            </UsageProvider>
           </StatusProvider>
         </TooltipProvider>
       </body>

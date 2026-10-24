@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { useStatus } from "@/components/app/StatusGate";
+import { useUsage } from "@/components/app/UsageMeter";
 import { AnswerView } from "@/components/ask/AnswerView";
 import { COMPOSER_ID, Composer } from "@/components/ask/Composer";
 import { ProgressSteps } from "@/components/ask/ProgressSteps";
@@ -17,7 +18,12 @@ import { useAsk } from "@/lib/useAsk";
 /** The Ask screen: the conversation, the working state, the composer and the source viewer
  *  opened from citation chips (User Stories 1 and 2). */
 export function AskScreen() {
-  const { turns, busy, ask } = useAsk();
+  const usage = useUsage();
+  const { turns, busy, ask } = useAsk({
+    // The meter follows each answer's figure; after a failure it asks the server (FR-024).
+    onAnswer: (answer) => answer.usage && usage?.report(answer.usage),
+    onFailure: () => void usage?.refresh(),
+  });
   const [openPassage, setOpenPassage] = useState<NumberedPassage | null>(null);
   const connection = useStatus();
   const status = connection.kind === "status" ? connection.status : null;

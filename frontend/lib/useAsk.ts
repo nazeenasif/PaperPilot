@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/api";
 import { postEventStream } from "@/lib/sse";
@@ -22,9 +22,13 @@ export interface AskTurn {
 }
 
 /** Ask questions over POST /api/ask and keep the conversation's turns (FR-004, FR-006, FR-010). */
-export function useAsk() {
+export function useAsk(callbacks: { onAnswer?: (answer: Answer) => void; onFailure?: (kind: string) => void } = {}) {
   const [turns, setTurns] = useState<AskTurn[]>([]);
   const nextId = useRef(1);
+  const callbacksRef = useRef(callbacks);
+  useEffect(() => {
+    callbacksRef.current = callbacks;
+  });
   const busy = turns.some((turn) => turn.state === "asking");
 
   const update = useCallback((id: number, change: Partial<AskTurn>) => {
@@ -45,10 +49,12 @@ export function useAsk() {
           else if (event === "retry_wait") update(id, { retry: data as RetryWaitEvent, retrySince: Date.now() });
           else if (event === "answer") {
             update(id, { state: "answered", answer: data as Answer, progress: null, retry: null });
+            callbacksRef.current.onAnswer?.(data as Answer);
             return;
           } else if (event === "error") {
             const { kind, ...fields } = data as { kind: string } & Record<string, unknown>;
             update(id, { state: "failed", error: { kind, fields }, progress: null, retry: null });
+            callbacksRef.current.onFailure?.(kind);
             return;
           }
         }

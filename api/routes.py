@@ -1,15 +1,18 @@
 """HTTP endpoints (contracts/web-api.md). Each one calls the engine and maps the result."""
 
 from collections.abc import AsyncIterable
+from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import FileResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from api.errors import ApiError, error_for
 from api.schemas import AskIn, StatusOut, answer_body
 from api.streams import run_streaming
-from paperpilot import llm, service, store
+from paperpilot import library, llm, service, store
 from paperpilot.config import Settings
+from paperpilot.errors import PdfMissingError, UnknownPaperError, UnknownPassageError
 from paperpilot.service import Turn
 
 router = APIRouter(prefix="/api")
@@ -65,3 +68,29 @@ async def ask_question(request: Request, body: AskIn = Depends(start_question)) 
             yield ServerSentEvent(event="answer", data=answer_body(answer, requests))
         else:
             yield ServerSentEvent(event="error", data=error_for(item[1]).body())
+
+
+@router.get("/passages/{passage_id}")
+def get_passage(passage_id: str) -> dict:
+    """One cited passage with its highlight layout; reads files only, never parses (FR-012, FR-013)."""
+    try:
+        view = library.get_passage(passage_id)
+    except UnknownPassageError:
+        raise ApiError("unknown_passage", passage_id=passage_id) from None
+    body = asdict(view)
+    if view.layout is not None:
+        body["layout"] = {"pages": view.layout.pages, "regions": [asdict(r) for r in view.layout.regions]}
+    return body
+
+
+@router.get("/papers/{paper_id}/pdf")
+def get_pdf(paper_id: str) -> FileResponse:
+    """The stored PDF, shown inline by the viewer and by "Open full PDF" (FR-014)."""
+    try:
+        path = library.pdf_path(paper_id)
+    except UnknownPaperError:
+        raise ApiError("unknown_paper", paper_id=paper_id) from None
+    except PdfMissingError:
+        raise ApiError("pdf_missing", paper_id=paper_id) from None
+    return FileResponse(path, media_type="application/pdf", content_disposition_type="inline",
+                        filename=f"{paper_id}.pdf")

@@ -319,7 +319,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - An unknown id gives `404 unknown_passage`.
   - The endpoint never parses (spy on `ingest.parse_pdf`).
   - `GET /api/papers/{id}/pdf` returns `200 application/pdf` inline with the stored bytes. `pdf_missing` and `unknown_paper` give 404.
-- [ ] T038 [US2] Implement both endpoints in `api/routes.py`, with their models in `api/schemas.py`, so T037 passes.
+- [X] T038 [US2] Implement both endpoints in `api/routes.py`, with their models in `api/schemas.py`, so T037 passes.
 - [ ] T039 [US2] Add part `viewer` to `scripts/checkpoint_6_web.py` (0 requests).
   - It takes the passages from part `ask`'s answer when `ask` ran, otherwise from `POST /api/search` (added in T047) for "What is LoRA?".
   - For each passage it fetches `/api/passages/{id}` and `/api/papers/{paper}/pdf`.

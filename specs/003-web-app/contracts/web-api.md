@@ -17,6 +17,8 @@ Every non-2xx response and every SSE `error` event has the body `{"kind": <kind>
 | `unknown_paper` | 404 | `paper_id` | paper not in library |
 | `unknown_passage` | 404 | `passage_id` | passage not in library |
 | `pdf_missing` | 404 | `paper_id` | paper has no stored PDF |
+| `not_found` | 404 | — | no such `/api` path |
+| `invalid_request` | 422 | — | the request body or parameters failed validation |
 | `busy_question` | 409 | — | another question is still being answered (FR-010) |
 | `busy_job` | 409 | `paper_id` | a job for this paper is already queued or running |
 | `daily_limit` | 429 | `used`, `limit`, `resets_at` | daily free requests used up (no model request made) |

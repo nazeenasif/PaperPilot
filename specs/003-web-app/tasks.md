@@ -110,7 +110,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
   - A request with `Host: 192.168.1.20` is rejected by trusted hosts.
   - An unhandled exception in a test route returns `500 {"kind": "internal"}` with no traceback text.
   - A loader failure gives `state: "error"`.
-- [ ] T012 Implement the API skeleton so T011 passes:
+- [X] T012 Implement the API skeleton so T011 passes:
   - `api/__init__.py`.
   - `api/main.py`: `create_app()`; a lifespan that starts a background thread running `store.load_model()`, a warm-up `library.search`, and `llm.refresh_usage()` once it exists (T032; guarded by `hasattr` until then); `CORSMiddleware` with the single `FRONTEND_ORIGIN`; `TrustedHostMiddleware` for `127.0.0.1` and `localhost`; a catch-all handler that logs server-side (key scrubbed) and returns `internal`.
   - `api/state.py`: the readiness state and the single-question guard.

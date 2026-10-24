@@ -180,7 +180,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
   - `api/errors.py`: the `forbidden` kind.
   - `frontend/lib/api.ts` and `frontend/lib/sse.ts`: send `X-PaperPilot: 1` on every write.
   - `.env.example`: `FRONTEND_ORIGINS`.
-- [ ] T074 Extend checkpoint 6 part `boundary` in `scripts/checkpoint_6_web.py` (0 model requests):
+- [X] T074 Extend checkpoint 6 part `boundary` in `scripts/checkpoint_6_web.py` (0 model requests):
   - Both default origins are allowed, and `http://evil.example` is refused with `403 forbidden`.
   - A cross-origin simple POST is refused with reason `origin`.
   - A write without the header is refused with reason `header`.

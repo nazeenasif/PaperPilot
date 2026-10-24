@@ -116,18 +116,29 @@ def accepts_connection(host: str, port: int) -> bool:
 
 
 def part_boundary(run: Run, client: httpx.Client) -> None:
-    """Localhost only and CORS for the frontend origin only (FR-002a, SC-012). 0 requests."""
-    frontend = load_settings().frontend_origins[0]
+    """Localhost only, allowed origins only, and cross-site writes refused (FR-002a, FR-002b,
+    SC-012). 0 model requests; the write probes are refused before any endpoint runs."""
+    for origin in load_settings().frontend_origins:
+        allowed = client.get("/api/status", headers={"Origin": origin})
+        run.check(allowed.headers.get("access-control-allow-origin") == origin, f"CORS allows {origin}")
+        preflight = client.options("/api/status", headers={
+            "Origin": origin, "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,x-paperpilot"})
+        run.check(preflight.status_code == 200 and preflight.headers.get("access-control-allow-origin") == origin
+                  and "x-paperpilot" in preflight.headers.get("access-control-allow-headers", "").lower(),
+                  f"a preflight from {origin} may send X-PaperPilot")
 
-    allowed = client.get("/api/status", headers={"Origin": frontend})
-    run.check(allowed.headers.get("access-control-allow-origin") == frontend,
-              f"CORS allows the frontend origin {frontend}")
-    preflight = client.options("/api/status", headers={"Origin": frontend, "Access-Control-Request-Method": "GET"})
-    run.check(preflight.headers.get("access-control-allow-origin") == frontend,
-              "CORS preflight succeeds for the frontend origin")
-    for origin in ("http://evil.example", "http://localhost:3000"):
-        refused = client.get("/api/status", headers={"Origin": origin})
-        run.check("access-control-allow-origin" not in refused.headers, f"CORS refuses origin {origin}")
+    foreign = "http://evil.example"
+    refused = client.get("/api/status", headers={"Origin": foreign})
+    run.check(refused.status_code == 403 and refused.json() == {"kind": "forbidden", "reason": "origin"}
+              and "access-control-allow-origin" not in refused.headers, f"a request from {foreign} is refused (403)")
+    simple_post = client.post("/api/papers", content="files=paper.pdf",
+                              headers={"Origin": foreign, "Content-Type": "text/plain"})
+    run.check(simple_post.status_code == 403 and simple_post.json().get("reason") == "origin",
+              "a cross-origin simple POST is refused before any endpoint runs")
+    no_header = client.post("/api/papers", json={}, headers={"Origin": load_settings().frontend_origins[0]})
+    run.check(no_header.status_code == 403 and no_header.json().get("reason") == "header",
+              "a write without X-PaperPilot: 1 is refused, even from an allowed origin")
 
     foreign_host = client.get("/api/status", headers={"Host": "192.168.1.20"})
     run.check(foreign_host.status_code == 400, "a foreign Host header is rejected (trusted hosts)")

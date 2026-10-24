@@ -3,14 +3,16 @@
 
 import type { Page, Route } from "@playwright/test";
 
-import type { PaperCard, UploadJob } from "../lib/types";
+import type { PaperCard, UploadJob, Usage } from "../lib/types";
 import {
   ASK_EVENTS,
   JOB_SCRIPTS,
   LIBRARY_PAPERS,
   NEW_PAPER,
   PDF_LINES,
+  SEARCH_RESULTS,
   STATUS,
+  USAGE,
   VIEW_HIGHLIGHTED,
   VIEW_UNMARKED,
 } from "./fixtures";
@@ -34,6 +36,8 @@ export interface FakeOptions {
   askEvents?: [string, unknown][];
   /** How long POST /api/ask waits before answering, to observe the working state. */
   askDelayMs?: number;
+  /** GET /api/usage reading (default USAGE). */
+  usage?: Usage;
   /** Extra handlers by path, tried before the defaults. */
   routes?: Record<string, (route: Route) => Promise<void>>;
 }
@@ -59,6 +63,10 @@ export async function fakeBackend(page: Page, options: FakeOptions = {}): Promis
     }
     if (path === "/api/status") {
       await route.fulfill({ status: 200, headers: CORS, json: STATUS });
+    } else if (path === "/api/usage") {
+      await route.fulfill({ status: 200, headers: CORS, json: options.usage ?? USAGE });
+    } else if (path === "/api/search" && request.method() === "POST") {
+      await route.fulfill({ status: 200, headers: CORS, json: SEARCH_RESULTS });
     } else if (path === "/api/ask" && request.method() === "POST") {
       state.asks.push(request.postDataJSON());
       if (options.askDelayMs) await new Promise((resolve) => setTimeout(resolve, options.askDelayMs));
@@ -147,4 +155,27 @@ export function fakeLibrary(): FakeLibrary {
     await route.fulfill({ status: 200, headers: CORS, json: { removed_passages: NEW_PAPER.passage_count } });
   };
   return state;
+}
+
+/** Make POST /api/ask stream its events over time inside the page (page.route can only send a
+ *  whole body at once): each step waits `afterMs`, then sends one event. */
+export async function streamAskInPage(page: Page, steps: { afterMs: number; event: string; data: unknown }[]) {
+  await page.addInitScript((plan) => {
+    const original = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (!url.endsWith("/api/ask")) return original(input, init);
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          for (const step of plan) {
+            await new Promise((resolve) => setTimeout(resolve, step.afterMs));
+            controller.enqueue(encoder.encode(`event: ${step.event}\ndata: ${JSON.stringify(step.data)}\n\n`));
+          }
+          controller.close();
+        },
+      });
+      return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    };
+  }, steps);
 }

@@ -505,7 +505,7 @@ the usage meter shows today's count.
   - At the limit it links to the daily-limit state.
   - The model chip shows "· free" for `:free` models.
   - Commit the test and the implementation together, test written first.
-- [ ] T066 [US5] Add tests "US5 states" to `frontend/e2e/smoke.spec.ts`, replaying the fixtures for not found, busy countdown, daily limit with browse passages, held back with the unverified answer, and server unreachable.
+- [X] T066 [US5] Add tests "US5 states" to `frontend/e2e/smoke.spec.ts`, replaying the fixtures for not found, busy countdown, daily limit with browse passages, held back with the unverified answer, and server unreachable.
   - **Story check**: `npm --prefix frontend run test:e2e -- -g "US5"` and `python scripts/checkpoint_6_web.py states usage`.
 
 ---

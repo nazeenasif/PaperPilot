@@ -1,7 +1,7 @@
 // Recorded-shape API responses for the smoke tests (contracts/web-api.md). No PDFs are
 // committed (constitution VI): the viewer fixture PDF is built in code (see pdf.ts).
 
-import type { Answer, PaperCard, PassageView, Status, UploadJob } from "../lib/types";
+import type { Answer, PaperCard, PassageView, Status, UploadJob, Usage } from "../lib/types";
 
 export const STATUS: Status = {
   state: "ready",
@@ -160,4 +160,46 @@ export const JOB_SCRIPTS: Record<string, Partial<UploadJob>[]> = {
     { phase: "ready", outcome: "pdf_attached", highlights: "exact", paper_id: "att" },
   ],
   "bert renamed.pdf": [{ phase: "ready", outcome: "already_present", highlights: "exact", paper_id: "bert" }],
+};
+
+// --- Failure states (US5) ---
+
+export const USAGE: Usage = { used: 34, limit: 50, remaining: 16, resets_at: "2026-10-26T00:00:00Z", source: "provider" };
+
+export const NOT_FOUND_TEXT = "I couldn't find that in the selected papers.";
+
+export const NOT_FOUND_ANSWER: Answer = {
+  ...ANSWER,
+  text: NOT_FOUND_TEXT,
+  not_found: true,
+  verified: false,
+  fallback_reason: "below_threshold",
+  passages: [],
+  citations: { valid: [], invalid: [], uncited_sentences: [] },
+};
+
+export const HELD_BACK_ANSWER: Answer = {
+  ...ANSWER,
+  text: NOT_FOUND_TEXT,
+  not_found: true,
+  verified: false,
+  fallback_reason: "invalid_citations",
+  rejected_answer: "LoRA trains low-rank update matrices [7].",
+  warning: "server wording",
+  citations: { valid: [], invalid: [7], uncited_sentences: [] },
+};
+
+export const SEARCH_RESULTS = {
+  results: [
+    {
+      rank: 1,
+      score: 0.74,
+      passage_id: "lora-12",
+      paper_id: "lora",
+      title: "LoRA: Low-Rank Adaptation of Large Language Models",
+      section: "Our Method",
+      page: 1,
+      text: "LoRA freezes the pretrained weights and injects trainable rank decomposition matrices.",
+    },
+  ],
 };

@@ -1,9 +1,10 @@
 // Smoke tests: the real frontend against a fake backend (e2e/fake-backend.ts). One test per
 // user story; run one with `npm run test:e2e -- -g "US1"`.
 
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { fakeBackend, fakeLibrary } from "./fake-backend";
+import { fakeBackend, fakeLibrary, streamAskInPage } from "./fake-backend";
+import { ANSWER, HELD_BACK_ANSWER, NOT_FOUND_ANSWER, NOT_FOUND_TEXT, USAGE } from "./fixtures";
 import { makePdf } from "./pdf";
 
 /** Drop files on an element the way a browser does (a drop event carrying a DataTransfer). */
@@ -109,4 +110,85 @@ test("US3 library", async ({ page }) => {
   await expect(heading).toHaveText("2 papers, 75 searchable passages");
   await expect(page.getByRole("heading", { name: "A Small Study of Grounded Answers" })).toHaveCount(0);
   expect(library.writeHeaders).toEqual(["1", "1", "1"]);
+});
+
+async function askOnPage(page: Page, question = "What is LoRA?") {
+  const box = page.getByRole("textbox", { name: /ask about your papers/i });
+  await box.fill(question);
+  await box.press("Enter");
+  return box;
+}
+
+test("US5 states: not found", async ({ page }) => {
+  await fakeBackend(page, { askEvents: [["progress", { step: "searching" }], ["answer", NOT_FOUND_ANSWER]] });
+  await page.goto("/");
+  await expect(page.getByRole("status", { name: /requests today/i })).toContainText("34 / 50");
+  const box = await askOnPage(page, "What is the capital of France?");
+  await expect(page.getByText(NOT_FOUND_TEXT)).toBeVisible();
+  await expect(page.getByText(/only answers from your library/i)).toBeVisible();
+  await page.getByRole("button", { name: "Rephrase more specifically" }).click();
+  await expect(box).toBeFocused();
+});
+
+test("US5 states: busy countdown", async ({ page }) => {
+  await streamAskInPage(page, [
+    { afterMs: 50, event: "progress", data: { step: "generating" } },
+    { afterMs: 50, event: "retry_wait", data: { attempt: 1, max_attempts: 4, wait_seconds: 8, reason: "rate_limited" } },
+    { afterMs: 3_000, event: "answer", data: ANSWER },
+  ]);
+  await fakeBackend(page);
+  await page.goto("/");
+  await askOnPage(page);
+  await expect(page.getByText("attempt 2 of 4")).toBeVisible();
+  await expect(page.getByText("The free model is busy right now")).toBeVisible();
+  await expect(page.getByText("0:08")).toBeVisible();
+  await expect(page.getByText(/^0:0[5-7]$/)).toBeVisible({ timeout: 2_900 }); // it counts down live
+  await expect(page.getByText(/efficient adaptation strategy/)).toBeVisible();
+  await expect(page.getByText("attempt 2 of 4")).toHaveCount(0);
+});
+
+test("US5 states: daily limit with browse passages", async ({ page }) => {
+  await fakeBackend(page, {
+    usage: { ...USAGE, used: 50, remaining: 0 },
+    askEvents: [["error", { kind: "daily_limit", used: 50, limit: 50, resets_at: "2026-10-26T00:00:00Z" }]],
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /daily limit reached/i })).toBeVisible();
+  await askOnPage(page);
+  const state = page.getByRole("alert").filter({ hasText: "free requests used today" });
+  await expect(state.getByText("50 / 50")).toBeVisible();
+  await expect(state.getByText(/Answers resume at \d\d:\d\d your time/)).toBeVisible();
+  await state.getByRole("button", { name: "Browse passages instead" }).click();
+  const results = state.getByRole("list", { name: /matching passages/i });
+  await expect(results.getByText("LoRA: Low-Rank Adaptation of Large Language Models")).toBeVisible();
+  await expect(results.getByText("Our Method · page 1")).toBeVisible();
+});
+
+test("US5 states: held back with the unverified answer", async ({ page }) => {
+  await fakeBackend(page, { askEvents: [["answer", HELD_BACK_ANSWER]] });
+  await page.goto("/");
+  await askOnPage(page);
+  await expect(page.getByText(/The model cited passage 7, but only 2 were provided/)).toBeVisible();
+  await expect(page.getByText("server wording")).toHaveCount(0);
+  await page.getByRole("button", { name: "View the unverified answer" }).click();
+  await expect(page.getByText("Not verified")).toBeVisible();
+  await expect(page.getByText(/trains low-rank update matrices/)).toBeVisible();
+  await expect(page.getByLabel("Citation 7: not among the provided passages")).toBeVisible();
+});
+
+test("US5 states: server unreachable, then recovered", async ({ page }) => {
+  let down = true;
+  await fakeBackend(page, {
+    routes: {
+      "/api/status": async (route) => {
+        if (down) await route.abort("connectionrefused");
+        else await route.fallback();
+      },
+    },
+  });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Can't reach PaperPilot" })).toBeVisible();
+  await expect(page.getByText(/reconnects by itself/i)).toBeVisible();
+  down = false;
+  await expect(page.getByRole("textbox", { name: /ask about your papers/i })).toBeVisible({ timeout: 10_000 });
 });

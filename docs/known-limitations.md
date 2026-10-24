@@ -106,3 +106,23 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
   22 within BERT, so the answer is not-found. Filtering to one paper does not fix this, because
   the problem is ranking inside the paper. Reranking is the top-priority experiment for the
   evaluation feature (`eval/probe_notes.md`).
+- **A valid citation does not prove the passage supports the claim.** Validation checks that
+  every [n] points to a passage that was provided; it does not check what the passage says.
+  Two cases passed it: a correct fact cited to the wrong passage, and a claim from one paper
+  section stretched to cover others ("Faithfulness cases" in `eval/probe_notes.md`). Checking
+  each claim against its passage is a job for the evaluation feature.
+- **The relevance threshold is calibrated for this library.** 0.58 was measured for
+  bge-small-en-v1.5 on the 5 test papers with 220/40 chunking (`eval/threshold_calibration.md`).
+  It must be recalibrated (`python scripts/calibrate_threshold.py`, no LLM requests) when papers,
+  chunking or the embedding model change. At 0.58 one word-level near-miss ("How do electrical
+  transformers step down voltage?", 0.588) passes and relies on the model saying not-found.
+- **Free models change and can be removed.** The default `:free` model can be rate-limited,
+  changed or withdrawn by the provider at any time; checkpoint 4 checks that it is still listed.
+  Switching needs only `LLM_MODEL` (or another OpenAI-compatible provider in `.env`).
+- **Free-tier limits make repeated runs impractical.** OpenRouter's free models allow 20
+  requests per minute and 50 per day (1,000 per day after $10 of lifetime credits). One full
+  checkpoint run uses about 16 requests, so repeated runs, and any evaluation run over many
+  questions, need credits or another provider.
+- **The uncited-sentence warning can be noisy.** Sentences are split with a simple rule, so
+  abbreviations such as "et al." or "e.g." can split a sentence in two and report its first half
+  as uncited. The warning never rejects an answer.

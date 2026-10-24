@@ -3,7 +3,7 @@
 Calls the configured model (OpenRouter free tier by default) and prints how many requests
 it used; it stops with FAIL if it exceeds its request budget.
 
-Usage: python scripts/checkpoint_4_answer.py [us1] [us2] [nearmiss]   (default: all parts)
+Usage: python scripts/checkpoint_4_answer.py [us1] [us2] [us3] [nearmiss]   (default: all parts)
 """
 
 import logging
@@ -34,7 +34,9 @@ NEARMISS_QUESTIONS = [
     "How does Llama 2 handle safety tuning?",
 ]
 NEARMISS_BUDGET = 3
-PARTS = ("us1", "us2", "nearmiss")
+US3_QUESTION = "What are the two pre-training tasks of BERT?"
+US3_PAPER_TITLE_PREFIX = "BERT:"
+PARTS = ("us1", "us2", "us3", "nearmiss")
 PREVIEW_CHARS = 160
 
 
@@ -133,6 +135,21 @@ def main() -> int:
             show(answer)
             check(results, answer.text == prompts.NOT_FOUND, "the answer is exactly the not-found sentence")
             check(results, llm.request_count() == before, "no LLM request was made (rejected by the threshold)")
+
+        if "us3" in parts:
+            bert = [p for p in library.list_papers() if p.title.startswith(US3_PAPER_TITLE_PREFIX)]
+            if not bert:
+                check(results, False, f"a paper titled '{US3_PAPER_TITLE_PREFIX}…' is in the library")
+            else:
+                paper = bert[0]
+                print(f"\n=== US3: {US3_QUESTION}  (filtered to {paper.paper_id}: {paper.title})")
+                answer = record(ask(US3_QUESTION, paper_ids=[paper.paper_id]))
+                show(answer)
+                papers_used = sorted({p.title for p in answer.passages})
+                print(f"\nPapers of the passages used: {papers_used or 'none'}")
+                check(results, all(p.paper_id == paper.paper_id for p in answer.passages),
+                      "every passage comes from the selected paper (SC-004)")
+                check(results, not answer.citations.invalid, "every citation maps to a provided passage")
 
         if "nearmiss" in parts:
             before = llm.request_count()

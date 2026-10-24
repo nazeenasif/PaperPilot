@@ -79,7 +79,7 @@ unplanned requests, FAIL if all requests exceed 2 × the plan.
   - `frontend/playwright.config.ts`: Chromium; `webServer: npm run dev` at `http://127.0.0.1:3000`; projects `desktop` (1280×800) and `phone` (375×740).
   - A trivial passing `frontend/tests/smoke.test.ts`.
   - Commit these files.
-- [ ] T006 [P] Add `frontend/scripts/copy-pdf-worker.mjs`. It copies `pdf.worker.min.mjs` from the `pdfjs-dist` version react-pdf depends on (6.3.289) into `frontend/public/`. Run it from the `postinstall` and `prebuild` scripts in `frontend/package.json`, and verify the copied file exists after `npm install`. Commit both files.
+- [X] T006 [P] Add `frontend/scripts/copy-pdf-worker.mjs`. It copies `pdf.worker.min.mjs` from the `pdfjs-dist` version react-pdf depends on (6.3.289) into `frontend/public/`. Run it from the `postinstall` and `prebuild` scripts in `frontend/package.json`, and verify the copied file exists after `npm install`. Commit both files.
 
 ---
 

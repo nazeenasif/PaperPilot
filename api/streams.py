@@ -13,8 +13,8 @@ Emit = Callable[[str, dict], None]
 
 async def run_streaming(work: Callable[[Emit], Any], on_finished: Callable[[], None]) -> AsyncIterator[tuple]:
     """Yield ("event", kind, detail) items while `work(emit)` runs, then ("result", value) or
-    ("error", exception). `on_finished` runs on the worker thread when the work ends, even if
-    the client has gone away."""
+    ("error", exception). `on_finished` runs on the worker thread when the work ends, before
+    the final item is sent and even if the client has gone away."""
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[tuple] = asyncio.Queue()
 
@@ -23,11 +23,14 @@ async def run_streaming(work: Callable[[Emit], Any], on_finished: Callable[[], N
 
     def run() -> None:
         try:
-            put(("result", work(lambda kind, detail: put(("event", kind, detail)))))
+            item: tuple = ("result", work(lambda kind, detail: put(("event", kind, detail))))
         except Exception as error:  # reported to the client as an error event
-            put(("error", error))
+            item = ("error", error)
         finally:
+            # Before the final event: a client that asks again as soon as it sees the answer
+            # must not find the lock still held.
             on_finished()
+        put(item)
 
     loop.run_in_executor(None, run)
     while True:

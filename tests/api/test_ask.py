@@ -191,3 +191,15 @@ def test_the_lock_is_released_after_a_failed_question(client_with_paper, scripte
     scripted.add(RuntimeError("boom"))
     ask_stream(client_with_paper, {"question": QUESTION})
     assert not client_with_paper.app.state.paperpilot.question_lock.locked()
+
+
+def test_the_lock_is_free_as_soon_as_the_answer_event_arrives(client_with_paper, scripted):
+    """The worker releases the lock before sending the final event (no race with a quick follow-up)."""
+    lock = client_with_paper.app.state.paperpilot.question_lock
+    for _ in range(5):
+        scripted.add(REPLY)
+        with client_with_paper.stream("POST", "/api/ask", json={"question": QUESTION}, headers=HEADER) as response:
+            for line in response.iter_lines():
+                if line.startswith("event: answer"):
+                    assert not lock.locked()
+                    break

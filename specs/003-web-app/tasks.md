@@ -74,7 +74,7 @@ unplanned requests, FAIL if all requests exceed 2 × the plan.
   - Files: `frontend/components.json`, `frontend/lib/utils.ts`, `frontend/components/ui/button.tsx`, `checkbox.tsx`, `dialog.tsx`, `sheet.tsx`, `tooltip.tsx`, `progress.tsx`.
   - Pin any packages the CLI adds to exact versions at least 14 days old.
   - Commit.
-- [ ] T005 [P] Configure the test runners.
+- [X] T005 [P] Configure the test runners.
   - `frontend/vitest.config.ts`: jsdom, the React plugin, setup file `frontend/tests/setup.ts` (jest-dom, a `matchMedia` mock, and a `fetch` guard that throws if a test calls the network without mocking).
   - `frontend/playwright.config.ts`: Chromium; `webServer: npm run dev` at `http://127.0.0.1:3000`; projects `desktop` (1280×800) and `phone` (375×740).
   - A trivial passing `frontend/tests/smoke.test.ts`.

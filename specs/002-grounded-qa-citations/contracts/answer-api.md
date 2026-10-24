@@ -31,6 +31,7 @@ ask(question: str, paper_ids: list[str] | None = None, k: int | None = None,
 - `is_not_found(reply: str) -> bool`
 - `extract_citations(text: str) -> list[int]`
 - `check_citations(text: str, passage_count: int) -> CitationReport`
+- `word_count(text: str) -> int` — words excluding citation markers (`[2]`, `[2, 4]`, `[2-4]`)
 
 ## `paperpilot.llm` (the only module that talks to an LLM)
 

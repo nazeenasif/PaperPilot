@@ -202,7 +202,9 @@ passages and confirm [9] is reported as invalid and [2] as valid.
   not-found sentence when the passages do not support an answer.
 - **FR-004a**: Answers MUST be at most about 150 words, or about 300 words when the question
   explicitly asks for detail (e.g. "explain in detail", "describe step by step"); the length
-  limit MUST be part of the language model's instructions.
+  limit MUST be part of the language model's instructions only: the system MUST NOT trim or
+  cut answers in code. Each answer MUST report its word count, not counting citation markers
+  such as [2]; exceeding the limit is reported as a warning in checkpoints, not a failure.
 - **FR-005**: Passage text MUST be presented to the language model as quoted data, clearly
   separated from the instructions, so that instructions inside passages are not followed.
 - **FR-006**: The not-found sentence MUST be exactly "I couldn't find that in the selected
@@ -220,7 +222,8 @@ passages and confirm [9] is reported as invalid and [2] as valid.
   list every sentence without one in the answer's warning; uncited sentences alone MUST NOT
   cause the answer to be rejected.
 - **FR-009**: When any citation is invalid, or an answer other than the not-found sentence
-  has no citations, the system MUST return the not-found sentence as the answer, together
+  (recognised with the tolerant matching of FR-007, so the not-found sentence itself never
+  counts as "no citations") has no citations, the system MUST return the not-found sentence as the answer, together
   with a warning that lists the invalid citation numbers (or states that citations were
   missing) and keeps the original answer text for inspection.
 
@@ -252,6 +255,10 @@ passages and confirm [9] is reported as invalid and [2] as valid.
   file.
 - **FR-016**: Each answer MUST report timings for rewrite, retrieve and generate steps, and
   input/output token counts when the provider supplies them.
+- **FR-016a**: Every fallback MUST record its reason: an answer replaced by or returned as the
+  not-found sentence states why (no passages retrieved, all passages below the threshold, the
+  model said not found, invalid citations, or no citations), and a follow-up that falls back
+  to the original question states why (rewrite failed or rewrite was empty).
 
 **Interface and checkpoints**
 

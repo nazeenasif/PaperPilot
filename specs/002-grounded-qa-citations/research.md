@@ -120,7 +120,16 @@ the installed package or official documentation on 2026-10-24.
   Lowest on-topic top = 0.635; highest off-topic top = 0.544. 0.60 is below every on-topic top
   (clarification Q2: never reject on-topic) and above every off-topic top (6/6 rejected
   without an LLM call). Generic questions score lowest, so the margin below 0.635 is kept.
-- **Risk**: vaguer real questions may score below 0.60; the calibration set must include them.
+- **Scope of the value**: the threshold is calibrated **for bge-small-en-v1.5 embeddings on this
+  library** (the 5 test papers, chunking 220/40). It is not a general relevance cut-off; it
+  must be recalibrated when the embedding model, chunking or library changes.
+- **Calibration set**: besides clearly off-topic questions, it MUST include **near-miss**
+  off-topic questions that share vocabulary with the papers but are not answered by them (e.g.
+  "How do electrical transformers step down voltage?", "What is the attention span of a
+  goldfish?", "Who invented the BERT muppet character?"), because those score closest to real
+  questions.
+- **Risk**: vaguer real questions may score below 0.60, and near-miss questions may score
+  above it; the model's not-found rule and citation checks are the second line of defence.
 
 ## R9. Follow-up rewriting
 
@@ -128,7 +137,8 @@ the installed package or official documentation on 2026-10-24.
   and the new question to the model with instructions to output only a standalone question in
   one line, resolving pronouns to their referents, adding no facts. Output is stripped of
   quotes and prefixes like "Standalone question:". If empty or the call fails, use the original
-  question and set `rewrite_applied=False` (FR-012). The standalone question is used for
+  question, set `rewrite_applied=False` and `rewrite_fallback_reason` to `rewrite_failed` or
+  `rewrite_empty` (FR-012, FR-016a). The standalone question is used for
   search and as the question answered.
 - **Rationale**: one extra small call only when needed (FR-011).
 

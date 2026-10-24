@@ -64,6 +64,9 @@ Feature 1 behaviour is unchanged when the LLM settings are absent.
 | citations | CitationReport | empty report for not-found answers from the threshold |
 | warning | str \| None | invalid/missing citations (with original answer text) or uncited sentences |
 | rejected_answer | str \| None | the model's original text when it was replaced by `NOT_FOUND` |
+| fallback_reason | str \| None | why the answer is `NOT_FOUND`: `no_passages`, `below_threshold`, `model_not_found`, `invalid_citations`, `no_citations`; `None` for a real answer |
+| rewrite_fallback_reason | str \| None | why the original question was used despite history: `rewrite_failed`, `rewrite_empty`; `None` otherwise |
+| word_count | int | words in `text`, not counting citation markers like [2]; reported, never enforced |
 | llm_calls | int | 0, 1 (answer) or 2 (rewrite + answer) |
 | timings | dict[str, float] | `rewrite`, `retrieve`, `generate` (seconds; 0.0 when skipped) |
 | tokens | dict[str, int] | `input`, `output`, `reasoning` summed over calls; keys omitted when unknown |

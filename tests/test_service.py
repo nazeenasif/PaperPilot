@@ -136,3 +136,42 @@ def test_empty_library_gives_not_found_without_a_call(library_env, fake_embedder
     assert answer.llm_calls == 0
     assert answer.fallback_reason == "no_passages"
     assert fake_answers.calls == []
+
+
+# --- US3: ask within selected papers ---
+
+
+@pytest.fixture
+def two_papers(answer_env, tmp_path, make_pdf):
+    """The answer_env paper plus a second, different paper; returns both IDs."""
+    from paperpilot.library import add_paper
+
+    second = add_paper(make_pdf(tmp_path / "second.pdf", title="A Second Paper on Searching Research"))
+    return answer_env.paper_id, second.paper_id
+
+
+def test_filtered_question_uses_only_the_selected_paper(two_papers, fake_answers):
+    _, second = two_papers
+    fake_answers.add("Evaluated on a benchmark [1].")
+    answer = ask(QUESTION, paper_ids=[second])
+    assert answer.passages
+    assert {p.paper_id for p in answer.passages} == {second}
+    prompt = fake_answers.calls[0][1]
+    assert 'title="A Second Paper on Searching Research"' in prompt
+    assert "A Study of Searching Research Papers by Meaning" not in prompt  # the other paper's title
+
+
+def test_unknown_paper_is_rejected_before_any_call(two_papers, fake_answers):
+    from paperpilot.errors import UnknownPaperError
+
+    with pytest.raises(UnknownPaperError):
+        ask(QUESTION, paper_ids=["000000000000"])
+    assert fake_answers.calls == []
+
+
+def test_empty_filter_searches_the_whole_library(two_papers, fake_answers):
+    fake_answers.add("Evaluated on a benchmark [1].", "Evaluated on a benchmark [1].")
+    unfiltered = ask(QUESTION, k=20)
+    empty_filter = ask(QUESTION, k=20, paper_ids=[])
+    assert [p.passage_id for p in empty_filter.passages] == [p.passage_id for p in unfiltered.passages]
+    assert {p.paper_id for p in unfiltered.passages} == set(two_papers)

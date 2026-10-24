@@ -1,7 +1,7 @@
 // Recorded-shape API responses for the smoke tests (contracts/web-api.md). No PDFs are
 // committed (constitution VI): the viewer fixture PDF is built in code (see pdf.ts).
 
-import type { Answer, PassageView, Status } from "../lib/types";
+import type { Answer, PaperCard, PassageView, Status, UploadJob } from "../lib/types";
 
 export const STATUS: Status = {
   state: "ready",
@@ -100,3 +100,64 @@ export const ASK_EVENTS: [string, unknown][] = [
   ["progress", { step: "checking" }],
   ["answer", ANSWER],
 ];
+
+// --- Library (US3) ---
+
+export const LIBRARY_PAPERS: PaperCard[] = [
+  {
+    paper_id: "att",
+    title: "Attention Is All You Need",
+    page_count: 15,
+    passage_count: 33,
+    text_passages: 29,
+    table_passages: 4,
+    section_count: 8,
+    arxiv_id: "1706.03762",
+    has_pdf: false,
+    highlights: "no_pdf",
+  },
+  {
+    paper_id: "bert",
+    title: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    page_count: 16,
+    passage_count: 42,
+    text_passages: 36,
+    table_passages: 6,
+    section_count: 7,
+    arxiv_id: "1810.04805",
+    has_pdf: true,
+    highlights: "exact",
+  },
+];
+
+export const NEW_PAPER: PaperCard = {
+  paper_id: "new",
+  title: "A Small Study of Grounded Answers",
+  page_count: 1,
+  passage_count: 3,
+  text_passages: 3,
+  table_passages: 0,
+  section_count: 2,
+  arxiv_id: null,
+  has_pdf: true,
+  highlights: "exact",
+};
+
+/** What each successive GET /api/jobs shows for a job, by file name, after it is uploaded. */
+export const JOB_SCRIPTS: Record<string, Partial<UploadJob>[]> = {
+  "new-paper.pdf": [
+    { phase: "queued" },
+    { phase: "parsing" },
+    { phase: "chunking" },
+    { phase: "embedding", percent: 40 },
+    { phase: "embedding", percent: 80 },
+    { phase: "ready", outcome: "added", highlights: "exact", paper_id: "new" },
+  ],
+  "attention.pdf": [
+    { phase: "queued" },
+    { phase: "mapping", paper_id: "att" },
+    { phase: "mapping", paper_id: "att" },
+    { phase: "ready", outcome: "pdf_attached", highlights: "exact", paper_id: "att" },
+  ],
+  "bert renamed.pdf": [{ phase: "ready", outcome: "already_present", highlights: "exact", paper_id: "bert" }],
+};

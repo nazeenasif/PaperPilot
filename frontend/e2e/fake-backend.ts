@@ -3,7 +3,17 @@
 
 import type { Page, Route } from "@playwright/test";
 
-import { ASK_EVENTS, PDF_LINES, STATUS, VIEW_HIGHLIGHTED, VIEW_UNMARKED } from "./fixtures";
+import type { PaperCard, UploadJob } from "../lib/types";
+import {
+  ASK_EVENTS,
+  JOB_SCRIPTS,
+  LIBRARY_PAPERS,
+  NEW_PAPER,
+  PDF_LINES,
+  STATUS,
+  VIEW_HIGHLIGHTED,
+  VIEW_UNMARKED,
+} from "./fixtures";
 import { makePdf } from "./pdf";
 
 export const API = "http://127.0.0.1:8000";
@@ -67,5 +77,74 @@ export async function fakeBackend(page: Page, options: FakeOptions = {}): Promis
       await route.fulfill({ status: 404, headers: CORS, json: { kind: "not_found" } });
     }
   });
+  return state;
+}
+
+type Handler = (route: Route) => Promise<void>;
+
+export interface FakeLibrary {
+  /** Pass as `routes` to fakeBackend. */
+  routes: Record<string, Handler>;
+  /** X-PaperPilot header of every write. */
+  writeHeaders: (string | undefined)[];
+  /** File names of every upload request. */
+  uploads: string[][];
+}
+
+/** A stateful fake library: uploads create jobs that move one scripted step per GET /api/jobs
+ *  (the event stream ends at once, so the page falls back to polling). */
+export function fakeLibrary(): FakeLibrary {
+  const papers: PaperCard[] = LIBRARY_PAPERS.map((paper) => ({ ...paper }));
+  const jobs: { job: UploadJob; script: Partial<UploadJob>[]; step: number }[] = [];
+  const state: FakeLibrary = { routes: {}, writeHeaders: [], uploads: [] };
+  const library = () => ({ papers, total_passages: papers.reduce((sum, p) => sum + p.passage_count, 0) });
+
+  function advance() {
+    for (const entry of jobs) {
+      entry.step = Math.min(entry.step + 1, entry.script.length - 1);
+      entry.job = { ...entry.job, ...entry.script[entry.step] };
+      if (entry.job.phase !== "ready") continue;
+      if (entry.job.paper_id === NEW_PAPER.paper_id && !papers.some((p) => p.paper_id === NEW_PAPER.paper_id)) {
+        papers.push({ ...NEW_PAPER });
+      }
+      if (entry.job.outcome === "pdf_attached") {
+        const paper = papers.find((p) => p.paper_id === entry.job.paper_id);
+        if (paper) Object.assign(paper, { has_pdf: true, highlights: "exact" });
+      }
+    }
+  }
+
+  state.routes["/api/papers"] = async (route) => {
+    const request = route.request();
+    if (request.method() !== "POST") {
+      await route.fulfill({ status: 200, headers: CORS, json: library() });
+      return;
+    }
+    state.writeHeaders.push(request.headers()["x-paperpilot"]);
+    const names = [...(request.postDataBuffer()?.toString("latin1") ?? "").matchAll(/filename="([^"]+)"/g)].map((m) => m[1] ?? "");
+    state.uploads.push(names);
+    const created = names.map((name, index) => {
+      const job: UploadJob = {
+        job_id: `job-${jobs.length + index + 1}`, kind: "upload", file_name: name, phase: "queued", percent: null,
+        outcome: null, highlights: null, paper_id: null, error: null,
+      };
+      return { job, script: JOB_SCRIPTS[name] ?? [{ phase: "failed", outcome: "failed", error: { kind: "upload_invalid", reason: "not_pdf" } }], step: -1 };
+    });
+    jobs.push(...created);
+    await route.fulfill({ status: 202, headers: CORS, json: { jobs: created.map(({ job }) => ({ job_id: job.job_id, file_name: job.file_name })) } });
+  };
+  state.routes["/api/jobs"] = async (route) => {
+    advance();
+    await route.fulfill({ status: 200, headers: CORS, json: { jobs: jobs.map(({ job }) => job) } });
+  };
+  state.routes["/api/jobs/events"] = async (route) => {
+    await route.fulfill({ status: 200, headers: { ...CORS, "content-type": "text/event-stream" }, body: "" });
+  };
+  state.routes[`/api/papers/${NEW_PAPER.paper_id}`] = async (route) => {
+    state.writeHeaders.push(route.request().headers()["x-paperpilot"]);
+    const index = papers.findIndex((p) => p.paper_id === NEW_PAPER.paper_id);
+    if (index >= 0) papers.splice(index, 1);
+    await route.fulfill({ status: 200, headers: CORS, json: { removed_passages: NEW_PAPER.passage_count } });
+  };
   return state;
 }

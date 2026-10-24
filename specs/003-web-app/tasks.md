@@ -456,7 +456,7 @@ attaches show "Mapping highlights" then "PDF attached". The cards show their cou
   - **Header:** the library header reads "5 papers, 223 searchable passages" and "Embeddings run on this machine".
   - **Not shown:** no Summarize button and no Compare tab.
 - [X] T058 [US3] Implement the Library screen so T057 passes: `frontend/app/library/page.tsx`, `frontend/components/library/DropZone.tsx`, `UploadRow.tsx`, `PaperCard.tsx` and `LibraryHeader.tsx`, and `frontend/lib/useJobs.ts`. Add Ask/Library navigation to `frontend/components/app/Header.tsx`.
-- [ ] T059 [US3] Add test "US3 library" to `frontend/e2e/smoke.spec.ts`: drop two fixture files and see the phases, an attach and a duplicate; then delete with confirmation.
+- [X] T059 [US3] Add test "US3 library" to `frontend/e2e/smoke.spec.ts`: drop two fixture files and see the phases, an attach and a duplicate; then delete with confirmation.
   - **Story check**: `npm --prefix frontend run test:e2e -- -g "US3"` and `python scripts/checkpoint_6_web.py library`.
 
 ### US4 (P2): scope and follow-ups

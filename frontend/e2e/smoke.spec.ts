@@ -1,9 +1,23 @@
 // Smoke tests: the real frontend against a fake backend (e2e/fake-backend.ts). One test per
 // user story; run one with `npm run test:e2e -- -g "US1"`.
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
-import { fakeBackend } from "./fake-backend";
+import { fakeBackend, fakeLibrary } from "./fake-backend";
+import { makePdf } from "./pdf";
+
+/** Drop files on an element the way a browser does (a drop event carrying a DataTransfer). */
+async function dropFiles(target: Locator, files: { name: string; buffer: Buffer }[]) {
+  const payload = files.map((file) => ({ name: file.name, data: file.buffer.toString("base64") }));
+  await target.evaluate((zone, items) => {
+    const transfer = new DataTransfer();
+    for (const item of items) {
+      const bytes = Uint8Array.from(atob(item.data), (c) => c.charCodeAt(0));
+      transfer.items.add(new File([bytes], item.name, { type: "application/pdf" }));
+    }
+    zone.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
+  }, payload);
+}
 
 test("US1 ask", async ({ page }) => {
   const backend = await fakeBackend(page, { askDelayMs: 800 });
@@ -54,4 +68,45 @@ test("US2 viewer", async ({ page }) => {
   await page.getByRole("button", { name: /^Citation 2: LoRA/ }).click();
   await expect(page.getByRole("dialog").getByText(/exact location could not be marked/i)).toBeVisible();
   await expect(page.getByRole("dialog").getByText("LoRA allows quick task switching when deployed as a service.")).toBeVisible();
+});
+
+test("US3 library", async ({ page }) => {
+  const library = fakeLibrary();
+  await fakeBackend(page, { routes: library.routes });
+  await page.goto("/library");
+  const heading = page.getByRole("heading", { level: 1 });
+  await expect(heading).toHaveText("2 papers, 75 searchable passages");
+  await expect(page.getByText(/embeddings run on this machine/i)).toBeVisible();
+
+  // Two files dropped at once: a new paper goes through every phase; a known one is attached.
+  const zone = page.getByRole("region", { name: /add papers/i });
+  await dropFiles(zone, [
+    { name: "new-paper.pdf", buffer: makePdf(["A Small Study of Grounded Answers"]) },
+    { name: "attention.pdf", buffer: makePdf(["Attention Is All You Need"]) },
+  ]);
+  const uploads = page.getByRole("list", { name: "Uploads" });
+  await expect(uploads.getByText("Mapping highlights")).toBeVisible();
+  await expect(uploads.getByText("Embedding passages · 80%")).toBeVisible();
+  await expect(uploads.getByText("Added to your library")).toBeVisible();
+  await expect(uploads.getByText("PDF attached", { exact: true })).toBeVisible();
+  await expect(heading).toHaveText("3 papers, 78 searchable passages");
+  await expect(page.getByRole("heading", { name: "A Small Study of Grounded Answers" })).toBeVisible();
+
+  // The same content under another name is recognised without processing.
+  await dropFiles(zone, [{ name: "bert renamed.pdf", buffer: makePdf(["BERT"]) }]);
+  await expect(uploads.getByText("Already in your library")).toBeVisible();
+  await expect(uploads.getByRole("link", { name: /view the paper/i })).toHaveAttribute("href", "#paper-bert");
+  expect(library.uploads).toEqual([["new-paper.pdf", "attention.pdf"], ["bert renamed.pdf"]]);
+
+  // Delete asks first; cancelling keeps the paper.
+  const remove = page.getByRole("button", { name: "Delete A Small Study of Grounded Answers" });
+  await remove.click();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(heading).toHaveText("3 papers, 78 searchable passages");
+  await remove.click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete paper" }).click();
+  await expect(heading).toHaveText("2 papers, 75 searchable passages");
+  await expect(page.getByRole("heading", { name: "A Small Study of Grounded Answers" })).toHaveCount(0);
+  expect(library.writeHeaders).toEqual(["1", "1", "1"]);
 });

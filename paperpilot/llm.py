@@ -196,6 +196,18 @@ def _to_reply(response, attempts: int, seconds: float) -> LLMReply:
     )
 
 
+def model_is_listed() -> bool:
+    """True if the provider's model list contains LLM_MODEL (not a chat request; not counted)."""
+    settings = load_settings()
+    _check_settings(settings)
+    try:
+        ids = {model.id for model in _make_client(settings).models.list()}
+    except openai.APIError as error:
+        message = _failure_message(error, 1, settings)
+        raise LLMError(_scrub(message, settings.llm_api_key)) from None
+    return settings.llm_model in ids
+
+
 def generate(system: str, prompt: str) -> LLMReply:
     """Send one system + user message to the configured model and return its reply.
 

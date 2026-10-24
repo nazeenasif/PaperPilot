@@ -109,10 +109,24 @@ class _Chat:
         self.completions = _Completions(client)
 
 
+class _Model:
+    def __init__(self, model_id: str) -> None:
+        self.id = model_id
+
+
+class _Models:
+    def __init__(self, model_ids: list[str]) -> None:
+        self._ids = model_ids
+
+    def list(self):
+        return [_Model(model_id) for model_id in self._ids]
+
+
 class FakeClient:
     """Stands in for openai.OpenAI: returns or raises scripted items in order and records calls."""
 
-    def __init__(self, responses: list) -> None:
+    def __init__(self, responses: list, model_ids: list[str] | None = None) -> None:
         self.responses = list(responses)
         self.calls: list[dict] = []
         self.chat = _Chat(self)
+        self.models = _Models(model_ids or [])

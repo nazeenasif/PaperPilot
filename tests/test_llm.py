@@ -216,3 +216,20 @@ def test_client_is_built_without_sdk_retries(monkeypatch, llm_env):
     assert created["base_url"] == "https://openrouter.ai/api/v1"
     assert created["max_retries"] == 0
     assert created["timeout"] == 60.0
+
+
+# --- model listing (used by checkpoint 4; not a chat request) ---
+
+
+def test_model_is_listed(monkeypatch, llm_env):
+    client = f.FakeClient([], model_ids=["other/model:free", "test/model:free"])
+    monkeypatch.setattr(llm, "_make_client", lambda settings: client)
+    llm.reset_request_count()
+    assert llm.model_is_listed() is True
+    assert llm.request_count() == 0
+
+
+def test_model_is_not_listed(monkeypatch, llm_env):
+    client = f.FakeClient([], model_ids=["other/model:free"])
+    monkeypatch.setattr(llm, "_make_client", lambda settings: client)
+    assert llm.model_is_listed() is False

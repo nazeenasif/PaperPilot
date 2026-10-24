@@ -177,3 +177,34 @@ describe("SourceViewer", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });
+
+describe("opening the viewer from the Ask screen", () => {
+  it("opens the cited passage from a chip, by click or Enter, and returns focus on Escape", async () => {
+    const { AskScreen } = await import("@/components/ask/AskScreen");
+    const answer = {
+      question: "What is LoRA?", standalone_question: "What is LoRA?", rewrite_applied: false,
+      rewrite_fallback_reason: null, text: "LoRA has limitations [3].", not_found: false, fallback_reason: null,
+      warning: null, rejected_answer: null, citations: { valid: [3], invalid: [], uncited_sentences: [] },
+      verified: true, passages: [CITED], papers_read: 1, word_count: 3, llm_calls: 1,
+      requests: { planned: 1, retries: 0 }, timings: { rewrite: 0, retrieve: 0.1, generate: 5 }, tokens: {}, usage: null,
+    };
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url.endsWith("/api/ask")) {
+        return Promise.resolve(new Response(`event: answer\ndata: ${JSON.stringify(answer)}\n\n`,
+          { headers: { "Content-Type": "text/event-stream" } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify(view()), { headers: { "Content-Type": "application/json" } }));
+    }));
+    const user = userEvent.setup();
+    render(<AskScreen />);
+    await user.type(screen.getByRole("textbox", { name: /ask about your papers/i }), "What is LoRA?{Enter}");
+    const chip = await screen.findByRole("button", { name: /^Citation 3: LoRA/ });
+    chip.focus();
+    await user.keyboard("{Enter}");
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/Our Method · page 5 of 26/)).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(chip).toHaveFocus());
+  });
+});

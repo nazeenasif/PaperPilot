@@ -5,13 +5,15 @@ import { useState } from "react";
 import { AnswerView } from "@/components/ask/AnswerView";
 import { Composer } from "@/components/ask/Composer";
 import { ProgressSteps } from "@/components/ask/ProgressSteps";
+import { SourceViewer } from "@/components/source/SourceViewer";
 import type { NumberedPassage } from "@/lib/types";
 import { useAsk } from "@/lib/useAsk";
 
-/** The Ask screen: the conversation, the working state and the composer (User Story 1). */
+/** The Ask screen: the conversation, the working state, the composer and the source viewer
+ *  opened from citation chips (User Stories 1 and 2). */
 export function AskScreen() {
   const { turns, busy, ask } = useAsk();
-  const [, setOpenPassage] = useState<NumberedPassage | null>(null);
+  const [openPassage, setOpenPassage] = useState<NumberedPassage | null>(null);
 
   return (
     <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-3xl flex-col px-4 pt-8 pb-6">
@@ -40,6 +42,7 @@ export function AskScreen() {
           Every answer cites the passage it came from. Click a number to see it in the paper.
         </p>
       </div>
+      {openPassage && <SourceViewer citation={openPassage} onClose={() => setOpenPassage(null)} />}
     </main>
   );
 }

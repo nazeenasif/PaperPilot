@@ -16,9 +16,10 @@ replies; an autouse fixture makes any attempt to build a real client fail the te
 checkpoint scripts call OpenRouter.
 
 **Request budget**: OpenRouter free models allow 50 requests/day without credits. Every
-checkpoint prints the number of HTTP requests it made to the model (including retries) and
-stops with FAIL if it exceeds its budget (checkpoint 4: 6, checkpoint 5: 12; calibration: 0).
-A full run of both checkpoints uses about 10 requests.
+checkpoint plans its model calls per part and prints planned requests (first attempts) and
+retries separately (`llm.request_counts()`). It FAILs if planned requests exceed the plan for
+the parts it ran, and on retries only if all requests together exceed 2 × the plan
+(`scripts/request_budget.py`). Plans: checkpoint 4: 6, checkpoint 5: 10, calibration: 0.
 
 **Organization**: Grouped by user story in priority order (US1, US2 P1; US3, US4, US5 P2).
 Every task is one commit; public functions get type hints and short docstrings.
@@ -187,12 +188,14 @@ T005 tests/fake_llm.py         (scripted fake OpenAI client)
 
 ### Request Budget per Full Run
 
-| Script | Model requests (no retries) |
-|---|---|
-| calibrate_threshold.py | 0 |
-| checkpoint_4_answer.py | 6 (US1 question, 2 US3 filtered questions, 3 near-miss questions; France, the citation check and the secret check use none) |
-| checkpoint_5_conversation.py | 10 (LoRA, 2 follow-ups × rewrite + answer, 5 probe questions) |
-| **Full run** | **16**, plus any retries (each retry is a request) |
+| Script | Planned requests (first attempts) | Safety cap (all requests) |
+|---|---|---|
+| calibrate_threshold.py | 0 | 0 |
+| checkpoint_4_answer.py | 6 (US1 question, 2 US3 filtered questions, 3 near-miss questions; France, the citation check and the secret check use none) | 12 |
+| checkpoint_5_conversation.py | 10 (LoRA, 2 follow-ups × rewrite + answer, 5 probe questions) | 20 |
+| **Full run** | **16**, plus retries, which are reported | 32 |
+
+Running only some parts lowers the plan (and the cap) to those parts' sum.
 
 ## Notes
 

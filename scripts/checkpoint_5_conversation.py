@@ -1,7 +1,8 @@
 """Checkpoint 5: follow-up questions (SC-005) and the probe-question answers (FR-019, SC-006).
 
-Calls the configured model and prints how many requests it used; it stops with FAIL if it
-exceeds its request budget. The probe part writes eval/probe_answers.md for reviewer verdicts.
+Calls the configured model and prints how many requests it used. It fails if it makes more
+first attempts than planned for the selected parts, or if all requests including retries
+exceed twice the plan (scripts/request_budget.py). The probe part writes eval/probe_answers.md for reviewer verdicts.
 
 Usage: python scripts/checkpoint_5_conversation.py [conversation] [probe]   (default: all parts)
 """
@@ -20,14 +21,13 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
-from checkpoint_4_answer import WORD_LIMIT, check, record, show, timing_summary  # noqa: E402
+from checkpoint_4_answer import WORD_LIMIT, budget, check, record, show, timing_summary  # noqa: E402
 
 from paperpilot import library, llm, store  # noqa: E402
 from paperpilot.config import load_settings  # noqa: E402
 from paperpilot.errors import PaperPilotError  # noqa: E402
 from paperpilot.service import Answer, Turn, ask  # noqa: E402
 
-REQUEST_BUDGET = 12
 FIRST_QUESTION = "What is LoRA?"
 # Each follow-up refers back to LoRA without naming it.
 FOLLOW_UPS = [
@@ -46,6 +46,9 @@ PROBE_QUESTIONS = [
 ]
 PROBE_REPORT = ROOT / "eval" / "probe_answers.md"
 PARTS = ("conversation", "probe")
+# Planned model calls per part (first attempts): the first question, then a rewrite and an
+# answer per follow-up; one answer per probe question. Retries are counted separately.
+PART_PLANS = {"conversation": 1 + 2 * len(FOLLOW_UPS), "probe": len(PROBE_QUESTIONS)}
 
 
 def _cell(text: str) -> str:
@@ -117,7 +120,7 @@ def main() -> int:
             history = [Turn("user", FIRST_QUESTION), Turn("assistant", first.text)]
 
             for question in FOLLOW_UPS:
-                before = llm.request_count()
+                before = llm.request_counts()
                 print(f"\n=== Follow-up: {question}")
                 answer = record(ask(question, history=history))
                 print(f"Original question:   {answer.question}")
@@ -125,7 +128,9 @@ def main() -> int:
                 print(f"Rewrite applied: {answer.rewrite_applied}   "
                       f"rewrite_fallback_reason: {answer.rewrite_fallback_reason}")
                 show(answer)
-                print(f"LLM requests for this follow-up: {llm.request_count() - before}")
+                used = llm.request_counts() - before
+                print(f"LLM requests for this follow-up: {used.total} ({used.planned} planned, "
+                      f"{used.retries} retries)")
                 check(results, answer.rewrite_applied, "the follow-up was rewritten")
                 check(results, REFERENT in answer.standalone_question.lower(),
                       "the standalone question names LoRA (SC-005)")
@@ -154,9 +159,10 @@ def main() -> int:
 
     print()
     timing_summary(results)
-    used = llm.request_count()
-    print(f"\nLLM requests: {used} (budget {REQUEST_BUDGET})")
-    check(results, used <= REQUEST_BUDGET, "stayed within the request budget")
+    used = llm.request_counts()
+    plan = sum(PART_PLANS[part] for part in parts)
+    print(f"\nLLM requests: {used.total} ({used.planned} planned, {used.retries} retries; plan {plan})")
+    budget(results, "checkpoint 5", used, plan)
     all_passed = all(passed for passed, _ in results)
     print(f"\n{'PASS' if all_passed else 'FAIL'}: checkpoint 5 automated checks")
     return 0 if all_passed else 1

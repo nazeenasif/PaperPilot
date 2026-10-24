@@ -130,7 +130,7 @@ def main() -> int:
     on_rejected = sum(s < configured for _, s in top["on-topic"])
     print(f"{'PASS' if on_rejected == 0 else 'FAIL'}: no on-topic question rejected at the configured threshold")
     print(f"Wrote {REPORT.relative_to(ROOT)}")
-    print(f"LLM requests: {llm.request_count()} (budget 0)")
+    print(f"LLM requests: {llm.request_count()} (plan 0)")
     return 0 if on_rejected == 0 and llm.request_count() == 0 else 1
 
 

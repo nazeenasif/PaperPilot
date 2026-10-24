@@ -1,7 +1,8 @@
 """Checkpoint 4: grounded answers with valid citations (SC-001, SC-010, SC-011).
 
 Calls the configured model (OpenRouter free tier by default) and prints how many requests
-it used; it stops with FAIL if it exceeds its request budget.
+it used. It fails if it makes more first attempts than planned for the selected parts, or if
+all requests including retries exceed twice the plan (scripts/request_budget.py).
 
 Usage: python scripts/checkpoint_4_answer.py [us1] [us2] [us3] [us5] [nearmiss] [secrets]   (default: all parts)
 """
@@ -23,8 +24,8 @@ from paperpilot import library, llm, prompts, store  # noqa: E402
 from paperpilot.config import load_settings  # noqa: E402
 from paperpilot.errors import PaperPilotError  # noqa: E402
 from paperpilot.service import Answer, ask, review_reply  # noqa: E402
+from request_budget import budget_checks  # noqa: E402
 
-REQUEST_BUDGET = 6
 WORD_LIMIT = 165  # 150 + 10% margin (SC-011); reported, never enforced
 MEDIAN_GENERATE_LIMIT = 15.0  # SC-008: median generate time of answered questions
 # Its top passage (Attention, Introduction) contains the paper's own markers such as "[13]".
@@ -37,7 +38,6 @@ NEARMISS_QUESTIONS = [
     "What is the context window of Claude 3?",  # the papers only cover Claude-1.3
     "How does Llama 2 handle safety tuning?",
 ]
-NEARMISS_BUDGET = 3
 # (question, must get a cited answer). The tasks question is a known false not-found: its
 # answer passages rank 13 and 22 within BERT (eval/probe_notes.md), outside the top 6.
 US3_QUESTIONS = [
@@ -50,6 +50,9 @@ US5_PASSAGES = 6
 US5_INVALID = "The Transformer was trained on WMT 2014 English-German [2]. It used 8 P100 GPUs [9]."
 US5_UNCITED = "The Transformer was trained on WMT 2014 English-German. It used 8 P100 GPUs."
 PARTS = ("us1", "us2", "us3", "us5", "nearmiss", "secrets")
+# Planned model calls per part (first attempts; retries are counted separately).
+PART_PLANS = {"us1": 1, "us2": 0, "us3": len(US3_QUESTIONS), "us5": 0,
+              "nearmiss": len(NEARMISS_QUESTIONS), "secrets": 0}
 PREVIEW_CHARS = 160
 
 
@@ -100,6 +103,12 @@ def check(results: list[tuple[bool, str]], passed: bool, description: str) -> No
     """Print and record one PASS/FAIL line."""
     print(f"{'PASS' if passed else 'FAIL'}: {description}")
     results.append((passed, description))
+
+
+def budget(results: list[tuple[bool, str]], label: str, used: llm.RequestCounts, plan: int) -> None:
+    """Check planned requests against the plan and all requests against the safety cap."""
+    for passed, description in budget_checks(label, used, plan):
+        check(results, passed, description)
 
 
 def check_secrets(results: list[tuple[bool, str]], api_key: str) -> None:
@@ -212,7 +221,7 @@ def main() -> int:
             check(results, llm.request_count() == before, "the citation check made no LLM request")
 
         if "nearmiss" in parts:
-            before = llm.request_count()
+            before = llm.request_counts()
             for question in NEARMISS_QUESTIONS:
                 print(f"\n=== Near-miss: {question}")
                 answer = record(ask(question))
@@ -225,8 +234,7 @@ def main() -> int:
                 for p in answer.passages:
                     if p.number in answer.citations.valid:
                         print(f"\n  [{p.number}] {p.title} — {p.section}, p. {p.page}\n  {p.text}")
-            used = llm.request_count() - before
-            check(results, used <= NEARMISS_BUDGET, f"near-miss part used {used} LLM requests (budget {NEARMISS_BUDGET})")
+            budget(results, "near-miss part", llm.request_counts() - before, PART_PLANS["nearmiss"])
 
         if "secrets" in parts:
             print("\n=== Secrets (no LLM request)")
@@ -236,9 +244,10 @@ def main() -> int:
 
     print()
     timing_summary(results)
-    used = llm.request_count()
-    print(f"\nLLM requests: {used} (budget {REQUEST_BUDGET})")
-    check(results, used <= REQUEST_BUDGET, "stayed within the request budget")
+    used = llm.request_counts()
+    plan = sum(PART_PLANS[part] for part in parts)
+    print(f"\nLLM requests: {used.total} ({used.planned} planned, {used.retries} retries; plan {plan})")
+    budget(results, "checkpoint 4", used, plan)
     all_passed = all(passed for passed, _ in results)
     print(f"\n{'PASS' if all_passed else 'FAIL'}: checkpoint 4 automated checks")
     return 0 if all_passed else 1

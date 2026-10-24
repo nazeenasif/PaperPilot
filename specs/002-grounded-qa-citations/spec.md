@@ -267,6 +267,10 @@ passages and confirm [9] is reported as invalid and [2] as valid.
   question, optional paper filter, optional k and optional conversation history.
 - **FR-018**: The project MUST include runnable checkpoint scripts for Checkpoints 4–5 that
   exercise the acceptance scenarios above and print PASS/FAIL lines for automatable checks.
+  Each checkpoint MUST state how many model requests it plans for the parts it runs and
+  report first attempts and retries separately; it MUST fail if its first attempts exceed
+  the plan (an unplanned call), and MUST fail on retries only when all requests together
+  exceed twice the plan (a safety cap).
 - **FR-019**: The five questions in `eval/probe_notes.md` MUST be run through question
   answering and their answers, citations and verdicts recorded.
 

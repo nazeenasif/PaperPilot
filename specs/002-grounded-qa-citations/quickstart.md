@@ -36,9 +36,11 @@ python scripts/checkpoint_4_answer.py        # cited answer, not-found, filter, 
 python scripts/checkpoint_5_conversation.py  # follow-up rewrite, probe questions -> eval/probe_answers.md
 ```
 
-A full run uses about 16 model requests (checkpoint 4: 6, checkpoint 5: 10); each retry after a
-rate limit or provider error counts as one more, and a checkpoint fails if it goes over its
-budget. Parts can be run alone to save requests, e.g.
+A full run plans 16 model requests (checkpoint 4: 6, checkpoint 5: 10). Each checkpoint
+prints planned requests and retries separately: it fails if it makes a call it did not plan,
+while retries after a rate limit or provider error are reported and fail the run only if all
+requests together exceed twice the plan. Every retry still counts against the provider's
+daily limit. Parts can be run alone to save requests, e.g.
 `python scripts/checkpoint_4_answer.py us5 secrets` (no requests) or
 `python scripts/checkpoint_5_conversation.py conversation` (5 requests). The scripts print
 UTF-8 themselves; `PYTHONIOENCODING` is not needed.

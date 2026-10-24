@@ -189,6 +189,31 @@ def test_request_count_resets(fake):
     llm.generate("s", "p")
     llm.reset_request_count()
     assert llm.request_count() == 0
+    assert llm.request_counts() == llm.RequestCounts(planned=0, retries=0)
+
+
+def test_first_attempts_and_retries_are_counted_separately(fake):
+    fake(f.rate_limited(retry_after="1"), f.ok("Answer [1]."), f.ok("Answer [2]."))
+    llm.generate("s", "p")
+    llm.generate("s", "p")
+    counts = llm.request_counts()
+    assert (counts.planned, counts.retries, counts.total) == (2, 1, 3)
+    assert llm.request_count() == counts.total
+
+
+def test_a_failed_call_counts_one_planned_request_and_its_retries(fake):
+    fake(*[f.rate_limited(retry_after="1")] * llm.MAX_ATTEMPTS)
+    with pytest.raises(LLMError):
+        llm.generate("s", "p")
+    assert llm.request_counts() == llm.RequestCounts(planned=1, retries=llm.MAX_ATTEMPTS - 1)
+
+
+def test_request_counts_subtract_for_a_part_of_a_run(fake):
+    fake(f.ok("Answer [1]."), f.timeout(), f.ok("Answer [2]."))
+    llm.generate("s", "p")
+    before = llm.request_counts()
+    llm.generate("s", "p")
+    assert llm.request_counts() - before == llm.RequestCounts(planned=1, retries=1)
 
 
 # --- settings checks happen before any client is created ---

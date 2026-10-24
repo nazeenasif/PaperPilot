@@ -26,8 +26,25 @@ RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
 _MAX_MESSAGE_CHARS = 300
 
 _sleep = time.sleep  # replaced in tests
-_requests = 0
+_planned = 0  # first attempts: one per generate() call
+_retries = 0  # further attempts after a retryable failure
 _clients: dict[tuple[str, str], object] = {}
+
+
+@dataclass(frozen=True)
+class RequestCounts:
+    """Model requests since the last reset: first attempts (planned) and retries."""
+
+    planned: int
+    retries: int
+
+    @property
+    def total(self) -> int:
+        """Every HTTP request sent, as the provider's rate limits count them."""
+        return self.planned + self.retries
+
+    def __sub__(self, other: "RequestCounts") -> "RequestCounts":
+        return RequestCounts(self.planned - other.planned, self.retries - other.retries)
 
 
 @dataclass(frozen=True)
@@ -53,13 +70,18 @@ class ProviderError(Exception):
 
 def request_count() -> int:
     """Return the number of HTTP requests sent to the model (including retries) since the last reset."""
-    return _requests
+    return _planned + _retries
+
+
+def request_counts() -> RequestCounts:
+    """Return first attempts and retries separately since the last reset."""
+    return RequestCounts(planned=_planned, retries=_retries)
 
 
 def reset_request_count() -> None:
-    """Start counting model requests from zero."""
-    global _requests
-    _requests = 0
+    """Start counting model requests (first attempts and retries) from zero."""
+    global _planned, _retries
+    _planned = _retries = 0
 
 
 def _base_url(settings: Settings) -> str:
@@ -218,7 +240,7 @@ def generate(system: str, prompt: str) -> LLMReply:
     Raises SettingsError for missing settings and LLMError for provider failures, cut-off or
     empty output. Retries rate limits and transient errors (research R3).
     """
-    global _requests
+    global _planned, _retries
     settings = load_settings()
     _check_settings(settings)
     client = _make_client(settings)
@@ -233,7 +255,10 @@ def generate(system: str, prompt: str) -> LLMReply:
 
     start = time.perf_counter()
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        _requests += 1
+        if attempt == 1:
+            _planned += 1
+        else:
+            _retries += 1
         try:
             response = client.chat.completions.create(**kwargs)
             _raise_for_error_body(response)

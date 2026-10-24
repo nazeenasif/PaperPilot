@@ -3,7 +3,7 @@
 Calls the configured model (OpenRouter free tier by default) and prints how many requests
 it used; it stops with FAIL if it exceeds its request budget.
 
-Usage: python scripts/checkpoint_4_answer.py [us1] [us2]   (default: all parts)
+Usage: python scripts/checkpoint_4_answer.py [us1] [us2] [nearmiss]   (default: all parts)
 """
 
 import logging
@@ -24,7 +24,15 @@ WORD_LIMIT = 165  # 150 + 10% margin (SC-011); reported, never enforced
 # Its top passage (Attention, Introduction) contains the paper's own markers such as "[13]".
 US1_QUESTION = "What recurrent models were state of the art for sequence modelling before the Transformer?"
 US2_QUESTION = "What is the capital of France?"
-PARTS = ("us1", "us2")
+# Topic-level near-misses: in-domain but not answered by the test papers. They pass the
+# threshold (research R8), so the model's not-found rule must catch them.
+NEARMISS_QUESTIONS = [
+    "How was GPT-4 trained?",
+    "What is the context window of Claude?",
+    "How does Llama 2 handle safety tuning?",
+]
+NEARMISS_BUDGET = 3
+PARTS = ("us1", "us2", "nearmiss")
 PREVIEW_CHARS = 160
 
 
@@ -98,6 +106,23 @@ def main() -> int:
             show(answer)
             check(results, answer.text == prompts.NOT_FOUND, "the answer is exactly the not-found sentence")
             check(results, llm.request_count() == before, "no LLM request was made (rejected by the threshold)")
+
+        if "nearmiss" in parts:
+            before = llm.request_count()
+            for question in NEARMISS_QUESTIONS:
+                print(f"\n=== Near-miss: {question}")
+                answer = ask(question)
+                show(answer)
+                if answer.not_found:
+                    check(results, True, f"not-found ({answer.fallback_reason}) for: {question}")
+                    continue
+                print(f"WARN: the model gave a cited answer for: {question} — judge whether these "
+                      "cited passages really support it:")
+                for p in answer.passages:
+                    if p.number in answer.citations.valid:
+                        print(f"\n  [{p.number}] {p.title} — {p.section}, p. {p.page}\n  {p.text}")
+            used = llm.request_count() - before
+            check(results, used <= NEARMISS_BUDGET, f"near-miss part used {used} LLM requests (budget {NEARMISS_BUDGET})")
     except PaperPilotError as error:
         check(results, False, f"{type(error).__name__}: {error}")
 

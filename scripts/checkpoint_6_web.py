@@ -6,19 +6,26 @@ retries included, exceed twice the plan (scripts/request_budget.py, Feature 2 bu
 
 Usage: python scripts/checkpoint_6_web.py [part ...] [--new-pdf PATH]   (default: every part)
 Parts: boundary, ask, viewer (viewer opens the citations of part ask), library (--new-pdf PATH
-also adds a paper that is not in the library yet, then deletes it)
+also adds a paper that is not in the library yet, then deletes it), states (in-process over a
+temporary library with a scripted model; needs no server), usage
 
 Start the servers first (quickstart): `python -m api` and `npm --prefix frontend run dev`.
 """
 
 import json
 import re
+import os
 import socket
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from unittest import mock
 from pathlib import Path
 
 # Allow `python scripts/checkpoint_6_web.py` from the repo root.
@@ -439,11 +446,178 @@ def part_library(run: Run, client: httpx.Client) -> None:
               "every paper has its PDF with exact highlights")
 
 
+STATES_KEY = "sk-checkpoint-states-not-a-real-key"
+STATES_ENV = {
+    "LLM_PROVIDER": "openrouter", "LLM_BASE_URL": "", "LLM_API_KEY": STATES_KEY,
+    "LLM_MODEL": "checkpoint/scripted:free", "LLM_REASONING_EFFORT": "", "RELEVANCE_THRESHOLD": "0.0",
+    "DAILY_REQUEST_LIMIT": "50", "CHUNK_WORDS": "220", "CHUNK_OVERLAP": "40", "MIN_CHUNK_WORDS": "30", "TOP_K": "6",
+}
+STATES_QUESTION = "Which evaluation dataset was used?"
+
+
+def _blocked(*args, **kwargs):
+    raise AssertionError("part states tried to reach the model or the provider")
+
+
+def part_states(run: Run, client: httpx.Client) -> None:
+    """US5: every error and answer state the API can produce, with its kind and safe fields.
+
+    Runs the API in-process (TestClient) over a temporary library, with a scripted model and a
+    fake embedder; real clients and the provider's key endpoint are blocked. 0 model requests.
+    """
+    sys.path.insert(0, str(ROOT / "tests"))
+    import openai
+    from fastapi.testclient import TestClient
+
+    import fake_llm
+    from conftest import ScriptedLLM, fake_vector, write_pdf
+    from paperpilot import llm, prompts, store
+    from paperpilot.errors import LLMError, RateLimitedError
+
+    real_generate = llm.generate
+    scripted = ScriptedLLM()
+    bodies: list[str] = []
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as folder, ExitStack() as stack:
+        library_dir = Path(folder) / "library"
+        stack.enter_context(mock.patch.dict(os.environ, {**STATES_ENV, "LIBRARY_DIR": str(library_dir)}))
+        for target, name, value in [
+            (openai, "OpenAI", _blocked), (llm, "_make_client", _blocked), (llm, "_fetch_key_info", _blocked),
+            (llm, "generate", scripted), (store, "load_model", lambda: 0.0), (store, "embed_query", fake_vector),
+            (store, "embed_passages", lambda texts, on_progress=None: [fake_vector(t) for t in texts]),
+        ]:
+            stack.enter_context(mock.patch.object(target, name, value))
+        store.reset_cache()
+        stack.callback(store.reset_cache)
+        from api.main import create_app
+        from paperpilot.library import add_paper
+
+        add_paper(write_pdf(Path(folder) / "paper.pdf"))
+        before = llm.request_counts()
+        with TestClient(create_app(), base_url=API) as app:
+            deadline = time.monotonic() + 30
+            while app.get("/api/status").json()["state"] != "ready" and time.monotonic() < deadline:
+                time.sleep(0.05)
+
+            def ask(*replies) -> tuple[str, dict, list]:
+                scripted.add(*replies)
+                with app.stream("POST", "/api/ask", json={"question": STATES_QUESTION}, headers=WRITE_HEADERS) as r:
+                    text = "".join(r.iter_text())
+                bodies.append(text)
+                events = parse_events(text)
+                name, data = events[-1]
+                return name, data, events
+
+            def show(state: str, name: str, data: dict) -> None:
+                shown = {k: v for k, v in data.items() if k in (
+                    "kind", "reason", "attempts", "used", "limit", "resets_at", "until", "daily", "passage_id",
+                    "fallback_reason", "verified", "rejected_answer", "warning")}
+                if name == "answer":
+                    shown["uncited_sentences"] = data["citations"]["uncited_sentences"]
+                print(f"  {state}: {name} {json.dumps(shown, ensure_ascii=False)}")
+
+            name, data, _ = ask(prompts.NOT_FOUND)
+            show("not found", name, data)
+            run.check(name == "answer" and data["not_found"] and not data["verified"]
+                      and data["fallback_reason"] == "model_not_found",
+                      "not found: an unverified answer event with fallback_reason model_not_found")
+
+            notice = llm.RetryNotice(attempt=1, max_attempts=4, wait_seconds=8.0, reason="rate_limited")
+            name, data, events = ask(notice, LLMError("provider text that must not leak", reason="busy"))
+            waits = [d for n, d in events if n == "retry_wait"]
+            print(f"  retry wait: retry_wait {json.dumps(waits[0]) if waits else None}")
+            show("model busy", name, data)
+            run.check(waits == [{"attempt": 1, "max_attempts": 4, "wait_seconds": 8.0, "reason": "rate_limited"}],
+                      "retry wait: the countdown's attempt, wait and reason are streamed")
+            run.check((name, data) == ("error", {"kind": "model_busy", "attempts": llm.MAX_ATTEMPTS}),
+                      "model busy: error model_busy with attempts")
+
+            with mock.patch.dict(os.environ, {"DAILY_REQUEST_LIMIT": "1"}):
+                llm.count_request()  # the temporary library's counter only
+                fake_client = fake_llm.FakeClient([fake_llm.ok("never sent [1].")])
+                with mock.patch.object(llm, "_make_client", lambda settings: fake_client), \
+                        mock.patch.object(llm, "generate", real_generate):
+                    name, data, _ = ask()
+            show("daily limit", name, data)
+            run.check(name == "error" and data["kind"] == "daily_limit" and (data["used"], data["limit"]) == (1, 1)
+                      and data["resets_at"].endswith("T00:00:00Z"),
+                      "daily limit: error daily_limit with used, limit and the next UTC midnight")
+            run.check(fake_client.calls == [], "daily limit: the pre-check sent no request (0 generate calls)")
+
+            until = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=90)
+            for daily in (False, True):
+                name, data, _ = ask(RateLimitedError(until, daily=daily))
+                show(f"rate limited ({'daily' if daily else 'not daily'})", name, data)
+                run.check(name == "error" and data == {"kind": "rate_limited", "until": until.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                                       "daily": daily},
+                          f"rate limited: error rate_limited with until and daily={str(daily).lower()}")
+
+            held = "Evaluated on a benchmark [99]."
+            name, data, _ = ask(held)
+            show("held back", name, data)
+            run.check(name == "answer" and not data["verified"] and data["rejected_answer"] == held
+                      and data["citations"]["invalid"] == [99],
+                      "held back: an unverified answer carrying the rejected text and invalid citation 99")
+
+            name, data, _ = ask("Evaluated on a benchmark dataset of questions [1]. It was also very fast.")
+            show("uncited sentence", name, data)
+            run.check(name == "answer" and data["verified"] and data["citations"]["uncited_sentences"],
+                      "uncited sentence: a verified answer that flags the sentence without a citation")
+
+            name, data, _ = ask(LLMError(f"401 for key {STATES_KEY}", reason="bad_key"))
+            show("model unavailable", name, data)
+            run.check((name, data) == ("error", {"kind": "model_unavailable", "reason": "bad_key"}),
+                      "model unavailable: error model_unavailable with reason bad_key")
+
+            response = app.get("/api/passages/0000000000-1")
+            bodies.append(response.text)
+            print(f"  unknown passage: HTTP {response.status_code} {response.text}")
+            run.check(response.status_code == 404 and response.json() == {"kind": "unknown_passage",
+                                                                           "passage_id": "0000000000-1"},
+                      "unknown passage: 404 unknown_passage")
+
+            response = app.post("/api/papers", files=[("files", ("notes.pdf", b"plain text", "application/pdf"))],
+                                headers=WRITE_HEADERS)
+            bodies.append(response.text)
+            job_id = response.json()["jobs"][0]["job_id"]
+            job = next(j for j in app.get("/api/jobs").json()["jobs"] if j["job_id"] == job_id)
+            print(f"  upload invalid: job {job['phase']} {json.dumps(job['error'])}")
+            run.check(job["phase"] == "failed" and job["error"] == {"kind": "upload_invalid", "reason": "not_pdf"},
+                      "upload invalid: a failed job with upload_invalid and reason not_pdf")
+
+        used = llm.request_counts() - before
+        leaks = [b for b in bodies if STATES_KEY in b or "Traceback" in b or "must not leak" in b]
+        run.check(not leaks, f"no response carried the key, a traceback or provider text ({len(bodies)} checked)")
+        run.check(used.total == 0 and scripted.queue == [],
+                  f"states: {used.total} model requests counted by the engine; every scripted reply was used")
+
+
+def part_usage(run: Run, client: httpx.Client) -> None:
+    """US5: GET /api/usage agrees with scripts/usage.py (FR-024). 0 model requests."""
+    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "usage.py")], capture_output=True,
+                            text=True, encoding="utf-8", timeout=60)
+    print(result.stdout.rstrip())
+    fields = dict(re.findall(r"^(Used today|Remaining|Resets at|Source):\s+(.*)$", result.stdout, re.MULTILINE))
+    used = re.match(r"(\d+) / (\d+)", fields.get("Used today", ""))
+    api = client.get("/api/usage").json()
+    print(f"GET /api/usage: {api}")
+    if result.returncode != 0 or used is None:
+        run.check(False, f"scripts/usage.py ran (exit {result.returncode}): {result.stderr.strip()[:200]}")
+        return
+    resets = datetime.strptime(api["resets_at"], "%Y-%m-%dT%H:%M:%SZ").strftime("%Y-%m-%d %H:%M UTC")
+    source = "the provider" if api["source"] == "provider" else "PaperPilot local count"
+    run.check((int(used[1]), int(used[2]), int(fields["Remaining"])) == (api["used"], api["limit"], api["remaining"]),
+              f"used, limit and remaining agree ({api['used']} / {api['limit']}, {api['remaining']} left)")
+    run.check(fields["Resets at"].startswith(resets) and fields["Source"] == source,
+              f"reset time and source agree ({resets}, {api['source']})")
+
+
 PARTS: dict[str, Part] = {
     "boundary": Part(plan=0, run=part_boundary),
     "ask": Part(plan=1, run=part_ask),
     "viewer": Part(plan=0, run=part_viewer),
     "library": Part(plan=0, run=part_library),
+    "states": Part(plan=0, run=part_states),
+    "usage": Part(plan=0, run=part_usage),
 }
 
 

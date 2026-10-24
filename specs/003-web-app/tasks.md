@@ -374,7 +374,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
     - `LLMError` with reason `not_listed`, `unknown_model`, `bad_key`, `out_of_credits`, `cut_off` or `empty` → `model_unavailable`
   - **No leaks:** across every endpoint and error, with the key set, no response contains the key, `Traceback` or the provider's message text.
 - [X] T047 [US5] Implement the `/api/usage` (with a 30 s refresh throttle in `api/state.py`) and `/api/search` routes, and complete the exception mapping in `api/errors.py`, so T046 passes. After every question the API calls `llm.refresh_usage()` (throttled) before sending `answer`.
-- [ ] T048 [US5] Add parts `states` and `usage` to `scripts/checkpoint_6_web.py`, both 0 model requests.
+- [X] T048 [US5] Add parts `states` and `usage` to `scripts/checkpoint_6_web.py`, both 0 model requests.
   - **`states`** runs in-process with `TestClient` and a scripted fake LLM, so no server and no requests are needed. It shows every error and answer state the API can produce and asserts each kind and its safe fields:
     - not found, retry wait and model busy
     - daily limit (pre-check, zero `generate` calls) and rate limited (daily and not daily)

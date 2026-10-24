@@ -24,7 +24,7 @@ ENV_VARS = [
     "LLM_REASONING_EFFORT",
     "LLM_TIMEOUT_SECONDS",
     "DAILY_REQUEST_LIMIT",
-    "FRONTEND_ORIGIN",
+    "FRONTEND_ORIGINS",
 ]
 
 
@@ -206,13 +206,23 @@ def test_invalid_daily_request_limit_names_variable_and_value(monkeypatch, value
     assert value in str(exc.value)
 
 
-def test_frontend_origin_default_and_override(monkeypatch):
-    assert load_settings().frontend_origin == "http://127.0.0.1:3000"
-    monkeypatch.setenv("FRONTEND_ORIGIN", "http://127.0.0.1:3100")
-    assert load_settings().frontend_origin == "http://127.0.0.1:3100"
+def test_frontend_origins_default_to_both_local_addresses():
+    assert load_settings().frontend_origins == ("http://127.0.0.1:3000", "http://localhost:3000")
+
+
+def test_frontend_origins_are_comma_separated(monkeypatch):
+    monkeypatch.setenv("FRONTEND_ORIGINS", " http://127.0.0.1:3100 , ,http://localhost:3100,")
+    assert load_settings().frontend_origins == ("http://127.0.0.1:3100", "http://localhost:3100")
+
+
+def test_frontend_origins_without_any_origin_are_invalid(monkeypatch):
+    monkeypatch.setenv("FRONTEND_ORIGINS", " , ")
+    with pytest.raises(SettingsError) as exc:
+        load_settings()
+    assert "FRONTEND_ORIGINS" in str(exc.value)
 
 
 def test_describe_lists_web_app_settings():
     text = load_settings().describe()
     assert "DAILY_REQUEST_LIMIT = 50" in text
-    assert "FRONTEND_ORIGIN = http://127.0.0.1:3000" in text
+    assert "FRONTEND_ORIGINS = http://127.0.0.1:3000,http://localhost:3000" in text

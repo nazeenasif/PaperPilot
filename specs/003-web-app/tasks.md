@@ -158,7 +158,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
 
 ### Cross-site request protection (added 2026-10-24, analysis finding A1; before any write endpoint)
 
-- [ ] T072 Write failing tests for spec FR-002b and research R11.
+- [X] T072 Write failing tests for spec FR-002b and research R11.
   - **`tests/test_settings.py`:**
     - `FRONTEND_ORIGINS` is comma-separated and defaults to `("http://127.0.0.1:3000", "http://localhost:3000")`.
     - Blank entries are ignored; a value with no origin is invalid.

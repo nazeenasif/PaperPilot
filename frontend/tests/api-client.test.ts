@@ -57,6 +57,16 @@ describe("apiPost and apiDelete", () => {
     expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
   });
 
+  it("marks every write with X-PaperPilot: 1 (cross-site protection, FR-002b)", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse({ ok: true })));
+    vi.stubGlobal("fetch", fetchMock);
+    await apiPost("/api/search", { query: "LoRA" });
+    await apiDelete("/api/papers/abc");
+    for (const [, init] of fetchMock.mock.calls as [string, RequestInit][]) {
+      expect(new Headers(init.headers).get("X-PaperPilot")).toBe("1");
+    }
+  });
+
   it("uses DELETE for apiDelete", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ removed_passages: 3 }));
     vi.stubGlobal("fetch", fetchMock);

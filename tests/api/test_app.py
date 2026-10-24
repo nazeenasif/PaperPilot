@@ -46,32 +46,38 @@ def test_loader_failure_gives_error_state_without_details(make_app, guarded, api
 # --- localhost-only boundary (FR-002a, SC-012) ---
 
 
-def test_cors_allows_only_the_frontend_origin(client):
+@pytest.mark.parametrize("origin", [FRONTEND, "http://localhost:3000"])
+def test_cors_allows_both_frontend_origins(client, origin):
     allowed = client.options(
-        "/api/status", headers={"Origin": FRONTEND, "Access-Control-Request-Method": "GET"}
+        "/api/status", headers={"Origin": origin, "Access-Control-Request-Method": "GET"}
     )
-    assert allowed.headers.get("access-control-allow-origin") == FRONTEND
-    assert client.get("/api/status", headers={"Origin": FRONTEND}).headers.get(
+    assert allowed.headers.get("access-control-allow-origin") == origin
+    assert client.get("/api/status", headers={"Origin": origin}).headers.get(
         "access-control-allow-origin"
-    ) == FRONTEND
+    ) == origin
 
 
-@pytest.mark.parametrize("origin", ["http://evil.example", "http://localhost:3000", "http://127.0.0.1:3001"])
-def test_cors_refuses_other_origins(client, origin):
+@pytest.mark.parametrize("origin", ["http://evil.example", "http://127.0.0.1:3001", "http://localhost:8080"])
+def test_other_origins_are_refused(client, origin):
     preflight = client.options(
         "/api/status", headers={"Origin": origin, "Access-Control-Request-Method": "GET"}
     )
+    assert preflight.status_code == 403
     assert "access-control-allow-origin" not in preflight.headers
     simple = client.get("/api/status", headers={"Origin": origin})
+    assert simple.status_code == 403
+    assert simple.json() == {"kind": "forbidden", "reason": "origin"}
     assert "access-control-allow-origin" not in simple.headers
 
 
-def test_frontend_origin_comes_from_settings(make_app, guarded, monkeypatch):
-    monkeypatch.setenv("FRONTEND_ORIGIN", "http://127.0.0.1:3100")
+def test_frontend_origins_come_from_settings(make_app, guarded, monkeypatch):
+    monkeypatch.setenv("FRONTEND_ORIGINS", "http://127.0.0.1:3100")
     app, _ = make_app()
     with guarded(app) as client:
-        response = client.get("/api/status", headers={"Origin": "http://127.0.0.1:3100"})
-    assert response.headers.get("access-control-allow-origin") == "http://127.0.0.1:3100"
+        allowed = client.get("/api/status", headers={"Origin": "http://127.0.0.1:3100"})
+        refused = client.get("/api/status", headers={"Origin": FRONTEND})
+    assert allowed.headers.get("access-control-allow-origin") == "http://127.0.0.1:3100"
+    assert refused.status_code == 403
 
 
 @pytest.mark.parametrize("host", ["192.168.1.20", "paperpilot.example", "0.0.0.0"])

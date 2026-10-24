@@ -88,6 +88,7 @@ describe("postEventStream", () => {
     expect(init.method).toBe("POST");
     expect(init.body).toBe(JSON.stringify({ question: "What is LoRA?" }));
     expect(new Headers(init.headers).get("Accept")).toBe("text/event-stream");
+    expect(new Headers(init.headers).get("X-PaperPilot")).toBe("1");
   });
 
   it("throws an ApiError when the server answers with a JSON error before streaming", async () => {

@@ -15,6 +15,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
+# Print Unicode (−, ﬁ, Θ) on a Windows console without PYTHONIOENCODING.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
 
 from checkpoint_4_answer import check, record, show, timing_summary  # noqa: E402
 

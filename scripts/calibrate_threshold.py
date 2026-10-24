@@ -16,6 +16,9 @@ from pathlib import Path
 # Allow `python scripts/calibrate_threshold.py` from the repo root.
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+# Print Unicode (−, ﬁ, Θ) on a Windows console without PYTHONIOENCODING.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
 
 from paperpilot import llm, store  # noqa: E402
 from paperpilot.config import load_settings  # noqa: E402

@@ -14,6 +14,9 @@ from pathlib import Path
 
 # Allow `python scripts/checkpoint_4_answer.py` from the repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Print Unicode (−, ﬁ, Θ) on a Windows console without PYTHONIOENCODING.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
 
 from paperpilot import library, llm, prompts, store  # noqa: E402
 from paperpilot.config import load_settings  # noqa: E402

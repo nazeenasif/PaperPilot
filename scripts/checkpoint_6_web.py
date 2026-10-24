@@ -117,7 +117,7 @@ def accepts_connection(host: str, port: int) -> bool:
 
 def part_boundary(run: Run, client: httpx.Client) -> None:
     """Localhost only and CORS for the frontend origin only (FR-002a, SC-012). 0 requests."""
-    frontend = load_settings().frontend_origin
+    frontend = load_settings().frontend_origins[0]
 
     allowed = client.get("/api/status", headers={"Origin": frontend})
     run.check(allowed.headers.get("access-control-allow-origin") == frontend,

@@ -1,7 +1,7 @@
 // Server-Sent Events over fetch(): EventSource cannot POST, and POST /api/ask streams its
 // progress, retry waits and final answer (research R2).
 
-import { apiFetch, errorFrom } from "@/lib/api";
+import { apiFetch, errorFrom, WRITE_HEADERS } from "@/lib/api";
 
 export interface StreamEvent {
   event: string;
@@ -67,7 +67,7 @@ export async function postEventStream(
 ): Promise<AsyncGenerator<StreamEvent>> {
   const response = await apiFetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...WRITE_HEADERS },
     body: JSON.stringify(body),
     signal,
   });

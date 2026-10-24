@@ -173,7 +173,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
     - Same-machine requests without `Origin` can read, and can write with the header.
   - **`tests/api/test_app.py`:** `http://localhost:3000` is now allowed. Read the origins from `FRONTEND_ORIGINS`.
   - **`frontend/tests/api-client.test.ts` and `frontend/tests/sse.test.ts`:** `apiPost`, `apiDelete` and `postEventStream` send `X-PaperPilot: 1`; `apiGet` doesn't need to.
-- [ ] T073 Make T072 pass:
+- [X] T073 Make T072 pass:
   - `paperpilot/config.py`: replace `frontend_origin` with `frontend_origins` (`FRONTEND_ORIGINS`).
   - New `api/security.py`: the Origin guard and the `X-PaperPilot` check as one middleware, placed between trusted hosts and CORS.
   - `api/main.py`: CORS allows the origin list and the headers `Content-Type` and `X-PaperPilot`.

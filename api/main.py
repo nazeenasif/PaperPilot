@@ -14,6 +14,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from api.errors import error_response, install_error_handlers
 from api.routes import router
+from api.security import HEADER_NAME, OriginGuard
 from api.state import AppState
 from paperpilot import library, llm, store
 from paperpilot.config import Settings, load_settings
@@ -97,14 +98,15 @@ def create_app(loader: Callable[[], None] | None = None) -> FastAPI:
             return error_response("not_ready", state=app_state.state)
         return await call_next(request)
 
-    # Added last = runs first: trusted hosts, then CORS, then the readiness check.
+    # Added last = runs first: trusted hosts, then the Origin guard, then CORS, then readiness.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.frontend_origin],
+        allow_origins=list(settings.frontend_origins),
         allow_methods=["GET", "POST", "DELETE"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", HEADER_NAME],
         allow_credentials=False,
     )
+    app.add_middleware(OriginGuard, allowed_origins=settings.frontend_origins)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
     install_error_handlers(app)

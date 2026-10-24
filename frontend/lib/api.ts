@@ -3,6 +3,10 @@
 
 const DEFAULT_API_URL = "http://127.0.0.1:8000";
 
+/** Sent on every write: the API refuses state-changing requests without it (FR-002b). A custom
+ *  header forces a CORS preflight, which only PaperPilot's own origins pass. */
+export const WRITE_HEADERS = { "X-PaperPilot": "1" } as const;
+
 /** An error from the API (or the network), identified by its kind. */
 export class ApiError extends Error {
   readonly kind: string;
@@ -50,6 +54,9 @@ export async function errorFrom(response: Response): Promise<ApiError> {
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const init: RequestInit = { method, headers: { Accept: "application/json" } };
+  if (method !== "GET") {
+    init.headers = { ...init.headers, ...WRITE_HEADERS };
+  }
   if (body !== undefined) {
     init.headers = { ...init.headers, "Content-Type": "application/json" };
     init.body = JSON.stringify(body);

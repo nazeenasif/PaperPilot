@@ -15,6 +15,7 @@ logger = logging.getLogger("api")
 
 # kind -> HTTP status (contracts/web-api.md)
 STATUS = {
+    "forbidden": 403,
     "not_ready": 503,
     "empty_question": 422,
     "no_papers_selected": 422,

@@ -244,7 +244,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 
 ### US3 (P2): ingest progress, per-paper stats, arXiv ID
 
-- [ ] T027 [P] [US3] Add failing tests to `tests/test_store.py`: `embed_passages(texts, on_progress=cb)` calls `cb(done, total)` after each batch, with `done` increasing and ending at `total`. Without a callback the behaviour is unchanged.
+- [X] T027 [P] [US3] Add failing tests to `tests/test_store.py`: `embed_passages(texts, on_progress=cb)` calls `cb(done, total)` after each batch, with `done` increasing and ending at `total`. Without a callback the behaviour is unchanged.
 - [ ] T028 [P] [US3] Create failing tests in `tests/test_library_stats.py`:
   - `add_paper(on_progress=cb)` reports `parsing`, `chunking`, `embedding` (percent rising to 100) and `ready`, in that order.
   - An attach reports `mapping` then `ready`.

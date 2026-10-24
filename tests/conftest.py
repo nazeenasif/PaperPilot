@@ -140,8 +140,14 @@ def fake_embedder(monkeypatch):
     """Replace the embedding model with `fake_vector` (no download, no torch)."""
     from paperpilot import store
 
+    def embed_passages(texts, on_progress=None):
+        vectors = [fake_vector(t) for t in texts]
+        if on_progress is not None and texts:
+            on_progress(len(texts), len(texts))
+        return vectors
+
     monkeypatch.setattr(store, "load_model", lambda: 0.0)
-    monkeypatch.setattr(store, "embed_passages", lambda texts: [fake_vector(t) for t in texts])
+    monkeypatch.setattr(store, "embed_passages", embed_passages)
     monkeypatch.setattr(store, "embed_query", fake_vector)
 
 

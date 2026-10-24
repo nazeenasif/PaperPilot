@@ -28,7 +28,7 @@ US2_QUESTION = "What is the capital of France?"
 # threshold (research R8), so the model's not-found rule must catch them.
 NEARMISS_QUESTIONS = [
     "How was GPT-4 trained?",
-    "What is the context window of Claude?",
+    "What is the context window of Claude 3?",  # the papers only cover Claude-1.3
     "How does Llama 2 handle safety tuning?",
 ]
 NEARMISS_BUDGET = 3

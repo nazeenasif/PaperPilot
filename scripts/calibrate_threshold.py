@@ -35,6 +35,8 @@ GROUPS: dict[str, list[str]] = {
         # ... plus vague questions, which score lowest.
         "what dataset was used for evaluation?",
         "What are the limitations?",
+        # Answered by Lost in the Middle p. 5 (Claude-1.3: 8K; Claude-1.3 (100K): 100K tokens).
+        "What is the context window of Claude?",
     ],
     "clear off-topic": [
         "What is the capital of France?",
@@ -53,7 +55,7 @@ GROUPS: dict[str, list[str]] = {
     # In-domain, but not answered by these five papers.
     "topic-level near-miss": [
         "How was GPT-4 trained?",
-        "What is the context window of Claude?",
+        "What is the context window of Claude 3?",
         "How does Llama 2 handle safety tuning?",
     ],
 }

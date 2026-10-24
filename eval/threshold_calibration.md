@@ -4,7 +4,7 @@ Date: 2026-10-24. Library: 5 papers in `data\library`. Embedding model: `BAAI/bg
 
 Calibrated **for bge-small-en-v1.5 on this library**; recalibrate when the embedding model, chunking or papers change. Score = top-1 similarity (0–1).
 
-| Group | Question | Top score | Rejected at 0.60 | Rejected at 0.59 |
+| Group | Question | Top score | Rejected at 0.59 | Rejected at 0.59 |
 |---|---|---|---|---|
 | on-topic | Which dataset was the Transformer trained on for English-German translation? | 0.782 | no | no |
 | on-topic | What are the two pre-training tasks of BERT? | 0.844 | no | no |
@@ -13,6 +13,7 @@ Calibrated **for bge-small-en-v1.5 on this library**; recalibrate when the embed
 | on-topic | Where in the context do models use information best? | 0.758 | no | no |
 | on-topic | what dataset was used for evaluation? | 0.635 | no | no |
 | on-topic | What are the limitations? | 0.629 | no | no |
+| on-topic | What is the context window of Claude? | 0.639 | no | no |
 | clear off-topic | What is the capital of France? | 0.468 | yes | yes |
 | clear off-topic | How do I bake a chocolate cake? | 0.481 | yes | yes |
 | clear off-topic | Who won the 2018 FIFA World Cup? | 0.530 | yes | yes |
@@ -23,17 +24,17 @@ Calibrated **for bge-small-en-v1.5 on this library**; recalibrate when the embed
 | word-level near-miss | Who invented the BERT muppet character? | 0.513 | yes | yes |
 | word-level near-miss | What is the attention span of a goldfish? | 0.558 | yes | yes |
 | topic-level near-miss | How was GPT-4 trained? | 0.698 | no | no |
-| topic-level near-miss | What is the context window of Claude? | 0.639 | no | no |
+| topic-level near-miss | What is the context window of Claude 3? | 0.662 | no | no |
 | topic-level near-miss | How does Llama 2 handle safety tuning? | 0.668 | no | no |
 
 | Group | Questions | Min top | Max top | Rejected at configured | Rejected at suggested |
 |---|---|---|---|---|---|
-| on-topic | 7 | 0.629 | 0.844 | 0/7 | 0/7 |
+| on-topic | 8 | 0.629 | 0.844 | 0/8 | 0/8 |
 | clear off-topic | 6 | 0.449 | 0.544 | 6/6 | 6/6 |
 | word-level near-miss | 3 | 0.513 | 0.588 | 3/3 | 3/3 |
-| topic-level near-miss | 3 | 0.639 | 0.698 | 0/3 | 0/3 |
+| topic-level near-miss | 3 | 0.662 | 0.698 | 0/3 | 0/3 |
 
-- Lowest on-topic top score: **0.629**; suggested threshold = that − 0.03 rounded down = **0.59** (configured: 0.60).
+- Lowest on-topic top score: **0.629**; suggested threshold = that − 0.03 rounded down = **0.59** (configured: 0.59).
 - Margin below the lowest on-topic question: 0.039.
 - Margin above the highest clear off-topic question: +0.046 (max 0.544).
 - Margin above the highest word-level near-miss question: +0.002 (max 0.588).

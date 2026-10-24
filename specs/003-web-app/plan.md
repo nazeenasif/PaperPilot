@@ -110,7 +110,7 @@ specs/003-web-app/
 
 ```text
 paperpilot/                    # engine (existing modules only)
-├── config.py                  # + daily_request_limit, frontend_origin
+├── config.py                  # + daily_request_limit, frontend_origins
 ├── errors.py                  # + DailyLimitError, RateLimitedError, PdfMissingError
 ├── ingest.py                  # + word boxes, page sizes, arxiv_id, Passage.regions, build_layout()
 ├── store.py                   # + embed progress callback, write lock
@@ -122,6 +122,7 @@ api/                           # NEW: thin FastAPI adapter (Principle II)
 ├── __init__.py
 ├── main.py                    # app, lifespan (background load), CORS, trusted hosts, routers
 ├── state.py                   # readiness, single-question guard
+├── security.py                # Origin guard + X-PaperPilot header check (FR-002b, research R11)
 ├── jobs.py                    # upload jobs, ingest worker thread, job event fan-out
 ├── routes.py                  # endpoints from contracts/web-api.md
 ├── schemas.py                 # pydantic response/request models

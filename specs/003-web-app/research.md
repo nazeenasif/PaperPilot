@@ -275,17 +275,42 @@ two-column order, footnote markers and the overlap that starts in another block.
 - Not-found and held-back answers are **not errors**: they are normal `answer` events with
   `not_found`, `fallback_reason`, `warning` and `rejected_answer`.
 
-## R11. Localhost only and CORS (FR-002a, SC-012)
+## R11. Localhost only, CORS and cross-site request protection (FR-002a, FR-002b, SC-012)
 
 - **Decision**: `uvicorn api.main:app --host 127.0.0.1 --port 8000` and
   `next dev --hostname 127.0.0.1 --port 3000` (both explicit; Next's default is all
-  interfaces). `CORSMiddleware(allow_origins=[FRONTEND_ORIGIN])`, default
-  `http://127.0.0.1:3000`, methods GET/POST/DELETE, no credentials. `TrustedHostMiddleware`
-  allows only `127.0.0.1` and `localhost` (defence against DNS rebinding). The browser calls the
-  API directly at `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000` (not a secret). The quickstart
-  says to open `http://127.0.0.1:3000` (`localhost:3000` is a different origin).
-- **Alternative**: a Next.js rewrite proxy (`/api/*` → FastAPI) to avoid CORS — rejected because
-  dev-server proxying can buffer or compress SSE streams, which would break the countdown.
+  interfaces). `CORSMiddleware(allow_origins=FRONTEND_ORIGINS)`, default
+  `http://127.0.0.1:3000,http://localhost:3000`, methods GET/POST/DELETE, headers
+  `Content-Type` and `X-PaperPilot`, no credentials. `TrustedHostMiddleware` allows only
+  `127.0.0.1` and `localhost` (defence against DNS rebinding). The browser calls the API directly
+  at `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000` (not a secret).
+- **Why CORS is not enough** (analysis finding A1, 2026-10-24): CORS controls whether a page may
+  *read* a response; it does not stop the browser from *sending* a "simple" request. A
+  cross-site `POST` with a form-style body (`text/plain`, `application/x-www-form-urlencoded`) or a
+  `multipart/form-data` upload — exactly what `POST /api/papers` accepts — and a body-less
+  `POST /api/papers/{id}/reprocess` are all sent without a preflight. The server would run them.
+  Any web page the researcher has open could then add files to the library or start expensive
+  re-processing. The browser would merely hide the response. Trusted hosts do not help: the Host
+  is genuinely `127.0.0.1`.
+- **Origin guard** (`api/security.py`, a middleware outside CORS and inside trusted hosts):
+  1. If an `Origin` header is present and is not in `FRONTEND_ORIGINS`, the request is refused
+     with `403 {"kind": "forbidden", "reason": "origin"}` before any endpoint runs. This covers
+     every method, including preflights from foreign origins and simple GETs.
+  2. Every state-changing method (POST, PUT, PATCH, DELETE) must carry `X-PaperPilot: 1`;
+     otherwise `403 {"kind": "forbidden", "reason": "header"}`. A custom header makes the request
+     non-simple, so a browser must send a CORS preflight first; the preflight from a foreign
+     origin is refused by rule 1, and only allowed origins are told `X-PaperPilot` may be sent.
+     Same-machine scripts send no `Origin` and simply add the header.
+  - The frontend client adds `X-PaperPilot: 1` to every POST and DELETE (`lib/api.ts`,
+    `lib/sse.ts`; uploads included).
+- **Both origins** are allowed so the app works whether opened at `127.0.0.1:3000` or
+  `localhost:3000`; `FRONTEND_ORIGIN` became `FRONTEND_ORIGINS` (comma-separated).
+- **Alternatives**: a CSRF token (needs a session and a token endpoint for one local user: more
+  moving parts, same protection as a custom header here because there are no cookies); requiring
+  `Content-Type: application/json` on writes (does not cover the multipart upload); SameSite
+  cookies (not applicable: no cookies or authentication); checking `Referer` (often stripped, less
+  reliable than `Origin`). A Next.js rewrite proxy (`/api/*` → FastAPI) to avoid CORS stays
+  rejected because dev-server proxying can buffer or compress SSE streams.
 
 ## R12. Design tokens and fonts
 

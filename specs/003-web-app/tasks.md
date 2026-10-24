@@ -156,7 +156,40 @@ hosts, error kinds), the frontend shell, and the boundary check.
     - TCP connections to the machine's LAN IP on ports 8000 and 3000 are refused, while `127.0.0.1` accepts (SC-012).
   - **Runnable check**: start both servers per quickstart and run `python scripts/checkpoint_6_web.py boundary`.
 
+### Cross-site request protection (added 2026-10-24, analysis finding A1; before any write endpoint)
+
+- [ ] T072 Write failing tests for spec FR-002b and research R11.
+  - **`tests/test_settings.py`:**
+    - `FRONTEND_ORIGINS` is comma-separated and defaults to `("http://127.0.0.1:3000", "http://localhost:3000")`.
+    - Blank entries are ignored; a value with no origin is invalid.
+    - `describe()` lists it. Remove the single `FRONTEND_ORIGIN` tests.
+  - **`tests/api/test_security.py`**, using a test-only `POST /api/echo` route that records whether it ran:
+    - A cross-origin simple POST (`Origin: http://evil.example`, `Content-Type: text/plain`) gets `403 {kind: forbidden, reason: origin}`, and the route never runs.
+    - The same applies to a multipart POST and to a GET from a foreign origin.
+    - A preflight from a foreign origin is refused.
+    - A write with no header, from an allowed origin or with no `Origin`, gets `403 {kind: forbidden, reason: header}`, and the route never runs. DELETE behaves the same.
+    - A write with `X-PaperPilot: 1` from `http://127.0.0.1:3000` or `http://localhost:3000` runs and carries `access-control-allow-origin`.
+    - A preflight from an allowed origin that asks for `x-paperpilot` is allowed.
+    - Same-machine requests without `Origin` can read, and can write with the header.
+  - **`tests/api/test_app.py`:** `http://localhost:3000` is now allowed. Read the origins from `FRONTEND_ORIGINS`.
+  - **`frontend/tests/api-client.test.ts` and `frontend/tests/sse.test.ts`:** `apiPost`, `apiDelete` and `postEventStream` send `X-PaperPilot: 1`; `apiGet` doesn't need to.
+- [ ] T073 Make T072 pass:
+  - `paperpilot/config.py`: replace `frontend_origin` with `frontend_origins` (`FRONTEND_ORIGINS`).
+  - New `api/security.py`: the Origin guard and the `X-PaperPilot` check as one middleware, placed between trusted hosts and CORS.
+  - `api/main.py`: CORS allows the origin list and the headers `Content-Type` and `X-PaperPilot`.
+  - `api/errors.py`: the `forbidden` kind.
+  - `frontend/lib/api.ts` and `frontend/lib/sse.ts`: send `X-PaperPilot: 1` on every write.
+  - `.env.example`: `FRONTEND_ORIGINS`.
+- [ ] T074 Extend checkpoint 6 part `boundary` in `scripts/checkpoint_6_web.py` (0 model requests):
+  - Both default origins are allowed, and `http://evil.example` is refused with `403 forbidden`.
+  - A cross-origin simple POST is refused with reason `origin`.
+  - A write without the header is refused with reason `header`.
+  - **Runnable check:** with both servers running, `python scripts/checkpoint_6_web.py boundary`.
+
 **Checkpoint**: `pytest`, `npm --prefix frontend test` and checkpoint 6 `boundary` pass.
+
+**Every later write** (T034–T048 tests and checkpoint parts, T057/T058 uploads and deletes, T054
+re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without it.
 
 ---
 
@@ -506,7 +539,7 @@ the usage meter shows today's count.
 
 ### Phase dependencies
 
-- **Setup** (T001–T006) → **Foundational** (T007–T018) → **Engine** (T019–T033) → **API**
+- **Setup** (T001–T006) → **Foundational** (T007–T018, then T072–T074) → **Engine** (T019–T033) → **API**
   (T034–T048) → **Frontend** (T049–T066) → **Polish** (T067–T071).
 - Within each layer, stories go US1 → US2 → US3 → US4 → US5. A layer's story section depends only
   on the same story's sections in the lower layers and on Foundational. One exception: the US2

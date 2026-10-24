@@ -52,6 +52,13 @@ summaries, comparison, user accounts, deployment."
   readable "rate limited until <time>" error from the engine. X-RateLimit-Reset is trusted only
   when it resolves to a future time within 48 hours, otherwise normal backoff applies; its units
   are confirmed from the first real 429. The daily-counter rules (FR-025) are restated unchanged.
+- Amendment from analysis finding A1 (2026-10-24): CORS alone only stops a foreign page from
+  *reading* responses. Browsers still send "simple" cross-site requests (a form-style POST, a
+  multipart upload), so any page the researcher visits could trigger uploads or re-processing.
+  The API therefore refuses every request whose Origin header is present and not an allowed
+  frontend origin. Every state-changing request (POST, PUT, PATCH, DELETE) must carry the header
+  `X-PaperPilot: 1`, which a cross-site page cannot send without a CORS preflight. The allowed
+  frontend origins are `http://127.0.0.1:3000` and `http://localhost:3000`.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -284,8 +291,14 @@ designed presentation, with no raw error text anywhere.
   appear in anything delivered to the browser.
 - **FR-002a**: Both the API server and the frontend dev server MUST bind explicitly to 127.0.0.1,
   never to all interfaces (the frontend dev server's default), so neither is reachable from other
-  devices on the network; the API MUST accept cross-origin requests only from the frontend's
-  localhost origin. No sign-in is required.
+  devices on the network; the API MUST accept cross-origin requests only from the allowed
+  frontend origins (by default `http://127.0.0.1:3000` and `http://localhost:3000`). No sign-in is
+  required.
+- **FR-002b**: The API MUST refuse any request whose Origin header is present and not an allowed
+  frontend origin, before any endpoint runs. Every state-changing request (POST, PUT, PATCH,
+  DELETE) MUST carry the header `X-PaperPilot: 1` or be refused, before any endpoint runs. The
+  frontend MUST send this header on every state-changing request. Requests without an Origin
+  header (scripts on the same machine) are allowed but still need the header to change state.
 - **FR-003**: The embedding model and the library MUST be loaded once when the server starts; the
   app MUST report a "getting ready" status until loading is complete.
 
@@ -461,8 +474,9 @@ designed presentation, with no raw error text anywhere.
   finishes appearing (text, chips and badge) within 0.5 seconds; with reduced motion it appears in
   a single step.
 - **SC-012**: Neither the API nor the frontend accepts a connection on the machine's network
-  address (only on 127.0.0.1), and the API refuses cross-origin requests from any origin other
-  than the frontend's.
+  address (only on 127.0.0.1). The API refuses every request from an origin other than the
+  allowed frontend origins, including simple cross-site POSTs, and refuses every state-changing
+  request without `X-PaperPilot: 1`; in both cases no endpoint runs.
 - **SC-013**: When the provider asks for a wait longer than 60 seconds, the question ends with
   exactly one model request spent and the matching designed state shown.
 

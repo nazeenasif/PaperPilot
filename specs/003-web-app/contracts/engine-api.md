@@ -6,7 +6,7 @@ and checkpoint scripts are unaffected.
 
 ## config
 - `daily_request_limit: int` ← `DAILY_REQUEST_LIMIT` (default 50, ≥ 1).
-- `frontend_origin: str` ← `FRONTEND_ORIGIN` (default `http://127.0.0.1:3000`).
+- `frontend_origins: tuple[str, ...]` ← `FRONTEND_ORIGINS`, comma-separated (default `http://127.0.0.1:3000,http://localhost:3000`).
 
 ## errors
 - `DailyLimitError(LLMError)`: `.used`, `.limit`, `.resets_at` (aware UTC datetime).

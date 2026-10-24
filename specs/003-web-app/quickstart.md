@@ -15,7 +15,7 @@ Optional settings in `.env`:
 
 ```text
 DAILY_REQUEST_LIMIT=50                       # replaced by the provider's figure when known
-FRONTEND_ORIGIN=http://127.0.0.1:3000        # the only origin the API accepts
+FRONTEND_ORIGINS=http://127.0.0.1:3000,http://localhost:3000   # browser origins the API accepts
 ```
 
 `frontend/.env.local` (not secret, no keys): `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000`.
@@ -27,7 +27,7 @@ uvicorn api.main:app --host 127.0.0.1 --port 8000
 cd frontend; npm run dev        # runs: next dev --hostname 127.0.0.1 --port 3000
 ```
 
-Open **http://127.0.0.1:3000** (not `localhost:3000`, which is a different origin). The app
+Open **http://127.0.0.1:3000** (or `http://localhost:3000`; both are allowed origins). The app
 shows "Getting ready" for ~20–30 s while the embedding model loads, then the Ask screen.
 
 First time with the existing library: open **Library** and drop the five files from `papers/`;

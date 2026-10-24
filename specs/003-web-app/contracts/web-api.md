@@ -1,9 +1,22 @@
 # Contract: PaperPilot Web API (Feature 3)
 
 Base URL `http://127.0.0.1:8000` (bound to 127.0.0.1 only). JSON unless noted. CORS allows only
-`FRONTEND_ORIGIN` (default `http://127.0.0.1:3000`); `TrustedHostMiddleware` accepts only
-`127.0.0.1` and `localhost` hosts. No authentication (local single user; spec FR-002a). No
-response ever contains the API key, a stack trace or a provider message.
+`FRONTEND_ORIGINS` (default `http://127.0.0.1:3000` and `http://localhost:3000`);
+`TrustedHostMiddleware` accepts only `127.0.0.1` and `localhost` hosts. No authentication (local
+single user; spec FR-002a). No response ever contains the API key, a stack trace or a provider
+message.
+
+**Cross-site request protection** (spec FR-002b, research R11). Both rules apply to every path,
+before any endpoint runs:
+
+1. A request whose `Origin` header is present and not one of `FRONTEND_ORIGINS` is refused with
+   `403 {"kind": "forbidden", "reason": "origin"}`.
+2. A `POST`, `PUT`, `PATCH` or `DELETE` without the header `X-PaperPilot: 1` is refused with
+   `403 {"kind": "forbidden", "reason": "header"}`.
+
+Requests without an `Origin` header (same-machine scripts) pass rule 1 but still need the header
+to change state. The frontend sends `X-PaperPilot: 1` on every POST and DELETE, uploads
+included.
 
 ## Errors
 
@@ -11,6 +24,7 @@ Every non-2xx response and every SSE `error` event has the body `{"kind": <kind>
 
 | kind | HTTP | Fields | Meaning |
 |---|---|---|---|
+| `forbidden` | 403 | `reason` (`origin`, `header`) | foreign `Origin`, or a state-changing request without `X-PaperPilot: 1` |
 | `not_ready` | 503 | `state` | model/library still loading or failed to load |
 | `empty_question` | 422 | — | blank question |
 | `no_papers_selected` | 422 | — | `paper_ids` given but empty |

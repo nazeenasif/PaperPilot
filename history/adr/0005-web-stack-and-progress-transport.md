@@ -59,8 +59,20 @@
 - **Network boundary:**
   - uvicorn runs with `--host 127.0.0.1`, and Next.js with `--hostname 127.0.0.1`. Both are set
     explicitly because Next defaults to all interfaces.
-  - `CORSMiddleware` allows only `FRONTEND_ORIGIN` (default `http://127.0.0.1:3000`).
+  - `CORSMiddleware` allows only `FRONTEND_ORIGINS` (default `http://127.0.0.1:3000` and
+    `http://localhost:3000`) and the request headers `Content-Type` and `X-PaperPilot`.
   - `TrustedHostMiddleware` accepts only the hosts `127.0.0.1` and `localhost`.
+  - **Cross-site request protection** (added 2026-10-24, analysis finding A1), an Origin guard
+    between trusted hosts and CORS:
+    - any request whose `Origin` is present and not an allowed origin gets `403 forbidden`
+      (`reason: origin`);
+    - any POST, PUT, PATCH or DELETE without `X-PaperPilot: 1` gets `403 forbidden`
+      (`reason: header`).
+
+    CORS only stops a foreign page from *reading* responses, while browsers still *send* simple
+    requests such as a multipart upload or a body-less POST. The custom header forces a
+    preflight that only allowed origins pass. The frontend sends the header on every write, and
+    same-machine scripts, which send no `Origin`, add it too.
   - The browser calls the API directly at `NEXT_PUBLIC_API_URL`; there is no Next.js proxy.
 
 ## Consequences
@@ -75,8 +87,9 @@
   embedding.
 - "Getting ready" can be told apart from "server unreachable", because the server accepts
   connections while it loads.
-- Same-machine-only access and a single allowed origin keep the papers and the free-request
-  quota away from other devices, with no authentication to build.
+- Same-machine-only access, the allowed-origin list and the Origin guard keep the papers and the
+  free-request quota away from other devices and from other web pages open in the same browser,
+  with no authentication to build.
 - Exact pins and a committed lockfile make checkpoint runs reproducible.
 
 ### Negative
@@ -86,8 +99,10 @@
 - Upload jobs live in memory and are lost on a server restart, although the library itself stays
   consistent because engine writes are atomic.
 - One ingest worker means several large PDFs queue behind each other.
-- Two dev servers and two toolchains (uv and npm) to run. The page must be opened at
-  `127.0.0.1:3000`, because `localhost:3000` is a different origin and is rejected by CORS.
+- Two dev servers and two toolchains (uv and npm) to run. Serving the frontend on any other
+  address or port means adding it to `FRONTEND_ORIGINS`.
+- Every write from a browser now costs a CORS preflight, because of the custom header; it is
+  local and cheap. Scripts that change state must remember to send `X-PaperPilot: 1`.
 - Threads and a write lock add concurrency reasoning that the scripts never needed.
 - Moving to network access later, which is out of scope here, will need authentication and a
   CORS and host review. This ADR doesn't cover that.
@@ -106,6 +121,16 @@
 - **Alternative D: a process pool or a task broker (Celery or RQ) for ingest.**
   - A process pool would load the embedding model twice.
   - A broker is disproportionate for one local user (Principle VIII).
+- **Alternative H: CORS alone for cross-site protection** (the first design).
+  - Rejected after analysis finding A1: CORS doesn't stop browsers sending simple cross-site
+    requests (form-style POSTs, multipart uploads), so any web page the researcher visits could
+    add papers or start re-processing.
+- **Alternative I: CSRF tokens, JSON-only writes, SameSite cookies or `Referer` checks.**
+  - CSRF tokens need a session and a token endpoint, and give the same protection as a custom
+    header when there are no cookies.
+  - Requiring `Content-Type: application/json` leaves the multipart upload open.
+  - SameSite doesn't apply, because there are no cookies.
+  - `Referer` is often stripped and less reliable than `Origin`.
 - **Alternative E: a Next.js rewrite proxy (`/api/*` → FastAPI) to avoid CORS.**
   - Same-origin requests and no CORS configuration.
   - Rejected because dev-server proxying can buffer or compress SSE streams, which would freeze

@@ -34,7 +34,7 @@ export interface PaperCard {
 
 export type JobPhase = "queued" | "parsing" | "chunking" | "embedding" | "mapping" | "ready" | "failed";
 export type JobOutcome = "added" | "already_present" | "pdf_attached" | "reprocessed" | "failed";
-export type UploadInvalidReason = "not_pdf" | "too_large" | "no_text" | "unreadable" | "password";
+export type UploadInvalidReason = "not_pdf" | "too_large" | "no_text" | "unreadable" | "password" | "storage";
 
 export interface UploadJob {
   job_id: string;
@@ -45,7 +45,7 @@ export interface UploadJob {
   outcome: JobOutcome | null;
   highlights: "exact" | "mismatch" | null;
   paper_id: string | null;
-  error: { kind: string; reason?: string } | null;
+  error: { kind: string; reason?: string; paper_id?: string } | null;
 }
 
 export interface Region {

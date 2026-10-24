@@ -74,3 +74,10 @@ export async function postEventStream(
   if (!response.ok) throw await errorFrom(response);
   return readEventStream(response, signal);
 }
+
+/** GET an event stream (e.g. /api/jobs/events); an error response throws ApiError. */
+export async function getEventStream(path: string, signal?: AbortSignal): Promise<AsyncGenerator<StreamEvent>> {
+  const response = await apiFetch(path, { method: "GET", headers: { Accept: "text/event-stream" }, signal });
+  if (!response.ok) throw await errorFrom(response);
+  return readEventStream(response, signal);
+}

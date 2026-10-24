@@ -80,3 +80,16 @@ export function apiPost<T>(path: string, body: unknown): Promise<T> {
 export function apiDelete<T>(path: string): Promise<T> {
   return request<T>("DELETE", path);
 }
+
+/** POST /api/papers: every file in one multipart request; each gets its own job (FR-016). */
+export async function uploadPapers(files: File[]): Promise<{ jobs: { job_id: string; file_name: string }[] }> {
+  const body = new FormData();
+  for (const file of files) body.append("files", file);
+  const response = await apiFetch("/api/papers", {
+    method: "POST",
+    headers: { Accept: "application/json", ...WRITE_HEADERS },
+    body,
+  });
+  if (!response.ok) throw await errorFrom(response);
+  return (await response.json()) as { jobs: { job_id: string; file_name: string }[] };
+}

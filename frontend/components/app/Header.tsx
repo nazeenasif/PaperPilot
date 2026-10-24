@@ -1,6 +1,8 @@
 "use client";
 
 import { Navigation2 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { useStatus } from "@/components/app/StatusGate";
 
@@ -10,10 +12,16 @@ export function modelLabel(model: string, isFree: boolean): string {
   return isFree ? `${name} · free` : name;
 }
 
-/** Top bar: name, tagline and the configured model (FR-024). */
+const NAV = [
+  { href: "/", label: "Ask" },
+  { href: "/library", label: "Library" },
+];
+
+/** Top bar: name, tagline, Ask/Library navigation and the configured model (FR-024). */
 export function Header() {
   const connection = useStatus();
   const status = connection.kind === "status" ? connection.status : null;
+  const pathname = usePathname() ?? "/";
 
   return (
     <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-6">
@@ -26,8 +34,25 @@ export function Header() {
           grounded answers
         </span>
       </div>
+      <nav aria-label="Main" className="ml-auto flex items-center gap-1">
+        {NAV.map(({ href, label }) => {
+          const current = href === "/" ? pathname === "/" : pathname.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={current ? "page" : undefined}
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                current ? "bg-panel-2 text-text" : "text-muted-foreground hover:text-text"
+              }`}
+            >
+              {label}
+            </Link>
+          );
+        })}
+      </nav>
       {status && (
-        <span className="truncate rounded-lg border border-line bg-panel px-3 py-1 font-mono text-xs text-muted-foreground">
+        <span className="max-w-[38vw] truncate rounded-lg border border-line bg-panel px-3 py-1 font-mono text-xs text-muted-foreground">
           {modelLabel(status.model, status.model_is_free)}
         </span>
       )}

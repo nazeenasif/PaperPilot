@@ -4,11 +4,15 @@ import pytest
 
 from paperpilot.prompts import (
     NOT_FOUND,
+    REWRITE_INSTRUCTION,
     SYSTEM_INSTRUCTION,
     CitationReport,
     NumberedPassage,
+    Turn,
     build_answer_prompt,
+    build_rewrite_prompt,
     check_citations,
+    clean_rewrite,
     extract_citations,
     is_not_found,
     word_count,
@@ -202,3 +206,44 @@ def test_not_found_variants_are_recognised(reply):
 )
 def test_other_replies_are_not_not_found(reply):
     assert not is_not_found(reply)
+
+
+# --- follow-up rewriting (research R9) ---
+
+
+def test_rewrite_instruction_asks_for_a_standalone_question():
+    rules = REWRITE_INSTRUCTION.lower()
+    assert "standalone" in rules
+    assert "question" in rules
+
+
+def test_rewrite_prompt_uses_only_the_last_six_turns():
+    history = [Turn("user" if i % 2 == 0 else "assistant", f"turn number {i}") for i in range(8)]
+    prompt = build_rewrite_prompt(history, "What are its limitations?")
+    assert "turn number 0" not in prompt
+    assert "turn number 1" not in prompt
+    for i in range(2, 8):
+        assert f"turn number {i}" in prompt
+
+
+def test_rewrite_prompt_labels_roles_and_ends_with_the_question():
+    history = [Turn("user", "What is LoRA?"), Turn("assistant", "LoRA freezes the weights [1].")]
+    prompt = build_rewrite_prompt(history, "What are its limitations?")
+    assert "User: What is LoRA?" in prompt
+    assert "Assistant: LoRA freezes the weights [1]." in prompt
+    assert prompt.rstrip().endswith("What are its limitations?")
+
+
+@pytest.mark.parametrize(
+    ("reply", "cleaned"),
+    [
+        ("What are the limitations of LoRA?", "What are the limitations of LoRA?"),
+        ('"What are the limitations of LoRA?"', "What are the limitations of LoRA?"),
+        ("Standalone question: What are the limitations of LoRA?", "What are the limitations of LoRA?"),
+        ("  What are the limitations of LoRA?\n\nThis resolves 'its' to LoRA.", "What are the limitations of LoRA?"),
+        ("", ""),
+        ("   \n  ", ""),
+    ],
+)
+def test_clean_rewrite(reply, cleaned):
+    assert clean_rewrite(reply) == cleaned

@@ -10,6 +10,7 @@ from paperpilot.prompts import (
     build_answer_prompt,
     check_citations,
     extract_citations,
+    is_not_found,
     word_count,
 )
 
@@ -169,3 +170,35 @@ def test_word_count_excludes_citation_markers():
 
 def test_word_count_of_plain_text():
     assert word_count("one two  three\nfour") == 4
+
+
+# --- recognising the not-found reply (tolerant matching) ---
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "I couldn't find that in the selected papers.",
+        "\"I couldn't find that in the selected papers.\"",
+        "  I couldn't find that in the selected papers  ",
+        "I couldn’t find that in the selected papers.",
+        "“I couldn't find that in the selected papers.”",
+        "i COULDN'T find that in the selected papers.",
+        "I couldn't find that in the selected papers. The passages only discuss training.",
+    ],
+)
+def test_not_found_variants_are_recognised(reply):
+    assert is_not_found(reply)
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "The authors couldn't find that in the selected papers they reviewed [1].",
+        "The model is trained on WMT 2014 [1].",
+        "",
+        "I couldn't find",
+    ],
+)
+def test_other_replies_are_not_not_found(reply):
+    assert not is_not_found(reply)

@@ -77,7 +77,7 @@ when no passage passes the threshold.
 **Independent Test**: checkpoint 4 asks "What is the capital of France?" → exactly the
 not-found sentence and 0 LLM requests.
 
-- [ ] T015 [P] [US2] Add failing tests to `tests/test_prompts.py` for `is_not_found()`: exact sentence; with surrounding quotes, whitespace or no final period; curly apostrophe (’); different case; reply that starts with the sentence and continues; a normal answer mentioning "couldn't find" mid-sentence is not not-found
+- [X] T015 [P] [US2] Add failing tests to `tests/test_prompts.py` for `is_not_found()`: exact sentence; with surrounding quotes, whitespace or no final period; curly apostrophe (’); different case; reply that starts with the sentence and continues; a normal answer mentioning "couldn't find" mid-sentence is not not-found
 - [ ] T016 [P] [US2] Add failing tests to `tests/test_service.py`: with `RELEVANCE_THRESHOLD=0.99` → `text == NOT_FOUND`, `not_found`, `passages == []`, `llm_calls == 0`, `fallback_reason == "below_threshold"` and the fake was never called; with a threshold between passage scores only passages at or above it are sent; scripted reply `"\"I couldn't find that in the selected papers\""` → exactly `NOT_FOUND` with `fallback_reason == "model_not_found"`; empty library → `NOT_FOUND`, 0 calls, `fallback_reason == "no_passages"`
 - [ ] T017 [US2] Implement `is_not_found()` in `paperpilot/prompts.py` (research R6); make T015 pass
 - [ ] T018 [US2] Add the relevance threshold and not-found mapping to `ask()` in `paperpilot/service.py`; make T016 pass

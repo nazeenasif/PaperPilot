@@ -5,11 +5,12 @@ states its planned model requests; the run fails on unplanned requests or when a
 retries included, exceed twice the plan (scripts/request_budget.py, Feature 2 budget rule).
 
 Usage: python scripts/checkpoint_6_web.py [part ...]   (default: every part)
-Parts: boundary
+Parts: boundary, ask
 
 Start the servers first (quickstart): `python -m api` and `npm --prefix frontend run dev`.
 """
 
+import json
 import socket
 import sys
 import time
@@ -46,6 +47,7 @@ class Run:
 
     results: list[tuple[bool, str]]
     used: RequestCounts
+    answer: dict | None = None  # the last answer from part "ask", reused by part "viewer"
 
     def check(self, passed: bool, description: str) -> None:
         """Print and record one PASS/FAIL line."""
@@ -160,8 +162,83 @@ def part_boundary(run: Run, client: httpx.Client) -> None:
         run.check(not accepts_connection(address, port), f"the {name} refuses connections on {address}:{port}")
 
 
+WRITE_HEADERS = {"X-PaperPilot": "1"}  # every state-changing request needs it (FR-002b)
+ASK_QUESTION = "What is LoRA?"
+ASK_TIMEOUT = 300.0  # a free-model answer with retries can take minutes
+
+
+def parse_events(text: str) -> list[tuple[str, object]]:
+    """(event, data) pairs from an event-stream body; ping comments are skipped."""
+    events: list[tuple[str, object]] = []
+    for chunk in text.replace("\r\n", "\n").split("\n\n"):
+        name, data = "message", []
+        for line in chunk.split("\n"):
+            if line.startswith("event:"):
+                name = line[6:].strip()
+            elif line.startswith("data:"):
+                data.append(line[5:].strip())
+        if data:
+            events.append((name, json.loads("\n".join(data))))
+    return events
+
+
+def part_ask(run: Run, client: httpx.Client) -> None:
+    """US1: a question streams progress, then a checked answer with valid citations (1 request)."""
+    print(f"Question: {ASK_QUESTION}")
+    start = time.monotonic()
+    with client.stream("POST", "/api/ask", json={"question": ASK_QUESTION}, headers=WRITE_HEADERS,
+                       timeout=ASK_TIMEOUT) as response:
+        body = "".join(response.iter_text())
+    seconds = time.monotonic() - start
+    if response.status_code != 200:
+        run.check(False, f"POST /api/ask answered {response.status_code}: {body[:200]}")
+        return
+    events = parse_events(body)
+    for name, data in events:
+        if name == "progress":
+            extra = {k: v for k, v in data.items() if k != "step"}
+            print(f"  progress: {data['step']}" + (f" {extra}" if extra else ""))
+        elif name == "retry_wait":
+            print(f"  retry_wait: attempt {data['attempt']} of {data['max_attempts']}, "
+                  f"{data['wait_seconds']:.0f} s ({data['reason']})")
+    final_name, final = events[-1] if events else ("", {})
+    if final_name == "error":
+        run.check(False, f"the question ended with an error event: {final}")
+        return
+    run.check(final_name == "answer", "the stream ends with an answer event")
+    if final_name != "answer":
+        return
+    answer = final
+    run.answer = answer
+    run.add_requests(answer["requests"])
+    print(f"\nAnswer ({answer['word_count']} words):\n  {answer['text']}")
+    print("\nPassages:")
+    for p in answer["passages"]:
+        print(f"  [{p['number']}] {p['score']:.3f}  {p['title'][:50]} — {p['section']}, p. {p['page']}")
+    citations = answer["citations"]
+    print(f"\nCitations: valid {citations['valid']}, invalid {citations['invalid']}; verified {answer['verified']}")
+    if answer["warning"]:
+        print(f"Warning: {answer['warning']}")
+    timings = answer["timings"]
+    print(f"Timings: rewrite {timings['rewrite']:.2f} s, retrieve {timings['retrieve']:.2f} s, "
+          f"generate {timings['generate']:.2f} s; whole request {seconds:.1f} s")
+    print(f"Requests for this answer: {answer['requests']['planned']} planned, {answer['requests']['retries']} retries")
+
+    steps = [data["step"] for name, data in events if name == "progress"]
+    run.check(steps[:1] == ["searching"] and steps[-1:] == ["checking"],
+              f"progress steps were streamed before the answer ({', '.join(steps)})")
+    before_answer = json.dumps([data for name, data in events[:-1]])
+    run.check(answer["text"] not in before_answer, "no answer text was sent before the answer event")
+    run.check(not citations["invalid"], "every citation maps to a provided passage")
+    run.check(answer["verified"] == (not answer["not_found"] and not citations["invalid"]),
+              "the verified flag matches the citation check")
+    if answer["not_found"]:
+        run.info(f"not-found answer ({answer['fallback_reason']}): no citations to open in part viewer")
+
+
 PARTS: dict[str, Part] = {
     "boundary": Part(plan=0, run=part_boundary),
+    "ask": Part(plan=1, run=part_ask),
 }
 
 

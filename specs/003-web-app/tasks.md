@@ -306,7 +306,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - The answer models go in `api/schemas.py`; `verified`, `papers_read` and the `requests` delta come from `llm.request_counts()`.
   - The single-question guard comes from `api/state.py`.
   - T034 must pass.
-- [ ] T036 [US1] Add part `ask` to `scripts/checkpoint_6_web.py` (plan: 1 request).
+- [X] T036 [US1] Add part `ask` to `scripts/checkpoint_6_web.py` (plan: 1 request).
   - It streams "What is LoRA?" from the running API and prints each event, the answer, citations, `verified`, the timings and the request counts.
   - PASS if: the answer has valid citations only; `verified` is consistent with them; and no `progress` event carries text.
   - **Runnable check**: `python scripts/checkpoint_6_web.py ask`.

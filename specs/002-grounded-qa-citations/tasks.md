@@ -32,7 +32,7 @@ Every task is one commit; public functions get type hints and short docstrings.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `openai==3.37.0` and `tenacity==9.1.4` to `requirements.txt` (tenacity is required by chromadb and was moved by the earlier google-genai install; pin it so installs are reproducible), confirm `google-genai` is absent, and run `uv pip install --python .venv\Scripts\python.exe -r requirements.txt` (no changes expected) and `pytest` (183 pass)
+- [X] T001 Add `openai==3.37.0` and `tenacity==9.1.4` to `requirements.txt` (tenacity is required by chromadb and was moved by the earlier google-genai install; pin it so installs are reproducible), confirm `google-genai` is absent, and run `uv pip install --python .venv\Scripts\python.exe -r requirements.txt` (no changes expected) and `pytest` (183 pass)
 
 ---
 

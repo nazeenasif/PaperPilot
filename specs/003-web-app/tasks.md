@@ -419,7 +419,7 @@ revealed answer with numbered chips and the verified badge.
 **Independent test**: activate chip [1] and see the cited page with the passage highlighted;
 the fallback cases show the passage text.
 
-- [ ] T054 [P] [US2] Create failing tests in `frontend/tests/source-viewer.test.tsx`, mocking `react-pdf` to render a sized placeholder.
+- [X] T054 [P] [US2] Create failing tests in `frontend/tests/source-viewer.test.tsx`, mocking `react-pdf` to render a sized placeholder.
   - **Opening:** activating a chip by click or Enter opens `SourceViewer` with the title, section, "page 5 of 26" and the score.
   - **Highlights:**
     - `HighlightOverlay` places the regions scaled from points to pixels (`lib/geometry.ts`), and they are labelled for screen readers.

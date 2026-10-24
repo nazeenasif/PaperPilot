@@ -484,7 +484,7 @@ attaches show "Mapping highlights" then "PDF attached". The cards show their cou
 **Independent test**: each failure kind renders its designed state with no raw error text, and
 the usage meter shows today's count.
 
-- [ ] T063 [P] [US5] Create failing tests in `frontend/tests/states.test.tsx`:
+- [X] T063 [P] [US5] Create failing tests in `frontend/tests/states.test.tsx`:
   - **NotFound:** the exact sentence, plus "Search all papers" (shown only when not all papers are selected; it re-asks with all) and "Rephrase more specifically" (focuses the composer).
   - **Busy:** `retry_wait` events give a live countdown and "attempt 2 of 4"; it uses fake timers and keeps counting through re-renders.
   - **ModelBusy:** all retries failed; the question text is kept, with "Try again".

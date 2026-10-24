@@ -92,7 +92,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
   - `DAILY_REQUEST_LIMIT`: default 50; must be ≥ 1; an invalid value raises an error naming the variable and the value.
   - `FRONTEND_ORIGIN`: default `http://127.0.0.1:3000`.
   - `describe()` lists both.
-- [ ] T008 [P] Create failing tests in `tests/test_errors.py`:
+- [X] T008 [P] Create failing tests in `tests/test_errors.py`:
   - `DailyLimitError` subclasses `LLMError` and has `used`, `limit` and `resets_at` (aware UTC).
   - `RateLimitedError` subclasses `LLMError`, has `until` and `daily`, and its message starts with `"rate limited until "`.
   - `PdfMissingError` subclasses `PaperPilotError` and has `paper_id`.

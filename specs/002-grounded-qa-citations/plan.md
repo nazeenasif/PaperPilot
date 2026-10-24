@@ -8,7 +8,7 @@
 `service.ask(question, paper_ids, k, history)` answers questions from the Feature 1 library.
 It optionally rewrites a follow-up into a standalone question (last 6 turns), retrieves the top
 k passages with Feature 1 search, drops passages below a calibrated relevance threshold
-(provisional 0.60), and — only if passages remain — asks the model through one
+(calibrated 0.59), and — only if passages remain — asks the model through one
 OpenAI-compatible client (`llm.py`, the single LLM boundary; default OpenRouter with the
 pinned free model `nvidia/nemotron-3-ultra-550b-a55b:free`) to answer from numbered, tag-delimited
 passages with [n] citations. Replies are
@@ -116,7 +116,7 @@ ADRs: [ADR-0003 LLM Boundary and Retry Policy](../../history/adr/0003-llm-bounda
 5. Lenient not-found detection mapped to the exact sentence (R6).
 6. Citation parsing with groups/ranges; invalid or none → not-found + warning; uncited
    sentences → warning only (R7, clarifications Q1/Q1b).
-7. Threshold 0.60 provisional, calibrated with evidence; never rejects on-topic (R8, Q2).
+7. Threshold 0.59, calibrated with evidence; never rejects on-topic, word-level near-miss rejection best effort (R8, Q2).
 8. Rewrite only with history, last 6 turns, fallback to original (R9).
 
 ## Risks

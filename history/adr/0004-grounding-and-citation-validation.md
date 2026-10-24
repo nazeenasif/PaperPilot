@@ -19,8 +19,9 @@
 ## Decision
 
 - **Relevance gate before the model**: passages scoring below `RELEVANCE_THRESHOLD`
-  (provisional 0.60; on-topic top scores 0.635–0.844, off-topic 0.449–0.544 on the test
-  papers) are dropped; if none remain the answer is the not-found sentence and the model is
+  (calibrated default 0.59; on-topic top scores 0.629–0.844, clear off-topic 0.449–0.544,
+  word-level near-misses 0.513–0.588 on the test papers; see `eval/threshold_calibration.md`)
+  are dropped; if none remain the answer is the not-found sentence and the model is
   not called. The default sits just below the lowest on-topic top score and is re-measured by
   a calibration script that records its evidence.
 - **Prompt contract** (`prompts.py`): the system message holds all rules (answer only from

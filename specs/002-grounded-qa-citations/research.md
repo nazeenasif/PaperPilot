@@ -134,8 +134,26 @@ the installed package or official documentation on 2026-10-24.
 
 ## R8. Relevance threshold
 
-- **Decision**: setting `RELEVANCE_THRESHOLD`, provisional default **0.60**; applied per
-  passage after retrieval. A calibration script records the evidence (FR-003).
+- **Decision**: setting `RELEVANCE_THRESHOLD`, default **0.59**, the calibration script's own
+  suggestion (lowest on-topic top score − 0.03, rounded down); applied per passage after
+  retrieval. Evidence: `eval/threshold_calibration.md` (FR-003).
+- **Rule**: never reject on-topic questions (clarification Q2) — this decides the value;
+  rejecting word-level near-misses is best effort; topic-level near-misses (in-domain but not
+  answered by these papers) are expected to pass and must be caught by the model's not-found
+  rule and the citation checks.
+- **Calibration result** (2026-10-24, `scripts/calibrate_threshold.py`, 0 LLM requests):
+
+  | Group | Questions | Top scores | Rejected at 0.59 |
+  |---|---|---|---|
+  | On-topic (5 probe + 2 vague) | 7 | 0.629–0.844 | 0/7 |
+  | Clear off-topic | 6 | 0.449–0.544 | 6/6 |
+  | Word-level near-miss | 3 | 0.513–0.588 | 3/3 |
+  | Topic-level near-miss | 3 | 0.639–0.698 | 0/3 (expected) |
+
+  Margins at 0.59: 0.039 below the lowest on-topic question ("What are the limitations?",
+  0.629); only 0.002 above the highest word-level near-miss ("How do electrical transformers
+  step down voltage?", 0.588) — a slightly closer near-miss would pass, which the rule accepts.
+  The provisional value was 0.60.
 - **Preliminary measurement** (5 test papers, k=6, scores 0–1):
 
   | Set | Top-1 scores |
@@ -154,7 +172,7 @@ the installed package or official documentation on 2026-10-24.
   "How do electrical transformers step down voltage?", "What is the attention span of a
   goldfish?", "Who invented the BERT muppet character?"), because those score closest to real
   questions.
-- **Risk**: vaguer real questions may score below 0.60, and near-miss questions may score
+- **Risk**: vaguer real questions may score below 0.59, and near-miss questions may score
   above it; the model's not-found rule and citation checks are the second line of defence.
 
 ## R9. Follow-up rewriting

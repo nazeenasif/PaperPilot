@@ -124,7 +124,7 @@ def test_llm_defaults():
     assert s.llm_base_url == ""
     assert s.llm_api_key == ""
     assert s.llm_model == "nvidia/nemotron-3-ultra-550b-a55b:free"
-    assert s.relevance_threshold == 0.60
+    assert s.relevance_threshold == 0.59
     assert s.llm_reasoning_effort == ""
 
 

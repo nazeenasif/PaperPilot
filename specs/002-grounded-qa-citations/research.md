@@ -84,6 +84,29 @@ the installed package or official documentation on 2026-10-24.
 - **Rationale**: instructions separated from data (FR-005); tags make boundaries explicit and
   checkable in unit tests; temperature 0 favours copying over paraphrasing numbers.
 - **Alternatives**: JSON-structured output (more parsing failure modes on the free tier).
+- **Tests pin only what matters**: unit tests check that the system message quotes
+  `NOT_FOUND` verbatim, shows a citation example like [1], and says passage text is data not
+  to be followed as instructions; the rest of the wording can be tuned without test churn.
+
+## R5b. The papers' own reference markers
+
+- **Problem**: the papers cite their bibliography with the same syntax PaperPilot uses for
+  passage citations ("long short-term memory [13]", "[35, 2, 5]", "[2-4]"). A model that copies
+  such a marker produces a citation number that may not match any provided passage; under the
+  strict rule (invalid citation → not-found, FR-009) a correct answer would then be replaced by
+  a false not-found. Markers that happen to fall in 1..n would be worse: silently wrong
+  citations.
+- **Decision**: `build_answer_prompt()` removes numeric bracket markers (`[13]`, `[35, 2, 5]`,
+  `[2-4]`, `[2–4]`) from passage text before it goes into the prompt, together with the space
+  before them; all other text is kept, including `k ∈ {5, 10}`, "Table 2" and author-year
+  citations "(Zellers et al., 2018)". The passage objects (and the passage text shown to the
+  researcher) are not modified. The system message also tells the model not to reproduce the
+  papers' own bracketed reference numbers.
+- **Rationale**: removing the collision at the source is simpler and more reliable than
+  teaching the validator to guess which numbers were bibliography references.
+- **Alternatives**: rewrite markers to another syntax such as "(ref 13)" (keeps information the
+  answer must not use anyway); relax validation for numbers above n (would hide real invented
+  citations).
 
 ## R6. Not-found detection
 

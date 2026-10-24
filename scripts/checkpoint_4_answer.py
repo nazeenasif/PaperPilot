@@ -3,11 +3,12 @@
 Calls the configured model (OpenRouter free tier by default) and prints how many requests
 it used; it stops with FAIL if it exceeds its request budget.
 
-Usage: python scripts/checkpoint_4_answer.py [us1] [us2] [us3] [us5] [nearmiss]   (default: all parts)
+Usage: python scripts/checkpoint_4_answer.py [us1] [us2] [us3] [us5] [nearmiss] [secrets]   (default: all parts)
 """
 
 import logging
 import statistics
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -48,7 +49,7 @@ US3_PAPER_TITLE_PREFIX = "BERT:"
 US5_PASSAGES = 6
 US5_INVALID = "The Transformer was trained on WMT 2014 English-German [2]. It used 8 P100 GPUs [9]."
 US5_UNCITED = "The Transformer was trained on WMT 2014 English-German. It used 8 P100 GPUs."
-PARTS = ("us1", "us2", "us3", "us5", "nearmiss")
+PARTS = ("us1", "us2", "us3", "us5", "nearmiss", "secrets")
 PREVIEW_CHARS = 160
 
 
@@ -99,6 +100,27 @@ def check(results: list[tuple[bool, str]], passed: bool, description: str) -> No
     """Print and record one PASS/FAIL line."""
     print(f"{'PASS' if passed else 'FAIL'}: {description}")
     results.append((passed, description))
+
+
+def check_secrets(results: list[tuple[bool, str]], api_key: str) -> None:
+    """SC-007: the key is in no tracked or untracked file except .env, describe() hides it and
+    .env is ignored by git. Prints only PASS/FAIL lines, never the key."""
+    root = Path(__file__).resolve().parents[1]
+    if not api_key:
+        check(results, False, "LLM_API_KEY is set, so the repository can be searched for it")
+        return
+    # Exit code 1 means no match; -e keeps a key starting with "-" from being read as an option.
+    found = subprocess.run(
+        ["git", "grep", "--untracked", "-F", "-q", "-e", api_key, "--", ".", ":!.env"],
+        cwd=root, capture_output=True,
+    ).returncode
+    check(results, found == 1, "the API key appears in no tracked or untracked file except .env")
+    settings = load_settings()
+    hidden = api_key not in settings.describe() and api_key not in repr(settings)
+    check(results, hidden and "LLM_API_KEY = set (hidden)" in settings.describe(),
+          "describe() and repr() hide the API key")
+    ignored = subprocess.run(["git", "check-ignore", "-q", ".env"], cwd=root, capture_output=True).returncode
+    check(results, ignored == 0, ".env is ignored by git")
 
 
 def main() -> int:
@@ -205,6 +227,10 @@ def main() -> int:
                         print(f"\n  [{p.number}] {p.title} — {p.section}, p. {p.page}\n  {p.text}")
             used = llm.request_count() - before
             check(results, used <= NEARMISS_BUDGET, f"near-miss part used {used} LLM requests (budget {NEARMISS_BUDGET})")
+
+        if "secrets" in parts:
+            print("\n=== Secrets (no LLM request)")
+            check_secrets(results, settings.llm_api_key)
     except PaperPilotError as error:
         check(results, False, f"{type(error).__name__}: {error}")
 

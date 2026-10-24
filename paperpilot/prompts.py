@@ -125,6 +125,20 @@ def check_citations(text: str, passage_count: int) -> CitationReport:
     return CitationReport(valid=valid, invalid=invalid, uncited_sentences=uncited)
 
 
+_QUOTES = "\"'`“”‘’"
+
+
+def _normalise(text: str) -> str:
+    return text.replace("’", "'").strip().strip(_QUOTES).strip().lower()
+
+
+def is_not_found(reply: str) -> bool:
+    """True if the reply is the not-found sentence, allowing quotes, case, curly apostrophes,
+    a missing final period, or extra text after it (research R6)."""
+    sentence = _normalise(NOT_FOUND).rstrip(".")
+    return _normalise(reply).rstrip(".!").startswith(sentence)
+
+
 def word_count(text: str) -> int:
     """Count words, not counting citation markers or bare punctuation."""
     return sum(1 for token in _CITATION.sub(" ", text).split() if any(c.isalnum() for c in token))

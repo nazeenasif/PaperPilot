@@ -255,7 +255,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 
 ### US5 (P2): request accounting and the long-wait rule (ADR-0007)
 
-- [ ] T030 [P] [US5] Create failing tests in `tests/test_llm_usage.py`, and add an autouse guard in `tests/conftest.py` that replaces `llm._fetch_key_info` with a stub that raises unless a test overrides it.
+- [X] T030 [P] [US5] Create failing tests in `tests/test_llm_usage.py`, and add an autouse guard in `tests/conftest.py` that replaces `llm._fetch_key_info` with a stub that raises unless a test overrides it.
   - **Counting:**
     - Every attempt, first or retry, increments the day's row in `<LIBRARY_DIR>/usage.sqlite3`.
     - A new UTC day starts at 0 (clock injected through `llm._utcnow`).

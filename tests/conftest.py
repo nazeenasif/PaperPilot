@@ -169,6 +169,12 @@ def no_real_llm_client(monkeypatch):
         return
     monkeypatch.setattr(llm, "_make_client", blocked)
 
+    def no_key_endpoint(*args, **kwargs):
+        raise AssertionError("the provider's key endpoint was called in a unit test")
+
+    # Usage refreshes read OpenRouter's key endpoint; tests that need it stub it (ADR-0007).
+    monkeypatch.setattr(llm, "_fetch_key_info", no_key_endpoint, raising=False)
+
 
 @pytest.fixture
 def llm_env(monkeypatch):

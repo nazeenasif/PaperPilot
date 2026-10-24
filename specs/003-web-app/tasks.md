@@ -208,7 +208,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - With `on_retry`, a 429 followed by success calls it once with `RetryNotice(attempt=1, max_attempts=4, wait_seconds=3.0, reason="rate_limited")` before the sleep.
   - Timeout, 5xx and error-in-200 cases report the reasons `timeout`, `server_error` and `provider_error`.
   - First-try success never calls it.
-- [ ] T021 [US1] Implement `RetryNotice` and the `on_retry` parameter in `paperpilot/llm.py`, and `on_event` in `paperpilot/service.py`, forwarding retries as `retry_wait` events. T019, T020 and the full `pytest` must pass.
+- [X] T021 [US1] Implement `RetryNotice` and the `on_retry` parameter in `paperpilot/llm.py`, and `on_event` in `paperpilot/service.py`, forwarding retries as `retry_wait` events. T019, T020 and the full `pytest` must pass.
 
 ### US2 (P1): stored PDFs, highlight geometry, attach with layout, passage views
 

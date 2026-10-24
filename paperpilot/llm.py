@@ -7,6 +7,7 @@ failures become one readable LLMError line with the API key scrubbed out.
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import openai
@@ -57,6 +58,16 @@ class LLMReply:
     reasoning_tokens: int | None
     attempts: int
     seconds: float
+
+
+@dataclass(frozen=True)
+class RetryNotice:
+    """Reported to `on_retry` before each retry wait (the web app's countdown, FR-023)."""
+
+    attempt: int  # the attempt that failed, 1-based
+    max_attempts: int
+    wait_seconds: float
+    reason: str  # "rate_limited", "timeout", "server_error" or "provider_error"
 
 
 class ProviderError(Exception):
@@ -201,6 +212,17 @@ def _retry_reason(error: Exception) -> str:
     return f"HTTP {status}"
 
 
+def _notice_reason(error: Exception) -> str:
+    """The reason category reported to on_retry (contracts/web-api.md, retry_wait event)."""
+    if isinstance(error, ProviderError):
+        return "provider_error"
+    if isinstance(error, openai.APITimeoutError):
+        return "timeout"
+    if getattr(error, "status_code", None) == 429:
+        return "rate_limited"
+    return "server_error"
+
+
 def _raise_for_error_body(response) -> None:
     """OpenRouter can report a failure inside an HTTP 200 body with no choices."""
     error = getattr(response, "error", None)
@@ -248,11 +270,14 @@ def model_is_listed() -> bool:
     return settings.llm_model in ids
 
 
-def generate(system: str, prompt: str) -> LLMReply:
+def generate(
+    system: str, prompt: str, on_retry: Callable[[RetryNotice], None] | None = None
+) -> LLMReply:
     """Send one system + user message to the configured model and return its reply.
 
     Raises SettingsError for missing settings and LLMError for provider failures, cut-off or
-    empty output. Retries rate limits and transient errors (research R3).
+    empty output. Retries rate limits and transient errors (research R3); `on_retry`, if given,
+    is told about each wait before it starts.
     """
     global _planned, _retries
     settings = load_settings()
@@ -283,6 +308,8 @@ def generate(system: str, prompt: str) -> LLMReply:
                 raise LLMError(_scrub(message, settings.llm_api_key)) from None
             logger.warning("LLM request attempt %d of %d failed: %s; retrying in %.1f s",
                            attempt, MAX_ATTEMPTS, _retry_reason(error), wait)
+            if on_retry is not None:
+                on_retry(RetryNotice(attempt, MAX_ATTEMPTS, wait, _notice_reason(error)))
             _sleep(wait)
             continue
         reply = _to_reply(response, attempt, time.perf_counter() - start)

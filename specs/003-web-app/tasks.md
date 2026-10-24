@@ -291,7 +291,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 
 ### US1: ask with progress
 
-- [ ] T034 [P] [US1] Create failing tests in `tests/api/test_ask.py`, reading the stream through `TestClient`.
+- [X] T034 [P] [US1] Create failing tests in `tests/api/test_ask.py`, reading the stream through `TestClient`.
   - **Answered question:**
     - `POST /api/ask` streams `progress` events (`searching`, `reading`, `generating`, `checking`), then a final `answer`.
     - The answer has every field in contracts/web-api.md, including `verified`, `papers_read`, `requests {planned, retries}` and `usage`.

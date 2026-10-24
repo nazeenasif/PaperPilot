@@ -7,8 +7,9 @@
 
 `service.ask(question, paper_ids, k, history)` answers questions from the Feature 1 library.
 It optionally rewrites a follow-up into a standalone question (last 6 turns), retrieves the top
-k passages with Feature 1 search, drops passages below a calibrated relevance threshold
-(calibrated 0.59), and — only if passages remain — asks the model through one
+k passages with Feature 1 search, gates the question on its top passage's score against a
+calibrated relevance threshold (calibrated 0.59), and — only if it passes — sends all k
+passages to the model through one
 OpenAI-compatible client (`llm.py`, the single LLM boundary; default OpenRouter with the
 pinned free model `nvidia/nemotron-3-ultra-550b-a55b:free`) to answer from numbered, tag-delimited
 passages with [n] citations. Replies are

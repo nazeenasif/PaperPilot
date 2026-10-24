@@ -135,8 +135,16 @@ the installed package or official documentation on 2026-10-24.
 ## R8. Relevance threshold
 
 - **Decision**: setting `RELEVANCE_THRESHOLD`, default **0.59**, the calibration script's own
-  suggestion (lowest on-topic top score − 0.03, rounded down); applied per passage after
-  retrieval. Evidence: `eval/threshold_calibration.md` (FR-003).
+  suggestion (lowest on-topic top score − 0.03, rounded down); applied as a **gate on the top
+  passage's score**: below it → not-found (`below_threshold`) with no LLM call; otherwise all
+  top-k passages are sent unfiltered. Evidence: `eval/threshold_calibration.md` (FR-003).
+- **Why a gate, not a filter** (amended 2026-10-24): the calibration measures top-1 scores, so
+  the value only means "is this question about the library?". It was first applied as a
+  per-passage filter, a different test the calibration never measured. Supporting passages
+  routinely score below the top one, so short questions lost most of their context: "What is
+  LoRA?" kept 2 of 6 passages (0.618, 0.593), the model declined, and checkpoint 5 recorded a
+  false not-found. As a gate, the threshold decides only whether the model is called; which
+  passages are relevant is left to the model and the citation checks.
 - **Rule**: never reject on-topic questions (clarification Q2) — this decides the value;
   rejecting word-level near-misses is best effort; topic-level near-misses (in-domain but not
   answered by these papers) are expected to pass and must be caught by the model's not-found

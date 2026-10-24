@@ -61,7 +61,7 @@ Feature 1 behaviour is unchanged when the LLM settings are absent.
 | rewrite_applied | bool | False when no history or rewrite failed |
 | text | str | the answer, or exactly `NOT_FOUND` |
 | not_found | bool | True when `text == NOT_FOUND` |
-| passages | list[NumberedPassage] | passages given to the model (empty if none passed the threshold) |
+| passages | list[NumberedPassage] | passages given to the model (all k when the top score passes the threshold; empty otherwise) |
 | citations | CitationReport | empty report for not-found answers from the threshold |
 | warning | str \| None | invalid/missing citations (with original answer text) or uncited sentences |
 | rejected_answer | str \| None | the model's original text when it was replaced by `NOT_FOUND` |
@@ -76,8 +76,8 @@ Feature 1 behaviour is unchanged when the LLM settings are absent.
 
 ```
 question ─► [history?] rewrite ─► retrieve (k, filter) ─► threshold
-   ├─ no passages left ─────────────────────────────► NOT_FOUND (llm_calls counts rewrite only)
-   └─ passages ─► generate ─► is_not_found? ─ yes ──► NOT_FOUND
+   ├─ no passages / top score < threshold ──────────► NOT_FOUND (llm_calls counts rewrite only)
+   └─ all k passages ─► generate ─► is_not_found? ─ yes ──► NOT_FOUND
                                  └─ no ─► citations: invalid or none ─► NOT_FOUND + warning + rejected_answer
                                                       └─ all valid ───► answer (+ uncited-sentence warning)
 ```

@@ -74,7 +74,7 @@ exactly the not-found sentence.
 
 1. **Given** a question unrelated to any paper, **When** it is asked, **Then** the answer is
    exactly "I couldn't find that in the selected papers." and the passage list is empty.
-2. **Given** retrieved passages that all fall below the relevance threshold, **When** the
+2. **Given** retrieved passages whose top score falls below the relevance threshold, **When** the
    question is asked, **Then** the not-found sentence is returned without contacting the
    language model.
 3. **Given** relevant-looking passages that do not actually contain the answer, **When** the
@@ -184,9 +184,10 @@ passages and confirm [9] is reported as invalid and [2] as valid.
 
 - **FR-001**: The system MUST retrieve the top k passages (k configurable, default 6) for the
   question using Feature 1's search, honouring any paper filter.
-- **FR-002**: The system MUST drop retrieved passages whose similarity score is below a
-  configurable relevance threshold; if none remain, it MUST return the not-found sentence
-  without contacting the language model.
+- **FR-002**: The system MUST compare the top retrieved passage's similarity score with a
+  configurable relevance threshold; if the top score is below it, it MUST return the not-found
+  sentence without contacting the language model. Otherwise all top k passages MUST be sent
+  to the language model, including those scoring below the threshold.
 - **FR-003**: The default relevance threshold MUST be chosen from recorded evidence: the
   top scores of at least 5 clearly off-topic questions and at least 5 on-topic questions
   against the 5 test papers, with the measurements and the chosen value documented. The
@@ -256,7 +257,7 @@ passages and confirm [9] is reported as invalid and [2] as valid.
 - **FR-016**: Each answer MUST report timings for rewrite, retrieve and generate steps, and
   input/output token counts when the provider supplies them.
 - **FR-016a**: Every fallback MUST record its reason: an answer replaced by or returned as the
-  not-found sentence states why (no passages retrieved, all passages below the threshold, the
+  not-found sentence states why (no passages retrieved, top passage below the threshold, the
   model said not found, invalid citations, or no citations), and a follow-up that falls back
   to the original question states why (rewrite failed or rewrite was empty).
 
@@ -275,7 +276,7 @@ passages and confirm [9] is reported as invalid and [2] as valid.
   conversation history.
 - **Conversation turn**: One message in the history, with a role (researcher or assistant)
   and text.
-- **Numbered passage**: A retrieved passage that passed the threshold, with its citation
+- **Numbered passage**: A retrieved passage sent to the model, with its citation
   number (1..n), paper title, section, page, score and text.
 - **Answer**: The answer text, the numbered passages, the standalone question (if rewritten),
   citation report (valid and invalid numbers, uncited sentences), whether it is the

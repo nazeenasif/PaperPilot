@@ -18,12 +18,15 @@
 
 ## Decision
 
-- **Relevance gate before the model**: passages scoring below `RELEVANCE_THRESHOLD`
-  (calibrated default 0.59; on-topic top scores 0.629–0.844, clear off-topic 0.449–0.544,
-  word-level near-misses 0.513–0.588 on the test papers; see `eval/threshold_calibration.md`)
-  are dropped; if none remain the answer is the not-found sentence and the model is
-  not called. The default sits just below the lowest on-topic top score and is re-measured by
-  a calibration script that records its evidence.
+- **Relevance gate before the model**: `RELEVANCE_THRESHOLD` gates the question on its **top
+  passage's score**, which is what the calibration measures (calibrated default 0.59; on-topic
+  top scores 0.629–0.844, clear off-topic 0.449–0.544, word-level near-misses 0.513–0.588 on the
+  test papers; see `eval/threshold_calibration.md`). If the top score is below it, the answer is
+  the not-found sentence (`below_threshold`) and the model is not called; otherwise all top-k
+  passages are sent unfiltered. The default sits just below the lowest on-topic top score and
+  is re-measured by a calibration script that records its evidence. (Amended 2026-10-24: the
+  threshold was first applied as a per-passage filter, which left short questions such as
+  "What is LoRA?" with two passages and a false not-found; research R8.)
 - **Prompt contract** (`prompts.py`): the system message holds all rules (answer only from
   passages, cite every factual claim as [n], never invent numbers/datasets/authors/citations,
   copy numbers exactly, ≤ ~150 words or ~300 on request, reply exactly with the not-found

@@ -120,7 +120,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
   - `api/__main__.py`: `python -m api` runs uvicorn on `127.0.0.1:8000`, never `0.0.0.0`.
   - Logging: also write to `<LIBRARY_DIR>/api.log` (gitignored under `data/`), with the key
     scrubbed and no prompts or answers logged.
-- [ ] T013 [P] Create failing tests:
+- [X] T013 [P] Create failing tests:
   - `frontend/tests/api-client.test.ts`:
     - The base URL comes from `NEXT_PUBLIC_API_URL`, defaulting to `http://127.0.0.1:8000`.
     - JSON errors are parsed into a typed `ApiError` with its `kind`.

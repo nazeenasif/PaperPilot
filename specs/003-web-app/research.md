@@ -99,17 +99,28 @@ two-column order, footnote markers and the overlap that starts in another block.
   - The viewer draws the rectangles of the cited page over the rendered page (scaled from PDF
     points to pixels); rectangles on the next page are shown when the reader turns to it, with a
     "continues on page N+1" note.
-- **Papers added before this feature** (PDF attached later, spec US3 scenario 4): attaching
-  stores only the PDF, as the spec requires (no parsing at attach time, < 3 s). The layout file
-  is built **lazily on the first citation view** by re-running the deterministic parse and chunk
-  steps (no embedding, about 1 s) and accepted only if every regenerated passage id and text
-  equals the stored one; otherwise no layout is written and the viewer uses the FR-013 fallback
-  (page plus passage text, "location could not be marked").
+- **Papers added before this feature** (PDF attached later, spec US3 scenario 4, FR-018 as
+  amended 2026-10-24): the attach job stores the PDF and then, **in the same ingest-worker job**,
+  runs a "Mapping highlights" step: the deterministic parse and chunk steps (no embedding, about
+  1–2 s) regenerate the passages with their regions, and the layout file is written only if
+  every regenerated passage id and text equals the stored one (same set, same order). On a
+  mismatch — typically because chunk settings changed since the paper was embedded — no layout
+  is written, the job still ends as "PDF attached" with `layout: "mismatch"`, and the viewer
+  opens the cited page without a highlight, shows the passage text alongside and offers
+  **"Re-process paper for exact highlights"** (FR-018a): a normal ingest job from the stored PDF
+  (parse, chunk, embed, layout) that replaces the paper's passages only after the new ones are
+  embedded, under the store write lock, so a failure leaves the old passages in place.
+  Re-processing can change passage ids; answers already on screen keep their passage numbers but
+  a chip whose passage no longer exists opens the "passage no longer in the library" state.
+  *Superseded design*: building the layout lazily on the first citation view (rejected after
+  planning: it hid work in a read request, made the first citation slow, and could not be shown
+  as progress).
 - **Rationale**: exact, deterministic, unit-testable in Python with generated PDFs, and cheap
   (geometry is a by-product of the parse that already runs). "Highlighted text is exactly what
   the model read" stays true, including overlap words.
-- **Trade-offs recorded**: more ingest code (alignment, layout file, lazy rebuild); layout
-  becomes stale if chunk settings change (detected by the id/text check, falls back safely);
+- **Trade-offs recorded**: more ingest code (alignment, layout file, attach-time mapping,
+  re-process job); layout becomes stale if chunk settings change (detected by the id/text check;
+  the viewer falls back and offers re-processing);
   table passages are highlighted by their blocks' boxes (tables are flattened text, so the box
   is the table area — acceptable).
 - **Alternative rejected as primary — fuzzy matching in the viewer**: normalise the pdf.js text
@@ -276,7 +287,8 @@ two-column order, footnote markers and the overlap that starts in another block.
 
 - **Decision**: `<LIBRARY_DIR>/pdfs/<paper_id>.pdf` (under the gitignored `data/` folder,
   Principle VI). `library.add_paper` copies the file after a successful store;
-  `library.attach_pdf` handles the "already in library, no PDF" case; `delete_paper` removes the
-  PDF and layout file. Uploads are checked server-side: ≤ 25 MB (read in chunks, abort when
+  `library.attach_pdf` handles the "already in library, no PDF" case (store the PDF, then map
+  highlights with the id/text check); `library.reprocess_paper` rebuilds a paper from its stored
+  PDF; `delete_paper` removes the PDF and layout file. Uploads are checked server-side: ≤ 25 MB (read in chunks, abort when
   exceeded), `%PDF-` magic bytes, then the engine's own errors for unreadable, password and
   no-text files.

@@ -34,6 +34,10 @@
 - FR-011 resolved 2026-10-24 (option A): no text before citations are checked; a sub-500 ms
   entrance animation (instant with reduced motion). Also added: re-adding a known paper without a
   stored PDF attaches the PDF ("PDF attached") without reprocessing (US3 scenario 4, FR-018).
+- 2026-10-24 amendment: attaching a PDF builds its highlight layout in the attach job
+  ("Mapping highlights", parse + chunk, no embedding), verified against stored passages; on a
+  mismatch the viewer offers "Re-process paper for exact highlights" (US2 scenarios 6–7, US3
+  scenario 4, FR-013, FR-018, FR-018a, SC-004).
 - All items pass.
 - Deliberate technical detail at the researcher's request (2026-10-24): FR-002a names the
   127.0.0.1 binding and the CORS origin rule; FR-023b–FR-023c name the X-RateLimit-Reset header

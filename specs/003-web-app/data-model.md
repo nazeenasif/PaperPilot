@@ -28,7 +28,18 @@ data/library/
 convention), one rectangle per line segment covered by the passage's words.
 
 Validation: every passage id in the library for this paper has an entry; x0 < x1, y0 < y1, all
-within the page box. Written atomically (temp file + rename). Missing or stale → viewer fallback.
+within the page box. Written atomically (temp file + rename), only after the id/text check
+passes — at ingest (always passes: same run) or in an attach job's "Mapping highlights" step.
+Missing → viewer fallback; missing because the attach check failed → fallback plus the
+"Re-process paper for exact highlights" offer.
+
+### Highlight status (per paper, derived)
+
+| Value | Meaning |
+|---|---|
+| `exact` | PDF and verified layout file present |
+| `mismatch` | PDF present; attach-time check failed (marker file `<paper_id>.layout-mismatch`, removed by re-processing) |
+| `no_pdf` | no stored PDF |
 
 ### Usage database (`usage.sqlite3`)
 
@@ -52,11 +63,11 @@ UTC day is a new row. `resets_at` = next 00:00 UTC.
 | Block | text, page, **bbox, words** (word boxes) | ingest |
 | ParsedPaper | paper_id, title, source_file, page_count, sections, **page_sizes**, **arxiv_id** | ingest |
 | Passage | …, kind, **regions: tuple[Region, ...]** (not stored in ChromaDB) | ingest |
-| AddResult | paper_id, title, passage_count, already_present, timings, **outcome** (`added`, `already_present`, `pdf_attached`) | library |
-| PaperSummary | paper_id, title, source_file, page_count, passage_count, **text_passages, table_passages, section_count, arxiv_id, has_pdf** | library |
-| PassageView | **passage_id, paper_id, title, section, page, page_count, text, kind, layout: PassageLayout \| None, layout_reason** | library |
+| AddResult | paper_id, title, passage_count, already_present, timings, **outcome** (`added`, `already_present`, `pdf_attached`, `reprocessed`), **highlights** (`exact`, `mismatch`, `no_pdf`) | library |
+| PaperSummary | paper_id, title, source_file, page_count, passage_count, **text_passages, table_passages, section_count, arxiv_id, has_pdf, highlights** | library |
+| PassageView | **passage_id, paper_id, title, section, page, page_count, text, kind, layout: PassageLayout \| None, layout_reason** (`no_pdf`, `mismatch`, `unavailable`), **can_reprocess** | library |
 | PassageLayout | **pages (sizes), regions** | library |
-| IngestProgress | **phase** (`parsing`, `chunking`, `embedding`, `ready`), **percent** | library (callback payload) |
+| IngestProgress | **phase** (`parsing`, `chunking`, `embedding`, `mapping`, `ready`), **percent** | library (callback payload) |
 | AskEvent | **kind** (`rewriting`, `searching`, `reading`, `generating`, `retry_wait`, `checking`), **detail** dict | service (callback payload) |
 | RetryNotice | **attempt, max_attempts, wait_seconds, reason** | llm (callback payload) |
 | RequestCounts | planned, retries, total (Feature 2) | llm |
@@ -77,17 +88,26 @@ stored passage metadata (`section`, `kind`).
 | Field | Type | Notes |
 |---|---|---|
 | job_id | str | uuid4 hex |
-| file_name | str | original name (display only; never used as a path) |
-| phase | enum | `queued` → `parsing` → `chunking` → `embedding` → `ready`, or `failed` at any point |
+| kind | enum | `upload` or `reprocess` |
+| file_name | str | original name, or the paper title for `reprocess` (display only; never used as a path) |
+| phase | enum | `queued`, `parsing`, `chunking`, `embedding`, `mapping`, `ready`, `failed` |
 | percent | int \| null | 0–100 during `embedding` |
-| outcome | enum \| null | `added`, `already_present`, `pdf_attached`, `failed` |
+| outcome | enum \| null | `added`, `already_present`, `pdf_attached`, `reprocessed`, `failed` |
+| highlights | enum \| null | `exact` or `mismatch` once known (for `pdf_attached`, the result of the mapping check) |
 | paper_id | str \| null | set when known |
 | error | {kind: "upload_invalid", reason} \| null | reasons: `not_pdf`, `too_large`, `no_text`, `unreadable`, `password`, `storage` |
 | created_at | datetime | jobs older than 1 hour and finished are dropped |
 
-State transitions: `queued → parsing → chunking → embedding → ready` for a new paper;
-`queued → ready` with outcome `already_present` or `pdf_attached` for known content;
-any state → `failed` with an error. Jobs live in memory only (lost on restart; the library
+State transitions:
+
+- new paper: `queued → parsing → chunking → embedding → ready` (outcome `added`, highlights
+  `exact`);
+- known content, PDF stored: `queued → ready` (outcome `already_present`, no processing);
+- known content, no PDF: `queued → mapping → ready` (outcome `pdf_attached`, highlights `exact`
+  or `mismatch`; parse and chunk run inside `mapping`, never embedding);
+- re-process: `queued → parsing → chunking → embedding → ready` (outcome `reprocessed`,
+  highlights `exact`); old passages are replaced only at the end;
+- any state → `failed` with an error (a failed re-process leaves the paper unchanged). Jobs live in memory only (lost on restart; the library
 itself is unaffected because the engine writes atomically).
 
 ### AppState

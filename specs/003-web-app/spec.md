@@ -31,6 +31,11 @@ summaries, comparison, user accounts, deployment."
 - Q (added by the researcher): What happens when a paper already in the library is added again
   but has no stored PDF? → A: The PDF is saved without re-parsing or re-embedding, and the upload
   reports "PDF attached" instead of "already present".
+  *Amended 2026-10-24 (after planning)*: attaching also builds the highlight layout in the same
+  background job, as its own "Mapping highlights" step (parse and chunk only, never embedding),
+  accepted only if every regenerated passage id and text matches what is stored. If the check
+  fails, no layout is stored; citations then open the cited page without a highlight and offer
+  "Re-process paper for exact highlights".
 - Q: Who can reach the app over the network? → A: Localhost only — the server accepts
   connections only from the same machine; phone width is a narrow-window layout requirement,
   not access from other devices.
@@ -115,8 +120,15 @@ shows the right paper at the cited page with the passage text highlighted on tha
    whole paper opens at the cited page.
 5. **Given** a paper whose original PDF is not available to PaperPilot, **When** its citation is
    activated, **Then** the viewer shows the passage text with its title, section and page and
-   explains that the PDF can be shown after the paper's file is added again (which only attaches
-   the PDF; see User Story 3, scenario 4).
+   explains that the PDF can be shown after the paper's file is added again (which attaches the
+   PDF without re-embedding; see User Story 3, scenario 4).
+6. **Given** a paper whose PDF was attached but whose highlight layout could not be verified,
+   **When** its citation is activated, **Then** the viewer opens the cited page without a
+   highlight, shows the passage text alongside, and offers "Re-process paper for exact
+   highlights".
+7. **Given** that offer, **When** the researcher confirms it, **Then** the paper is processed again
+   from its stored PDF as a background job with the usual phases, and afterwards its citations
+   open with exact highlights.
 
 ---
 
@@ -147,8 +159,10 @@ same PDF again and confirm it is reported as already in the library without repr
    with a link to the existing card, and no processing happens.
 4. **Given** a file whose content is already in the library but whose PDF is not stored (for
    example a paper added from a script before this feature), **When** it is dropped, **Then** the
-   PDF is saved without re-parsing or re-embedding, the row reports "PDF attached", and the
-   paper's citations can now open the PDF.
+   PDF is saved, the row shows a "Mapping highlights" step while the passage layout is built
+   (no embedding), and the row reports "PDF attached"; the paper's citations can now open the PDF
+   with highlights — or, if the layout could not be verified against the stored passages, the
+   row says so and citations open without highlights (User Story 2, scenarios 6–7).
 5. **Given** a file that is not a PDF, is larger than the size limit, has no extractable text
    (for example a scanned image), or cannot be read, **When** it is dropped, **Then** its row
    ends in a friendly explanation of the problem and what to try, and nothing is added.
@@ -307,7 +321,9 @@ designed presentation, with no raw error text anywhere.
 - **FR-012**: Activating a citation chip MUST open a source viewer for that passage showing paper
   title, section, page number and total pages, score, and the PDF page itself.
 - **FR-013**: The viewer MUST highlight the passage's text on the displayed page; when the exact
-  location cannot be found, it MUST show the passage text alongside the page with a note.
+  location cannot be found, it MUST show the passage text alongside the page with a note. When
+  the reason is a paper whose attached PDF could not be matched to its stored passages, the
+  viewer MUST also offer "Re-process paper for exact highlights" (FR-018a).
 - **FR-014**: The viewer MUST offer opening the full PDF at the cited page.
 - **FR-015**: PaperPilot MUST keep a local copy of each added PDF so citations can open it; the
   copies MUST stay on the researcher's machine and out of version control (constitution
@@ -321,8 +337,16 @@ designed presentation, with no raw error text anywhere.
   Embedding with percentage, Ready, or Failed with a reason); the rest of the app MUST stay usable.
 - **FR-018**: Files MUST be rejected with a friendly reason when they are not PDFs, exceed 25 MB,
   have no extractable text, or cannot be read. A file whose content is already in the library
-  MUST NOT be parsed or embedded again: if the paper's PDF is already stored it MUST be reported
-  as "already present"; if not, the PDF MUST be stored and the upload reported as "PDF attached".
+  MUST NOT be embedded again: if the paper's PDF is already stored it MUST be reported as
+  "already present" with no processing; if not, the PDF MUST be stored and, in the same
+  background job, its highlight layout built as a separate "Mapping highlights" step (parse and
+  chunk only, no embedding). The layout MUST be stored only if every regenerated passage id and
+  text equals the stored passage; otherwise no layout is stored and the job reports that
+  highlights are unavailable. Either way the upload is reported as "PDF attached".
+- **FR-018a**: For a paper with a stored PDF but no verified layout, the researcher MUST be able
+  to re-process the paper from its stored PDF (parse, chunk, embed, layout) as a background job
+  with the usual phases; the paper's passages are replaced only after the new ones are fully
+  prepared, so a failure leaves the paper as it was.
 - **FR-019**: Each paper card MUST show title, passage count split into text and table passages,
   section count and page count, plus its arXiv identifier when one is found in the paper; the
   Library header MUST show the total number of papers and passages.
@@ -390,9 +414,12 @@ designed presentation, with no raw error text anywhere.
 ### Key Entities
 
 - **Paper card**: a paper in the library — title, passage counts (text and table), section count,
-  page count, optional arXiv identifier, whether its PDF copy is available.
-- **Upload job**: one file being added — file name, phase, embedding percentage, outcome (ready,
-  already present, PDF attached to an existing paper, or failed with a reason).
+  page count, optional arXiv identifier, whether its PDF copy is available, and whether exact
+  highlights are available.
+- **Upload job**: one file being added, or one paper being re-processed — file name, phase
+  (including "Mapping highlights" for an attach), embedding percentage, outcome (ready, already
+  present, PDF attached to an existing paper with or without highlights, re-processed, or failed
+  with a reason).
 - **Conversation**: the ordered question and answer turns on the Ask screen, plus the selected
   papers; it lasts until the researcher starts a new one or reloads the page.
 - **Answer view**: everything from FR-004, plus its presentation state (verified, uncited flags,
@@ -415,8 +442,8 @@ designed presentation, with no raw error text anywhere.
   of them does a raw error, stack trace, provider message or API key appear on screen.
 - **SC-004**: A 20-page text PDF reaches Ready within 60 seconds on the development machine, with
   at least three phase changes visible along the way; re-adding it is reported as already present
-  within 3 seconds, and re-adding a paper that has no stored PDF reports "PDF attached" within 3
-  seconds with no parsing or embedding.
+  within 3 seconds, and re-adding a paper that has no stored PDF reports "PDF attached" within 10
+  seconds (including the "Mapping highlights" step) with no embedding.
 - **SC-005**: After the app reports ready, the first question's search step takes under 2
   seconds (no model loading happens per request).
 - **SC-006**: The request usage shown in the app equals the number of model requests the engine
@@ -447,8 +474,9 @@ designed presentation, with no raw error text anywhere.
   run: the daily reset time (expected 00:00 UTC) and the units of X-RateLimit-Reset (currently
   read as epoch milliseconds; the 48-hour rule of FR-023b makes a wrong unit fall back safely to
   normal backoff).
-- The five test papers' files are dropped into the app once to attach their PDFs (no
-  re-processing); until then User Story 2 scenario 5 applies.
+- The five test papers' files are dropped into the app once to attach their PDFs and build their
+  highlight layouts (no re-embedding); until then User Story 2 scenario 5 applies. Their stored
+  passages were made with the current chunk settings, so the layout check is expected to pass.
 - The provider's daily free limit resets at midnight UTC (OpenRouter); the app shows the reset in
   the researcher's local time. Requests made with the same key outside the PaperPilot engine
   (other tools, the provider's website) cannot be seen and are not counted; the provider's own
@@ -463,7 +491,8 @@ designed presentation, with no raw error text anywhere.
 
 - Features 1 and 2 (library, search, `ask()` with citation checks and follow-up rewriting).
 - Engine additions this feature needs, kept inside the engine (FR-001): storing a copy of each
-  added PDF, and attaching a PDF to a paper already in the library without reprocessing;
+  added PDF; attaching a PDF to a paper already in the library with a verified layout and no
+  re-embedding; re-processing a paper from its stored PDF;
   reporting ingest phases and embedding progress; reporting retry waits and attempt numbers
   during a question; not retrying when the provider's requested wait exceeds the cap, and
   trusting X-RateLimit-Reset only within 48 hours (FR-023a–FR-023c, an amendment to ADR-0003's

@@ -29,14 +29,20 @@ and checkpoint scripts are unaffected.
 ## library
 - `add_paper(path, on_progress: Callable[[str, int | None], None] | None = None) -> AddResult`:
   phases `parsing`, `chunking`, `embedding` (percent), `ready`; stores the PDF copy and layout
-  after the passages; outcome `added`, or for known content `already_present` (PDF stored) or
-  `pdf_attached` (PDF saved, nothing parsed or embedded).
-- `delete_paper(paper_id)` also removes the PDF and layout.
-- `list_papers()` fills the new `PaperSummary` fields.
+  after the passages; outcome `added`, or for known content `already_present` (PDF stored, no
+  processing) or `pdf_attached` (PDF saved, then phase `mapping`: parse + chunk, never embed;
+  layout written only if every regenerated passage id and text equals the stored passages,
+  otherwise a mismatch marker; `AddResult.highlights` is `exact` or `mismatch`).
+- `reprocess_paper(paper_id, on_progress=None) -> AddResult`: parse, chunk, embed and layout from
+  the stored PDF; replaces the paper's passages under the write lock only after embedding
+  succeeds; clears the mismatch marker; outcome `reprocessed`. Raises `PdfMissingError` /
+  `UnknownPaperError`.
+- `delete_paper(paper_id)` also removes the PDF, layout and marker.
+- `list_papers()` fills the new `PaperSummary` fields, including `highlights`.
 - `pdf_path(paper_id) -> Path` — raises `PdfMissingError` / `UnknownPaperError`.
-- `get_passage(passage_id) -> PassageView` — layout from the file; built lazily for attached
-  PDFs (parse + chunk only, accepted only if every passage id and text matches), else
-  `layout=None` with a reason.
+- `get_passage(passage_id) -> PassageView` — reads the layout file only (never parses); returns
+  `layout=None` with `layout_reason` `no_pdf`, `mismatch` (and `can_reprocess=True`) or
+  `unavailable`.
 
 ## llm
 - `generate(system, prompt, on_retry: Callable[[RetryNotice], None] | None = None)`:

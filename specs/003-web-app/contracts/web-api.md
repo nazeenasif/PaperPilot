@@ -18,6 +18,7 @@ Every non-2xx response and every SSE `error` event has the body `{"kind": <kind>
 | `unknown_passage` | 404 | `passage_id` | passage not in library |
 | `pdf_missing` | 404 | `paper_id` | paper has no stored PDF |
 | `busy_question` | 409 | — | another question is still being answered (FR-010) |
+| `busy_job` | 409 | `paper_id` | a job for this paper is already queued or running |
 | `daily_limit` | 429 | `used`, `limit`, `resets_at` | daily free requests used up (no model request made) |
 | `rate_limited` | 429 | `until`, `daily` | provider asked for a wait > 60 s; `daily: true` → daily-limit screen |
 | `model_busy` | 503 | `attempts` | all retries failed (429/5xx/timeouts) |
@@ -39,7 +40,8 @@ Every non-2xx response and every SSE `error` event has the body `{"kind": <kind>
 `200 {"papers": [PaperCard], "total_passages": 223}`, sorted by title.
 
 `PaperCard`: `{"paper_id", "title", "page_count", "passage_count", "text_passages",
-"table_passages", "section_count", "arxiv_id": str | null, "has_pdf": bool}`.
+"table_passages", "section_count", "arxiv_id": str | null, "has_pdf": bool,
+"highlights": "exact" | "mismatch" | "no_pdf"}`.
 
 ### `POST /api/papers` (multipart/form-data, field `files`, one or more)
 `202 {"jobs": [{"job_id", "file_name"}]}`. Size (≤ 25 MB, enforced while reading) and the
@@ -52,6 +54,16 @@ Every non-2xx response and every SSE `error` event has the body `{"kind": <kind>
 ### `GET /api/jobs/events` (text/event-stream)
 Events: `job` with an `UploadJob` payload on every change; keep-alive pings every 15 s. On
 connect, the current snapshot of unfinished jobs is sent first.
+
+A file whose content is already in the library without a stored PDF becomes an attach job:
+phases `queued → mapping → ready`, outcome `pdf_attached`, `highlights` `exact` or `mismatch`
+(no embedding; spec FR-018).
+
+### `POST /api/papers/{paper_id}/reprocess`
+`202 {"job_id", "file_name"}` — re-processes the paper from its stored PDF (parse, chunk, embed,
+layout) as a `reprocess` job with the usual phases; passages are replaced only when the job
+succeeds (FR-018a). `404 unknown_paper | pdf_missing`; `409 {"kind": "busy_job"}` if a job for
+the same paper is already queued or running.
 
 ### `DELETE /api/papers/{paper_id}`
 `200 {"removed_passages": 56}`; removes passages, PDF and layout. `404 unknown_paper`.
@@ -67,11 +79,13 @@ connect, the current snapshot of unfinished jobs is sent first.
  "has_pdf": true,
  "layout": {"pages": [{"number": 5, "width": 612.0, "height": 792.0}],
             "regions": [{"page": 5, "x0": 108.0, "y0": 412.3, "x1": 504.1, "y1": 423.9}]},
- "layout_reason": null}
+ "layout_reason": null, "can_reprocess": false}
 ```
-`layout` is `null` with `layout_reason` = `no_pdf` | `stale` | `unavailable` when the passage
-cannot be marked; the viewer then shows the passage text beside the page (FR-013). The first
-request for a paper whose PDF was attached builds its layout (about 1 s).
+`layout` is `null` with `layout_reason` = `no_pdf` | `mismatch` | `unavailable` when the passage
+cannot be marked; the viewer then shows the passage text beside the page (FR-013). For
+`mismatch` (attached PDF whose regenerated passages did not match the stored ones),
+`can_reprocess` is `true` and the viewer offers "Re-process paper for exact highlights", which
+calls `POST /api/papers/{paper_id}/reprocess`. This endpoint never parses or builds layouts.
 
 ### `POST /api/search`
 Body `{"query": str, "paper_ids": [str] | null, "k": int | null}` → `200 {"results":

@@ -56,7 +56,7 @@ Both servers bind to 127.0.0.1, and the API accepts only the frontend's origin. 
 **Performance Goals**:
 - Search step under 2 s after ready (SC-005).
 - A 20-page PDF reaches Ready in under 60 s (SC-004).
-- Duplicate and attach outcomes in under 3 s.
+- Duplicate outcome in under 3 s; attach with highlight mapping in under 10 s.
 - Answer reveal under 500 ms (SC-011).
 - Countdown events within 1 s of the engine starting a wait.
 
@@ -114,7 +114,7 @@ paperpilot/                    # engine (existing modules only)
 ├── errors.py                  # + DailyLimitError, RateLimitedError, PdfMissingError
 ├── ingest.py                  # + word boxes, page sizes, arxiv_id, Passage.regions, build_layout()
 ├── store.py                   # + embed progress callback, write lock
-├── library.py                 # + PDF copy/attach/delete, extended PaperSummary, pdf_path(), get_passage()
+├── library.py                 # + PDF copy/attach (with mapping)/reprocess/delete, extended PaperSummary, pdf_path(), get_passage()
 ├── llm.py                     # + usage SQLite counter, refresh_usage(), daily pre-check, long-wait rule, on_retry
 └── service.py                 # + on_event progress callback
 
@@ -148,7 +148,7 @@ frontend/                      # NEW: Next.js App Router
 
 tests/
 ├── test_ingest_layout.py      # NEW: word boxes, hyphen alignment, regions, layout file
-├── test_library_pdfs.py       # NEW: PDF copy, attach, delete, summaries, get_passage, lazy layout
+├── test_library_pdfs.py       # NEW: PDF copy, attach + mapping (match and mismatch), reprocess, delete, summaries, get_passage
 ├── test_llm_usage.py          # NEW: counter, concurrency, provider refresh, daily pre-check, long waits
 ├── test_service_events.py     # NEW: ask() progress events
 └── api/                       # NEW: TestClient tests per endpoint, SSE streams, errors, CORS, hosts
@@ -171,8 +171,10 @@ under the existing `tests/` tree so one `pytest` run covers the engine and the A
 3. **Threads:** one ingest worker thread, questions in the threadpool, and a store write lock
    (R3).
 4. **Highlights:** word-level geometry recorded at ingest and kept in per-paper layout files.
-   Layouts for papers whose PDF was attached are built lazily on first view, after verifying the
-   passage ids and texts. Fuzzy matching was rejected (R4).
+   Attaching a PDF builds its layout in the same ingest job, as a "Mapping highlights" step
+   (parse and chunk, no embedding), written only if every passage id and text matches. On a
+   mismatch, the viewer offers "Re-process paper for exact highlights". Fuzzy matching was
+   rejected (R4).
 5. **Viewer:** react-pdf renders a single page with a DOM highlight overlay, and a local pdf.js
    worker (R5).
 6. **Answer reveal:** progress events while `ask()` runs, then a staggered entrance capped at
@@ -225,7 +227,6 @@ under the existing `tests/` tree so one `pytest` run covers the engine and the A
 
 No constitution violations to justify.
 
-One spec nuance is recorded instead: FR-018 forbids parsing at attach time, and attaching does
-not parse. The first citation view of an attached paper re-runs parse and chunk, with no
-embedding, about 1 s, to build its layout. That is the only way to get exact highlights without
-re-ingesting. The result is accepted only if every passage id and text matches.
+FR-018, as amended on 2026-10-24, builds the highlight layout inside the attach job ("Mapping
+highlights": parse and chunk, no embedding), verified against the stored passages.
+`get_passage` never parses, so opening a citation is always a plain read.

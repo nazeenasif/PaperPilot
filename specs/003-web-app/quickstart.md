@@ -31,7 +31,9 @@ Open **http://127.0.0.1:3000** (not `localhost:3000`, which is a different origi
 shows "Getting ready" for ~20–30 s while the embedding model loads, then the Ask screen.
 
 First time with the existing library: open **Library** and drop the five files from `papers/`;
-each reports **PDF attached** (no parsing or embedding) and citations can then open the PDFs.
+each shows a **Mapping highlights** step and then reports **PDF attached** (no embedding);
+citations can then open the PDFs with exact highlights. If a paper reports that highlights are
+unavailable, its citations offer **Re-process paper for exact highlights**.
 
 ## 3. Tests (offline; never call the model)
 

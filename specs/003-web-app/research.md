@@ -19,7 +19,7 @@ documentation and one call to its key endpoint (not a model request).
   | uvicorn | 0.54.0 (09-25) | **0.54.0** | already installed |
   | python-multipart | 0.0.32 (06-04) | **0.0.32** | needed for file uploads |
   | **Node** (Node 24.18.0, npm 11.6.2 installed; Next needs ≥ 20.9) | | | |
-  | next | 16.4.3 (10-23) | **16.4.0** (10-06) | App Router |
+  | next | 16.4.3 (10-23) | **16.4.1** (10-14) | App Router. 16.4.0 was planned but has critical advisories (see the security exception below) |
   | react, react-dom | 19.3.1 (10-14) | **19.3.0** (09-09) | |
   | typescript | 7.0.2 (07-08) | **6.0.3** (04-16) | TS 7 (Go compiler) has no JS compiler API; Next's in-process type check needs an experimental flag for it — not worth it |
   | tailwindcss, @tailwindcss/postcss | 4.3.3 (07-16) | **4.3.3** | v4 CSS-first `@theme` (R12) |
@@ -34,13 +34,35 @@ documentation and one call to its key endpoint (not a model request).
   | @playwright/test | 1.64.1 (10-14) | **1.64.0** (10-07) | |
   | @types/react, @types/react-dom | — | **19.3.0** | |
   | @types/node | — | **26.6.5** (10-09) | |
+  | clsx | — | **2.1.1** | shadcn/ui class helper (`cn`) |
+  | tailwind-merge | — | **3.7.0** (09-12) | shadcn/ui class helper (`cn`) |
+  | lucide-react | — | **1.55.0** (10-10) | icon set used by shadcn/ui components |
+  | @testing-library/jest-dom | — | **7.0.1** (08-09) | DOM matchers for Vitest |
+  | **Python, added at implementation** | | | |
+  | httpx | 0.28.1 | **0.28.1** | already installed; used by FastAPI's `TestClient` and `llm.refresh_usage()` |
+
+- **Security exception** (2026-10-24, during T003): the 14-day rule chose Next.js **16.4.0**,
+  but `npm audit` reported three advisories published on 2026-10-22 for `16.0.0 – 16.4.0`, all
+  first patched in **16.4.1**:
+  - GHSA-2464-fhr4-w9xw (critical): unauthenticated remote code execution in the Image
+    Optimization API with SVG files.
+  - GHSA-673q-mjm6-r5xr (critical): unauthenticated remote code execution in `use cache`
+    functions returning typed arrays.
+  - GHSA-p3m5-59mp-jv5r (high): denial of service in App Router Server Actions.
+
+  The pin is **16.4.1**: the earliest patched release, 10 days old. **Rule**: a known advisory
+  overrides the 14-day margin; take the earliest release that fixes it. After the change,
+  `npm audit` reported 0 vulnerabilities, including dev dependencies. The Python pins were
+  checked against OSV and have no known advisories. Re-run both checks before each install.
 
 - **Alternatives**: newest of everything (rejected: day-old releases); caret ranges (rejected:
   constitution VIII and reproducible checkpoints favour exact pins; `package-lock.json` is
   committed). ESLint is not added: `tsc --noEmit` plus tests cover correctness, and Next 16 no
   longer runs a linter during build.
-- **Re-check**: before `/sp.implement` installs anything, re-run the two queries; if a pinned
-  release has been deprecated, take the next one that is ≥ 14 days old.
+- **Re-check**: before `/sp.implement` installs anything, re-run the two version queries plus
+  `npm audit` and an OSV query for the Python pins. If a pinned release has been deprecated, take
+  the next one that is at least 14 days old; if it has an advisory, take the earliest patched
+  release.
 
 ## R2. Progress transport: Server-Sent Events (FastAPI built-in) with a polling fallback
 

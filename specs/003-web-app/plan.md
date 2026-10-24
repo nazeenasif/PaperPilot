@@ -34,7 +34,7 @@ Both servers bind to 127.0.0.1, and the API accepts only the frontend's origin. 
 
 **Primary Dependencies**:
 - **Python:** FastAPI 0.143.0 (Starlette 1.7.0), uvicorn 0.54.0, python-multipart 0.0.32.
-- **Frontend:** Next.js 16.4.0, React 19.3.0, Tailwind CSS 4.3.3, shadcn CLI 4.21.4, motion
+- **Frontend:** Next.js 16.4.1 (security fix; research R1), React 19.3.0, Tailwind CSS 4.3.3, shadcn CLI 4.21.4, motion
   14.1.0, react-pdf 11.0.0 (pdfjs-dist 6.3.289).
 - **Pinning:** every pin is the newest release at least 14 days old, verified 2026-10-24 (R1).
 

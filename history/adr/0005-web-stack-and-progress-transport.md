@@ -32,7 +32,7 @@
   - FastAPI 0.143.0 (Starlette 1.7.0) on uvicorn 0.54.0, with python-multipart for uploads.
   - Pins are the newest release at least 14 days old (research R1).
 - **Frontend:**
-  - Next.js 16.4.0, React 19.3.0 and TypeScript 6.0.3 in strict mode. TypeScript 7 isn't used
+  - Next.js 16.4.1, React 19.3.0 and TypeScript 6.0.3 in strict mode. 16.4.1 rather than the planned 16.4.0, which has critical advisories (research R1). TypeScript 7 isn't used
     because Next's in-process type checker can't load it.
   - Tailwind CSS 4.3.3 with a CSS-first `@theme` built from `docs/design/`.
   - shadcn/ui components and motion 14.1.0.

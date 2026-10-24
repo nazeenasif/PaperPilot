@@ -48,7 +48,7 @@ unplanned requests, FAIL if all requests exceed 2 × the plan.
 - [X] T001 Add `fastapi==0.143.0`, `starlette==1.7.0`, `uvicorn==0.54.0`, `python-multipart==0.0.32` and `httpx==0.28.1` to `requirements.txt`. Install with `uv pip install -r requirements.txt`. Verify that `python -c "import fastapi.sse, multipart"` succeeds and `pytest` still passes. Commit `requirements.txt`.
 - [X] T002 Scaffold `frontend/` by hand (no `create-next-app`, to keep the pins exact).
   - **Dependencies** in `frontend/package.json`:
-    - `next 16.4.0`, `react 19.3.0`, `react-dom 19.3.0`
+    - `next 16.4.1` (16.4.0 has critical advisories; research R1), `react 19.3.0`, `react-dom 19.3.0`
     - `motion 14.1.0`, `react-pdf 11.0.0`
     - `clsx`, `tailwind-merge` and `lucide-react`, each at the newest version at least 14 days old
   - **devDependencies**:

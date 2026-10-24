@@ -432,7 +432,7 @@ the fallback cases show the passage text.
 - [X] T055 [US2] Implement `frontend/components/source/SourceViewer.tsx`, `frontend/components/source/HighlightOverlay.tsx` and `frontend/lib/geometry.ts` so T054 passes.
   - react-pdf uses `/pdf.worker.min.mjs`, with the text and annotation layers off.
   - The viewer is a side panel on desktop and a full-screen sheet below 768 px.
-- [ ] T056 [US2] Add test "US2 viewer" to `frontend/e2e/smoke.spec.ts`, with a small generated PDF fixture in `frontend/e2e/fixtures/`. Clicking a chip must render the page with a visible highlight box, and the fallback fixture must show the passage text.
+- [X] T056 [US2] Add test "US2 viewer" to `frontend/e2e/smoke.spec.ts`, with a small generated PDF fixture in `frontend/e2e/fixtures/`. Clicking a chip must render the page with a visible highlight box, and the fallback fixture must show the passage text.
   - **Story check**: `npm --prefix frontend run test:e2e -- -g "US2"`; then, with both servers running, `python scripts/checkpoint_6_web.py ask viewer`.
 
 ### US3 (P2): add papers and watch them become searchable

@@ -3,7 +3,8 @@
 
 import type { Page, Route } from "@playwright/test";
 
-import { ASK_EVENTS, STATUS } from "./fixtures";
+import { ASK_EVENTS, PDF_LINES, STATUS, VIEW_HIGHLIGHTED, VIEW_UNMARKED } from "./fixtures";
+import { makePdf } from "./pdf";
 
 export const API = "http://127.0.0.1:8000";
 
@@ -56,6 +57,12 @@ export async function fakeBackend(page: Page, options: FakeOptions = {}): Promis
         headers: { ...CORS, "content-type": "text/event-stream" },
         body: eventStream(options.askEvents ?? ASK_EVENTS),
       });
+    } else if (path === `/api/passages/${VIEW_HIGHLIGHTED.passage_id}`) {
+      await route.fulfill({ status: 200, headers: CORS, json: VIEW_HIGHLIGHTED });
+    } else if (path === `/api/passages/${VIEW_UNMARKED.passage_id}`) {
+      await route.fulfill({ status: 200, headers: CORS, json: VIEW_UNMARKED });
+    } else if (path === `/api/papers/${VIEW_HIGHLIGHTED.paper_id}/pdf`) {
+      await route.fulfill({ status: 200, headers: { ...CORS, "content-type": "application/pdf" }, body: makePdf(PDF_LINES) });
     } else {
       await route.fulfill({ status: 404, headers: CORS, json: { kind: "not_found" } });
     }

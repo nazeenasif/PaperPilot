@@ -86,6 +86,13 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
   paper can outrank the one passage that holds the answer. A 5-query probe found the answer
   in the top 6 for 3 of 5 queries (`eval/probe_notes.md`). Improving this belongs to the
   evaluation feature.
+- **Title-and-author passages can take a retrieval slot without adding content.** A paper's
+  "Front Matter" passage may hold only its title, authors, affiliations and arXiv line. It
+  matches questions that name the paper's topic, so it can fill one of the top 6 slots while
+  giving the model nothing to answer from. Example: for "What is LoRA?" it ranked 5th (0.578),
+  ahead of passages that explain the method. Whether to drop such passages, or merge them into
+  the next passage, is a question for the evaluation feature, measured against the probe
+  baseline.
 - **The first search after startup is slower.** Opening the library and loading the embedding
   model are one-time costs (about 1–2 s and 2–8 s); later searches take well under a second.
 

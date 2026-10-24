@@ -85,7 +85,7 @@ evaluation feature's faithfulness test cases (claim-level support, not citation 
   grounded, but attributed to the wrong passage; [1, 2] would have been faithful.
 - **Validation result**: citations valid [1, 2, 5, 6], invalid [] → passed, no warning.
 
-### F2. Merged claims stretched across sources (threshold-gate rerun, 2026-10-24)
+### F2. Overgeneralisation when combining passages (threshold-gate rerun, 2026-10-24)
 
 - **Question**: "What is LoRA?" (threshold 0.58, top-score gate, all 6 passages sent).
 - **Sentence**: "LoRA matches or exceeds full fine-tuning performance on NLU and NLG tasks with

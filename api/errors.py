@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from paperpilot.errors import DailyLimitError, EmptyQueryError, LLMError, RateLimitedError, UnknownPassageError
+from paperpilot.llm import MAX_ATTEMPTS
 
 logger = logging.getLogger("api")
 
@@ -77,7 +78,7 @@ def error_for(error: Exception) -> ApiError:
         return ApiError("rate_limited", until=iso_utc(error.until), daily=error.daily)
     if isinstance(error, LLMError):
         if error.reason in _BUSY_REASONS:
-            return ApiError("model_busy")
+            return ApiError("model_busy", attempts=MAX_ATTEMPTS)  # every attempt was used
         return ApiError("model_unavailable", reason=error.reason)
     if isinstance(error, EmptyQueryError):
         return ApiError("empty_question")

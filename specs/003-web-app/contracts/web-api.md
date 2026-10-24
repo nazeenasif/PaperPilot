@@ -38,7 +38,7 @@ Every non-2xx response and every SSE `error` event has the body `{"kind": <kind>
 | `daily_limit` | 429 | `used`, `limit`, `resets_at` | daily free requests used up (no model request made) |
 | `rate_limited` | 429 | `until`, `daily` | provider asked for a wait > 60 s; `daily: true` → daily-limit screen |
 | `model_busy` | 503 | `attempts` | all retries failed (429/5xx/timeouts) |
-| `model_unavailable` | 502 | `reason` (`not_listed`, `unknown_model`, `bad_key`, `out_of_credits`, `cut_off`, `empty`) | configuration or model problem |
+| `model_unavailable` | 502 | `reason` (`not_listed`, `unknown_model`, `bad_key`, `out_of_credits`, `cut_off`, `empty`, `bad_request`) | configuration or model problem (`bad_request`: the provider refused the request as malformed, HTTP 400/422) |
 | `upload_invalid` | 400 | `reason` (`not_pdf`, `too_large`, `no_text`, `unreadable`, `password`) | rejected upload (also used inside jobs) |
 | `internal` | 500 | — | unexpected; details only in server logs |
 

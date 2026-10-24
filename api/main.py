@@ -16,7 +16,7 @@ from api.errors import error_response, install_error_handlers
 from api.jobs import JobRegistry
 from api.routes import router
 from api.security import HEADER_NAME, OriginGuard
-from api.state import AppState
+from api.state import AppState, UsageCache
 from paperpilot import library, llm, store
 from paperpilot.config import Settings, load_settings
 
@@ -94,6 +94,7 @@ def create_app(loader: Callable[[], None] | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.paperpilot = app_state
     app.state.jobs = jobs
+    app.state.usage = UsageCache()
 
     @app.middleware("http")
     async def require_ready(request: Request, call_next):

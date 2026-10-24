@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from api.errors import ApiError, error_for
-from api.schemas import AskIn, StatusOut, answer_body
+from api.schemas import AskIn, SearchIn, StatusOut, answer_body, usage_body
 from api.streams import run_streaming
 from paperpilot import library, llm, service, store
 from paperpilot.config import Settings
@@ -30,16 +30,37 @@ def get_status(request: Request) -> StatusOut:
     )
 
 
+@router.get("/usage")
+def get_usage(request: Request) -> dict:
+    """Today's model requests; the provider is asked at most every 30 s (FR-024)."""
+    return usage_body(request.app.state.usage.get())
+
+
+def check_scope(paper_ids: list[str] | None) -> None:
+    """An explicit selection must name at least one paper, and only known ones."""
+    if paper_ids is not None:
+        if not paper_ids:
+            raise ApiError("no_papers_selected")
+        for paper_id in paper_ids:
+            if not store.has_paper(paper_id):
+                raise ApiError("unknown_paper", paper_id=paper_id)
+
+
+@router.post("/search")
+def search_passages(body: SearchIn) -> dict:
+    """Ranked passages without the model ("Browse passages instead", FR-026)."""
+    if not body.query.strip():
+        raise ApiError("empty_question")
+    check_scope(body.paper_ids)
+    results = library.search(body.query, k=body.k, paper_ids=body.paper_ids)
+    return {"results": [asdict(result) for result in results]}
+
+
 def start_question(body: AskIn, request: Request) -> AskIn:
     """Validate before the stream starts (plain JSON errors) and take the one-question lock."""
     if not body.question.strip():
         raise ApiError("empty_question")
-    if body.paper_ids is not None:
-        if not body.paper_ids:
-            raise ApiError("no_papers_selected")
-        for paper_id in body.paper_ids:
-            if not store.has_paper(paper_id):
-                raise ApiError("unknown_paper", paper_id=paper_id)
+    check_scope(body.paper_ids)
     if not request.app.state.paperpilot.question_lock.acquire(blocking=False):
         raise ApiError("busy_question")
     return body
@@ -49,12 +70,13 @@ def start_question(body: AskIn, request: Request) -> AskIn:
 async def ask_question(request: Request, body: AskIn = Depends(start_question)) -> AsyncIterable[ServerSentEvent]:
     """Stream progress and retry waits, then the checked answer (or an error) (FR-006, FR-011)."""
     lock = request.app.state.paperpilot.question_lock
+    usage = request.app.state.usage
     history = [Turn(turn.role, turn.text) for turn in body.history]
 
     def work(emit):
         before = llm.request_counts()
         answer = service.ask(body.question, paper_ids=body.paper_ids, k=body.k, history=history, on_event=emit)
-        return answer, llm.request_counts() - before
+        return answer, llm.request_counts() - before, usage_body(usage.get())
 
     async for item in run_streaming(work, on_finished=lock.release):
         if item[0] == "event":
@@ -64,8 +86,8 @@ async def ask_question(request: Request, body: AskIn = Depends(start_question)) 
             else:
                 yield ServerSentEvent(event="progress", data={"step": kind, **detail})
         elif item[0] == "result":
-            answer, requests = item[1]
-            yield ServerSentEvent(event="answer", data=answer_body(answer, requests))
+            answer, requests, today = item[1]
+            yield ServerSentEvent(event="answer", data=answer_body(answer, requests, today))
         else:
             yield ServerSentEvent(event="error", data=error_for(item[1]).body())
 

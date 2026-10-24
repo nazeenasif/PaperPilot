@@ -5,7 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from paperpilot.llm import RequestCounts
+from api.errors import iso_utc
+from paperpilot.llm import RequestCounts, Usage
 from paperpilot.service import Answer
 
 
@@ -34,6 +35,20 @@ class AskIn(BaseModel):
     history: list[TurnIn] = Field(default_factory=list, max_length=50)
 
 
+class SearchIn(BaseModel):
+    """POST /api/search body ("Browse passages instead"; no model request)."""
+
+    query: str = Field(max_length=2_000)
+    paper_ids: list[str] | None = None
+    k: int | None = Field(default=None, ge=1, le=20)
+
+
+def usage_body(usage: Usage) -> dict:
+    """GET /api/usage and the answer's `usage` field."""
+    return {"used": usage.used, "limit": usage.limit, "remaining": usage.remaining,
+            "resets_at": iso_utc(usage.resets_at), "source": usage.source}
+
+
 def answer_body(answer: Answer, requests: RequestCounts, usage: dict | None = None) -> dict:
     """The `answer` event payload: everything ask() returns plus verified and papers_read (FR-004)."""
     return {
@@ -56,5 +71,5 @@ def answer_body(answer: Answer, requests: RequestCounts, usage: dict | None = No
         "requests": {"planned": requests.planned, "retries": requests.retries},
         "timings": answer.timings,
         "tokens": answer.tokens,
-        "usage": usage,  # filled once request accounting exists (US5, ADR-0007)
+        "usage": usage,  # today's requests after this question (ADR-0007)
     }

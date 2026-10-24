@@ -143,3 +143,36 @@ def fake_embedder(monkeypatch):
     monkeypatch.setattr(store, "load_model", lambda: 0.0)
     monkeypatch.setattr(store, "embed_passages", lambda texts: [fake_vector(t) for t in texts])
     monkeypatch.setattr(store, "embed_query", fake_vector)
+
+
+TEST_API_KEY = "sk-test-key-123"
+
+
+@pytest.fixture(autouse=True)
+def no_real_llm_client(monkeypatch):
+    """Fail any test that tries to create a real LLM client (unit tests never call the API)."""
+    import openai
+
+    def blocked(*args, **kwargs):
+        raise AssertionError("real LLM client created in a unit test")
+
+    monkeypatch.setattr(openai, "OpenAI", blocked)
+    try:
+        from paperpilot import llm
+    except ImportError:  # llm.py not written yet
+        return
+    monkeypatch.setattr(llm, "_make_client", blocked)
+
+
+@pytest.fixture
+def llm_env(monkeypatch):
+    """Default LLM settings with a dummy key; a real .env cannot override them."""
+    for name, value in {
+        "LLM_PROVIDER": "openrouter",
+        "LLM_BASE_URL": "",
+        "LLM_API_KEY": TEST_API_KEY,
+        "LLM_MODEL": "test/model:free",
+        "LLM_REASONING_EFFORT": "",
+    }.items():
+        monkeypatch.setenv(name, value)
+    return TEST_API_KEY

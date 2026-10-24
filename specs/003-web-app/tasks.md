@@ -98,7 +98,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
   - `PdfMissingError` subclasses `PaperPilotError` and has `paper_id`.
   - `LLMError` accepts an optional `reason` attribute (`busy`, `not_listed`, `unknown_model`, `bad_key`, `out_of_credits`, `cut_off`, `empty`, `timeout`, `unreachable`), defaulting to `None`.
 - [X] T009 Implement `daily_request_limit` and `frontend_origin` in `paperpilot/config.py`, and the new errors and `LLMError.reason` in `paperpilot/errors.py`. T007 and T008 must pass, along with the full `pytest`.
-- [ ] T010 Create `tests/api/__init__.py` and `tests/api/conftest.py` with these fixtures:
+- [X] T010 Create `tests/api/__init__.py` and `tests/api/conftest.py` with these fixtures:
   - `make_app`: builds the app through `api.main.create_app()` with a controllable loader event.
   - `client`: a `TestClient` used as a context manager so the lifespan runs. It waits until `/api/status` is `ready` and combines `library_env`, `fake_embedder`, `llm_env` and `fake_answers` with `RELEVANCE_THRESHOLD=0.0`.
   - `client_with_paper`: one generated paper added through the engine.

@@ -302,7 +302,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - **Validation before the stream:** `empty_question` (422), `unknown_paper` (404) and `not_ready` (503) are returned as plain JSON.
   - **One at a time:** a second ask while one is running gets `409 busy_question`.
   - **Retry waits:** a fake `generate` that calls `on_retry` produces a `retry_wait` event.
-- [ ] T035 [US1] Implement `POST /api/ask` in `api/routes.py`. The question runs in the threadpool, and its events are bridged through `loop.call_soon_threadsafe` onto an `asyncio.Queue` in the new `api/streams.py`.
+- [X] T035 [US1] Implement `POST /api/ask` in `api/routes.py`. The question runs in the threadpool, and its events are bridged through `loop.call_soon_threadsafe` onto an `asyncio.Queue` in the new `api/streams.py`.
   - The answer models go in `api/schemas.py`; `verified`, `papers_read` and the `requests` delta come from `llm.request_counts()`.
   - The single-question guard comes from `api/state.py`.
   - T034 must pass.

@@ -5,11 +5,14 @@ never leave the server; the frontend owns all wording.
 """
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from paperpilot.errors import DailyLimitError, EmptyQueryError, LLMError, RateLimitedError, UnknownPassageError
 
 logger = logging.getLogger("api")
 
@@ -53,6 +56,35 @@ class ApiError(Exception):
     def body(self) -> dict:
         """The JSON body sent to the browser."""
         return {"kind": self.kind, **self.fields}
+
+
+# LLMError reasons that mean "the model is there but busy or slow" versus "it can't work as set up".
+_BUSY_REASONS = {None, "busy", "timeout", "unreachable"}
+
+
+def iso_utc(moment: datetime) -> str:
+    """An aware datetime as ISO 8601 in UTC with a Z suffix."""
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def error_for(error: Exception) -> ApiError:
+    """Map an engine exception to an error kind with safe fields; unexpected ones are logged."""
+    if isinstance(error, ApiError):
+        return error
+    if isinstance(error, DailyLimitError):
+        return ApiError("daily_limit", used=error.used, limit=error.limit, resets_at=iso_utc(error.resets_at))
+    if isinstance(error, RateLimitedError):
+        return ApiError("rate_limited", until=iso_utc(error.until), daily=error.daily)
+    if isinstance(error, LLMError):
+        if error.reason in _BUSY_REASONS:
+            return ApiError("model_busy")
+        return ApiError("model_unavailable", reason=error.reason)
+    if isinstance(error, EmptyQueryError):
+        return ApiError("empty_question")
+    if isinstance(error, UnknownPassageError):
+        return ApiError("unknown_passage")
+    logger.error("Unexpected error", exc_info=error)
+    return ApiError("internal")
 
 
 def error_response(kind: str, **fields: object) -> JSONResponse:

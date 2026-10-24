@@ -8,12 +8,13 @@ Usage: python scripts/checkpoint_4_answer.py
 
 import logging
 import sys
+import time
 from pathlib import Path
 
 # Allow `python scripts/checkpoint_4_answer.py` from the repo root.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from paperpilot import llm, prompts  # noqa: E402
+from paperpilot import library, llm, prompts, store  # noqa: E402
 from paperpilot.config import load_settings  # noqa: E402
 from paperpilot.errors import PaperPilotError  # noqa: E402
 from paperpilot.service import Answer, ask  # noqa: E402
@@ -58,6 +59,15 @@ def main() -> int:
           f"Threshold: {settings.relevance_threshold}")
     results: list[tuple[bool, str]] = []
     llm.reset_request_count()
+
+    # One-time startup costs, reported separately so answer timings show per-question cost:
+    # importing and loading the embedding model, then opening the library and its first search.
+    start = time.perf_counter()
+    store.load_model()
+    print(f"Cold: embedding model import + load {time.perf_counter() - start:.1f} s")
+    start = time.perf_counter()
+    library.search(US1_QUESTION)
+    print(f"Cold: library open + first search {time.perf_counter() - start:.2f} s (excluded from answer timings)")
 
     try:
         check(results, llm.model_is_listed(), f"model {settings.llm_model} is listed by the provider")

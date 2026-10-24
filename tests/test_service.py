@@ -103,18 +103,32 @@ def test_all_passages_below_threshold_gives_not_found_without_a_call(answer_env,
     assert fake_answers.calls == []
 
 
-def test_threshold_keeps_only_passages_at_or_above_it(answer_env, fake_answers, monkeypatch):
+def test_threshold_gates_on_the_top_score_and_sends_all_k_passages(answer_env, fake_answers, monkeypatch):
+    # The threshold was calibrated on top-1 scores, so it gates the question, not each passage.
     from paperpilot.library import search
 
-    scores = sorted(r.score for r in search(QUESTION))
-    threshold = scores[len(scores) // 2]
-    monkeypatch.setenv("RELEVANCE_THRESHOLD", str(threshold))
+    results = search(QUESTION)
+    top = max(r.score for r in results)
+    assert any(r.score < top for r in results), "the test needs passages below the top score"
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", str(top))
     fake_answers.add("Evaluated on a benchmark [1].")
     answer = ask(QUESTION)
-    assert answer.passages
-    assert all(p.score >= threshold for p in answer.passages)
-    assert len(answer.passages) == sum(1 for s in scores if s >= threshold) < len(scores)
-    assert [p.number for p in answer.passages] == list(range(1, len(answer.passages) + 1))
+    assert answer.fallback_reason is None
+    assert [p.passage_id for p in answer.passages] == [r.passage_id for r in results]
+    assert [p.number for p in answer.passages] == list(range(1, len(results) + 1))
+    _, prompt = fake_answers.calls[0]
+    assert all(f'<passage id="{n}"' in prompt for n in range(1, len(results) + 1))
+
+
+def test_top_score_just_below_threshold_gives_not_found_without_a_call(answer_env, fake_answers, monkeypatch):
+    from paperpilot.library import search
+
+    top = max(r.score for r in search(QUESTION))
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", str(min(1.0, top + 0.001)))
+    answer = ask(QUESTION)
+    assert answer.fallback_reason == "below_threshold"
+    assert answer.passages == []
+    assert fake_answers.calls == []
 
 
 def test_model_not_found_reply_becomes_the_exact_sentence(answer_env, fake_answers):

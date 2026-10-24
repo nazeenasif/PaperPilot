@@ -330,3 +330,46 @@ def test_persistent_timeouts_give_readable_error_naming_the_limit(fake):
     assert "LLM_TIMEOUT_SECONDS" in message
     assert "\n" not in message
     assert len(client.calls) == 4
+
+
+# --- on_retry: retry waits reported to the caller (web app countdown, FR-023) ---
+
+
+def test_on_retry_is_called_before_each_retry_wait(fake):
+    client = fake(f.rate_limited(retry_after="3"), f.ok("Answer [1]."))
+    events: list = client.sleeps  # the fake sleep appends to the same list, so order is visible
+    llm.generate("s", "p", on_retry=events.append)
+    notice, slept = events
+    assert notice == llm.RetryNotice(attempt=1, max_attempts=4, wait_seconds=3.0, reason="rate_limited")
+    assert slept == 3.0
+
+
+@pytest.mark.parametrize(
+    "error, reason",
+    [
+        (f.timeout(), "timeout"),
+        (f.status_error(502, "bad gateway"), "server_error"),
+        (f.error_body(503, "upstream overloaded"), "provider_error"),
+    ],
+)
+def test_on_retry_reports_the_reason(fake, error, reason):
+    fake(error, f.ok("Answer [1]."))
+    notices: list = []
+    llm.generate("s", "p", on_retry=notices.append)
+    assert [n.reason for n in notices] == [reason]
+    assert notices[0].attempt == 1 and notices[0].max_attempts == llm.MAX_ATTEMPTS
+
+
+def test_on_retry_is_not_called_on_first_try_success(fake):
+    fake(f.ok("Answer [1]."))
+    notices: list = []
+    llm.generate("s", "p", on_retry=notices.append)
+    assert notices == []
+
+
+def test_on_retry_is_not_called_for_the_final_failed_attempt(fake):
+    fake(*[f.rate_limited(retry_after="1")] * llm.MAX_ATTEMPTS)
+    notices: list = []
+    with pytest.raises(LLMError):
+        llm.generate("s", "p", on_retry=notices.append)
+    assert [n.attempt for n in notices] == [1, 2, 3]

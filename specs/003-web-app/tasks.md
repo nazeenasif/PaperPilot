@@ -204,7 +204,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - With no passages, the same.
   - `on_event=None` behaves exactly as before.
   - Events never contain answer text.
-- [ ] T020 [P] [US1] Add failing tests to `tests/test_llm.py`:
+- [X] T020 [P] [US1] Add failing tests to `tests/test_llm.py`:
   - With `on_retry`, a 429 followed by success calls it once with `RetryNotice(attempt=1, max_attempts=4, wait_seconds=3.0, reason="rate_limited")` before the sleep.
   - Timeout, 5xx and error-in-200 cases report the reasons `timeout`, `server_error` and `provider_error`.
   - First-try success never calls it.

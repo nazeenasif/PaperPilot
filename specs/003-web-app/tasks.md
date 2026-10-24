@@ -70,7 +70,7 @@ unplanned requests, FAIL if all requests exceed 2 × the plan.
   - In `frontend/app/layout.tsx`, load Sora, Inter and JetBrains Mono with `next/font/google` and set `<html lang="en">` with `bg-ink text-text`.
   - Add a placeholder `frontend/app/page.tsx`. `npm run build` must succeed.
   - Commit the three files.
-- [ ] T004 Initialise shadcn/ui with the pinned CLI (`npx shadcn@4.21.4 init`, then `add button checkbox dialog sheet tooltip progress`) and restyle the generated components to the T003 tokens (dark only).
+- [X] T004 Initialise shadcn/ui with the pinned CLI (`npx shadcn@4.21.4 init`, then `add button checkbox dialog sheet tooltip progress`) and restyle the generated components to the T003 tokens (dark only).
   - Files: `frontend/components.json`, `frontend/lib/utils.ts`, `frontend/components/ui/button.tsx`, `checkbox.tsx`, `dialog.tsx`, `sheet.tsx`, `tooltip.tsx`, `progress.tsx`.
   - Pin any packages the CLI adds to exact versions at least 14 days old.
   - Commit.

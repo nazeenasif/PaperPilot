@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Sora } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
+
 import "./globals.css";
 
 // Downloaded at build time and served by Next itself: no runtime requests to Google.
@@ -17,7 +19,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sora.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="min-h-screen bg-ink font-body text-text antialiased">{children}</body>
+      <body className="min-h-screen bg-background font-body text-foreground antialiased">
+        <TooltipProvider>{children}</TooltipProvider>
+      </body>
     </html>
   );
 }

@@ -38,6 +38,22 @@ documentation and one call to its key endpoint (not a model request).
   | tailwind-merge | — | **3.7.0** (09-12) | shadcn/ui class helper (`cn`) |
   | lucide-react | — | **1.55.0** (10-10) | icon set used by shadcn/ui components |
   | @testing-library/jest-dom | — | **7.0.1** (08-09) | DOM matchers for Vitest |
+  | radix-ui | 1.8.1 (10-12) | **1.7.0** (10-05) | accessible primitives behind the shadcn/ui components (dialog, sheet, checkbox, tooltip, progress, slot) |
+  | class-variance-authority | 0.7.1 | **0.7.1** | shadcn/ui button variants |
+  | tw-animate-css | 1.4.0 | **1.4.0** | enter/exit animations used by the shadcn/ui dialog, sheet and tooltip |
+
+  `shadcn init` (CLI 4.21.4, run from a clean npm cache after an `ECOMPROMISED` cache-lock
+  error) also added two runtime dependencies, which were declined:
+  - `cn` (0.x, shadcn's merged clsx+tailwind-merge): the classic two-line `cn` helper over the
+    already pinned `clsx` and `tailwind-merge` does the same.
+  - `shadcn` itself, only to import `shadcn/tailwind.css`: the CLI package pulls in Express, the
+    MCP SDK and more. The five `data-*` custom variants the components need were copied into
+    `globals.css` (MIT).
+
+  The CLI also replaced the theme's fonts with Geist and defined a light `:root` with a `--muted`
+  surface colour that clashed with the muted-text token. Both were reverted: the shadcn semantic
+  variables are mapped onto the PaperPilot palette (dark only), and muted text is
+  `muted-foreground`.
   | **Python, added at implementation** | | | |
   | httpx | 0.28.1 | **0.28.1** | already installed; used by FastAPI's `TestClient` and `llm.refresh_usage()` |
 

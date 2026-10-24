@@ -1,24 +1,28 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 1.1.0 (MINOR: Principle II module list materially expanded)
+- Version change: 1.1.0 → 1.2.0 (MINOR: Principle III broadened and made more specific;
+  backward compatible — Gemini and Groq remain usable through their OpenAI-compatible
+  endpoints, and no existing code depends on a vendor SDK)
 - Modified principles:
-  - II. Modular Package with a Single LLM Boundary: added `errors` (shared exception
-    hierarchy) and `library` (paper-library operations); `service` now explicitly calls
-    `library`. LLM boundary unchanged.
+  - III. Swappable Free-Tier LLM Provider → III. OpenAI-Compatible LLM, Free Tier by Default:
+    the provider list "Gemini or Groq" is replaced by "any model reached through an
+    OpenAI-compatible API", selected by `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL` with the key
+    in `LLM_API_KEY`; free-tier models are the default and paid models need an explicit
+    configuration choice; the single-boundary rule (`llm.py` only) is restated.
+- Modified sections: Technology Stack and Constraints (LLM, Configuration and Excluded lines
+  aligned with Principle III).
 - Added sections: none
 - Removed sections: none
 - Templates requiring updates:
-  - ✅ .specify/templates/plan-template.md (no module names referenced; no change)
+  - ✅ .specify/templates/plan-template.md (no provider names referenced; no change)
   - ✅ .specify/templates/spec-template.md (no change)
-  - ✅ .specify/templates/tasks-template.md (no module names referenced; no change)
-  - ✅ .claude/commands/*.md (no module names referenced; no change)
-  - ✅ specs/001-pdf-ingest-search/plan.md (Constitution Check and Complexity Tracking
-       updated: `library`/`errors` no longer deviations)
-- Follow-up TODOs (carried from 1.0.0):
+  - ✅ .specify/templates/tasks-template.md (no change)
+  - ✅ .claude/commands/*.md (no provider names referenced; no change)
+  - ✅ specs/002-grounded-qa-citations/plan.md (Principle III row now passes; Complexity
+       Tracking row for the provider removed)
+  - ✅ history/adr/0003-llm-boundary-and-retry-policy.md (amendment noted)
+- Follow-up TODOs:
   - docs/paperpilot-guide.pdf is referenced but not present locally; keep it untracked.
-  - .gitignore does not exist yet; created by Feature 1 (see Principle VI).
-  - The exact "not found" fallback string is to be taken from the guide and defined once
-    in prompts.py.
 -->
 
 # PaperPilot Constitution
@@ -49,15 +53,19 @@ Rationale: plain code keeps every RAG step visible, debuggable, and explainable.
 Rationale: a single boundary makes the provider swappable and the rest of the code testable
 without network access.
 
-### III. Swappable Free-Tier LLM Provider
+### III. OpenAI-Compatible LLM, Free Tier by Default
 
-- The LLM MUST be a free-tier provider (Gemini or Groq).
-- Provider and model MUST be selected via the `LLM_PROVIDER` and `LLM_MODEL` environment
-  variables, read through `config`.
-- Switching provider or model MUST require no code changes outside `llm.py` (and none at all
-  when the provider is already supported).
+- The LLM MUST be a model reached through an OpenAI-compatible API.
+- Provider, endpoint and model MUST be selected via the `LLM_PROVIDER`, `LLM_BASE_URL` and
+  `LLM_MODEL` environment variables, with the API key in `LLM_API_KEY`, all read through
+  `config`.
+- Free-tier models MUST be the default; a paid model MAY be used only as an explicit
+  configuration choice, never as a code default.
+- Switching provider or model MUST require settings changes only, with no code changes.
+- Only `llm.py` MAY talk to the LLM (Principle II).
 
-Rationale: free tiers change; the project must survive a provider swap with a config edit.
+Rationale: free tiers and free models change often; one standard API lets the project move
+between providers with a config edit and keeps costs at zero unless someone opts in.
 
 ### IV. Local Embeddings, Persistent Vector Store
 
@@ -113,13 +121,15 @@ Rationale: the project is a learning-friendly, explainable codebase; small steps
 ## Technology Stack and Constraints
 
 - Language: Python 3.12.
-- LLM: Gemini or Groq free tier, accessed only from `llm.py`.
+- LLM: any model behind an OpenAI-compatible API (default: a free-tier model), accessed only
+  from `llm.py`.
 - Embeddings: `BAAI/bge-small-en-v1.5`, run locally.
 - Vector store: ChromaDB, persistent mode.
 - Testing: pytest for unit tests; a project eval harness for answer quality.
-- Configuration: environment variables via `.env` (`LLM_PROVIDER`, `LLM_MODEL`, provider
-  API key).
-- Excluded: LangChain and comparable RAG frameworks; hosted embedding APIs; paid LLM tiers.
+- Configuration: environment variables via `.env` (`LLM_PROVIDER`, `LLM_BASE_URL`,
+  `LLM_MODEL`, `LLM_API_KEY`).
+- Excluded: LangChain and comparable RAG frameworks; hosted embedding APIs; paid LLM models as
+  a default (allowed only as an explicit configuration choice).
 
 ## Development Workflow and Quality Gates
 
@@ -143,4 +153,4 @@ Rationale: the project is a learning-friendly, explainable codebase; small steps
 - Every plan and code review MUST check compliance with these principles.
 - Runtime agent guidance lives in `CLAUDE.md`.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-23 | **Last Amended**: 2026-10-23
+**Version**: 1.2.0 | **Ratified**: 2026-10-23 | **Last Amended**: 2026-10-24

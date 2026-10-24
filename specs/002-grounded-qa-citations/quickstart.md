@@ -5,19 +5,23 @@ Windows, PowerShell, repo root, venv active, Feature 1 library populated
 
 ## 1. Configure the model
 
-1. Create a free API key in Google AI Studio.
+1. Create an API key at https://openrouter.ai/keys (free models need no credits).
 2. In `.env` (never commit it):
 
 ```text
-LLM_PROVIDER=gemini
-LLM_MODEL=<a free-tier Flash model name exactly as shown in AI Studio>
-GEMINI_API_KEY=<your key>
+LLM_PROVIDER=openrouter
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=<your key>
+LLM_MODEL=google/gemma-4-31b-it:free
 # optional
 RELEVANCE_THRESHOLD=0.60
-LLM_THINKING_LEVEL=
+LLM_REASONING_EFFORT=
 ```
 
-3. `python scripts/checkpoint_0_settings.py` — shows `GEMINI_API_KEY = set (hidden)`.
+3. `python scripts/checkpoint_0_settings.py` — shows `LLM_API_KEY = set (hidden)`.
+
+Any other OpenAI-compatible provider works by changing `LLM_PROVIDER`, `LLM_BASE_URL`,
+`LLM_API_KEY` and `LLM_MODEL`.
 
 ## 2. Calibrate the threshold (no LLM calls)
 
@@ -32,7 +36,10 @@ python scripts/checkpoint_4_answer.py        # cited answer, not-found, filter, 
 python scripts/checkpoint_5_conversation.py  # follow-up rewrite, probe questions -> eval/probe_answers.md
 ```
 
-Free-tier rate limits may add waits of up to a minute between calls; that is expected.
+Free models allow 20 requests/minute and 50 requests/day (1,000/day after $10 of lifetime
+credits). Waits of up to a minute between calls are expected; one full checkpoint run fits
+in the daily limit, repeated runs and evaluation runs need the higher limit. If the output is
+cut off by reasoning, set `LLM_REASONING_EFFORT=low`.
 
 ## 4. Unit tests (offline, no key needed)
 

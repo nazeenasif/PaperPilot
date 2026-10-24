@@ -18,8 +18,8 @@ ask(question: str, paper_ids: list[str] | None = None, k: int | None = None,
 |---|---|
 | `EmptyQueryError` | question empty or whitespace |
 | `UnknownPaperError` | a filter ID is not in the library (from Feature 1 search) |
-| `SettingsError` | `LLM_MODEL`/`GEMINI_API_KEY` missing, unknown `LLM_PROVIDER` (message names the setting, never a value) — raised only when the model is actually needed |
-| `LLMError` | provider still failing after retries, non-retryable provider error, or truncated/empty output (one readable line, key scrubbed) |
+| `SettingsError` | `LLM_API_KEY` missing, `LLM_BASE_URL` missing for a provider label without a default (message names the setting, never a value) — raised only when the model is actually needed |
+| `LLMError` | provider still failing after retries, non-retryable provider error (bad key, unknown model, out of credits), or cut-off/empty output (`finish_reason == "length"`) — one readable line, key scrubbed |
 
 ## `paperpilot.prompts` (pure; unit-tested offline)
 
@@ -34,6 +34,9 @@ ask(question: str, paper_ids: list[str] | None = None, k: int | None = None,
 
 ## `paperpilot.llm` (the only module that talks to an LLM)
 
-- `generate(system: str, prompt: str) -> LLMReply` — provider and model from settings;
-  retries per research R3; raises `SettingsError` or `LLMError`.
-- `PROVIDERS: dict[str, Callable]` — registry; `"gemini"` only in this feature.
+- `generate(system: str, prompt: str) -> LLMReply` — one OpenAI-compatible chat completion
+  (system + user message) using `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; retries per
+  research R3; raises `SettingsError` or `LLMError`.
+- `DEFAULT_BASE_URLS: dict[str, str]` — `{"openrouter": "https://openrouter.ai/api/v1"}`.
+- `retry_wait(error, attempt) -> float | None` — pure: seconds to wait from `Retry-After` /
+  `X-RateLimit-Reset` or the 2/4/8 s backoff; `None` when the error is not retryable.

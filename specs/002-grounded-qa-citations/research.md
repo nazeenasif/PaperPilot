@@ -5,66 +5,75 @@
 Each entry: Decision / Rationale / Alternatives considered. "Verified" means checked against
 the installed package or official documentation on 2026-10-24.
 
-## R1. Gemini SDK
+## R1. One OpenAI-compatible client
 
-- **Decision**: `google-genai` (2.33.0 installed), `from google import genai`,
-  `from google.genai import types, errors`. One `genai.Client(api_key=...,
-  http_options=types.HttpOptions(timeout=60_000))` created lazily in `llm.py`; calls go through
-  `client.models.generate_content(model=..., contents=..., config=types.GenerateContentConfig(
-  system_instruction=..., temperature=0.0, max_output_tokens=..., thinking_config=...))`.
-- **Verified**: `HttpOptions.timeout` is in **milliseconds**; `GenerateContentConfig` has
-  `temperature`, `max_output_tokens`, `system_instruction`, `http_options`, `thinking_config`;
-  usage fields `prompt_token_count`, `candidates_token_count`, `thoughts_token_count`,
-  `total_token_count`; errors `errors.ClientError` (4xx) and `errors.ServerError` (5xx), both
-  subclasses of `errors.APIError` with `code`, `status`, `message`, `details`.
-- **Rationale**: Google's current official SDK; small surface; no LangChain (Principle I).
-- **Alternatives**: raw REST with `httpx` (more code for auth, errors, usage parsing); the
-  deprecated `google-generativeai` package.
-- **Note**: the SDK reads `GEMINI_API_KEY`/`GOOGLE_API_KEY` from the environment by itself;
-  we pass the key explicitly from `config` so the settings file stays the single source.
+- **Decision**: the `openai` package (3.37.0 installed) with one lazily created
+  `OpenAI(api_key=..., base_url=..., timeout=60.0, max_retries=0)` in `llm.py`; calls use
+  `client.chat.completions.create(model=..., messages=[{"role": "system", ...},
+  {"role": "user", ...}], temperature=0, max_tokens=..., extra_body=...)`. The SDK's own
+  retries are off (`max_retries=0`) so the retry policy (R3) is ours and testable.
+- **Settings**: `LLM_PROVIDER` (label, default `openrouter`), `LLM_BASE_URL` (default for
+  `openrouter`: `https://openrouter.ai/api/v1`), `LLM_API_KEY`, `LLM_MODEL` (default: pinned
+  free model, R2). Any OpenAI-compatible provider (Groq, a local server, OpenAI) works by
+  changing these settings; `LLM_PROVIDER` only selects the default base URL and labels errors.
+- **Verified**: `OpenAI.__init__` accepts `api_key`, `base_url`, `timeout`, `max_retries`;
+  `chat.completions.create` accepts `temperature`, `max_tokens`, `extra_body`;
+  `choices[0].finish_reason` includes `"length"`; usage fields `prompt_tokens`,
+  `completion_tokens`, `completion_tokens_details.reasoning_tokens`; errors `APIStatusError`
+  (`status_code`, `response` with headers), `RateLimitError`, `APITimeoutError`,
+  `APIConnectionError`, `AuthenticationError`, `NotFoundError`, `BadRequestError`.
+- **Rationale**: one standard API instead of a vendor SDK; swapping providers needs no code
+  (Principle III); OpenRouter offers many free models behind one key.
+- **Alternatives**: `google-genai` (previous design; Gemini only, removed from the
+  environment); raw `httpx` (re-implements error and usage parsing).
 
-## R2. Model name and thinking tokens
+## R2. Pinned free model and reasoning tokens
 
-- **Decision**: `LLM_MODEL` has **no default**; it must name a free-tier Flash model exactly as
-  shown in Google AI Studio. Missing → clear settings error when asking a question (Feature 1
-  keeps working without it). Optional `LLM_THINKING_LEVEL` (empty = model default) is passed
-  as `ThinkingConfig(thinking_level=...)` only when set. `max_output_tokens` = 2048.
-- **Verified** (Gemini thinking docs): Flash models think by default and **`max_output_tokens`
-  includes thought tokens**; supported thinking levels differ per model generation, and the
-  docs do not confirm a way to disable thinking on every Flash model.
-- **Rationale**: a ~150-word answer needs ~250 output tokens; 2048 leaves room for thinking so
-  answers are not truncated. Not hard-coding a model or level avoids invented names and
-  per-model errors.
-- **Guard**: if the reply is empty or the finish reason is MAX_TOKENS, raise `LLMError`
-  ("the model ran out of output tokens; try LLM_THINKING_LEVEL=low") rather than returning a
-  cut-off answer.
-- **Alternatives**: default model name in code (would go stale and might not be free tier).
+- **Decision**: default `LLM_MODEL=google/gemma-4-31b-it:free` (listed by
+  `https://openrouter.ai/api/v1/models` on 2026-10-24 among 17 `:free` models;
+  instruction-tuned, 262k context). `max_tokens` = 2048. Optional `LLM_REASONING_EFFORT`
+  (empty = model default; e.g. `low`, `none`) is sent as `extra_body={"reasoning":
+  {"effort": ...}}`. Checkpoint 4 verifies that the configured model is still listed.
+- **Verified** (OpenRouter docs): all 17 current free models support reasoning; the output
+  limit "applies to reasoning and visible output combined"; when reasoning uses the whole
+  budget the response has `finish_reason: "length"` and empty content, and retrying does not
+  help — raise `max_tokens` or cap reasoning (`reasoning.effort` or `reasoning.max_tokens`).
+- **Guard**: `finish_reason == "length"` or empty content → `LLMError("the model's output was
+  cut off (N reasoning tokens used); set LLM_REASONING_EFFORT=low or try another model")`;
+  never returned as an answer (FR-014a). Not retried.
+- **Risk**: free models are added and removed; the pin is a setting, and checkpoint 4 fails
+  clearly if the model is no longer listed.
 
 ## R3. Retries and errors
 
-- **Decision**: up to 4 attempts. Retry on 429, 500, 502, 503, 504 and on network timeouts.
-  Wait: the server's `RetryInfo.retryDelay` from `details` when present (capped at 60 s),
-  otherwise 2, 4, 8 s. Do not retry other 4xx (bad key, unknown model, bad request). After the
-  last attempt raise `LLMError` with a one-line message ("Gemini rate limit: still limited
-  after 4 attempts; wait a minute and try again"). The sleep function is injectable for tests.
-- **Rationale**: free-tier limits are per minute, so 1–4 s waits alone often fail; honouring
-  the server delay is the simplest correct policy. Deviation from the spec assumption
-  ("doubling from 1 second") is deliberate and recorded here.
-- **To verify in implementation**: the exact shape of `details` on a real 429 (a fake 429 in
-  unit tests covers both "delay present" and "absent").
+- **Decision**: up to 4 attempts. Retry on 408, 429, 500, 502, 503, 504, on
+  `APITimeoutError`/`APIConnectionError`, and on a 200 body carrying an `error` object with a
+  retryable code. Wait: `Retry-After` header (seconds) if present, else
+  `X-RateLimit-Reset` (epoch milliseconds → seconds until reset) if present, capped at 60 s;
+  otherwise 2, 4, 8 s. Never retry 400, 401, 402 (out of credits; unless `Retry-After` is
+  present), 403, 404, or a `length` finish. After the last attempt raise `LLMError` with one
+  readable line, e.g. "OpenRouter rate limit: still limited after 4 attempts (free models
+  allow 20 requests/minute); try again in a minute". The sleep function is injectable.
+- **Verified** (OpenRouter docs): platform 429s carry `X-RateLimit-Limit`,
+  `X-RateLimit-Remaining`, `X-RateLimit-Reset`; `Retry-After` appears when providers gave a
+  retry hint; successful responses carry no rate-limit headers; non-streaming errors that
+  occur after headers are sent return **200 with an `error` object and no `choices`**, so the
+  body must be checked even on 200.
+- **To verify in implementation**: the unit of `X-RateLimit-Reset` on a real 429 (docs-based
+  assumption: epoch milliseconds); unit tests cover header present/absent.
 
 ## R4. Secrets
 
-- **Decision**: `GEMINI_API_KEY` is read by `config` into a `Settings` field with
-  `repr=False`; `describe()` prints `GEMINI_API_KEY = set (hidden)` / `not set`. `llm.py`
-  passes every provider error message through `_scrub()` (replaces the key with `***`) before
-  raising. Checkpoint 4 runs `git grep --untracked -F` for the key value (excluding `.env`) and
-  prints only PASS/FAIL. Logs never include the key, prompts or the full answer at INFO.
+- **Decision**: `LLM_API_KEY` is read by `config` into a `Settings` field with `repr=False`;
+  `describe()` prints `LLM_API_KEY = set (hidden)` / `not set`. `llm.py` passes every error
+  message through `_scrub()` (replaces the key with `***`) before raising and never logs
+  request headers, prompts or full answers. Checkpoint 4 runs `git grep --untracked -F` for
+  the key value (excluding `.env`) and prints only PASS/FAIL.
 - **Rationale**: FR-015, SC-007, Principle VI.
 
 ## R5. Prompt design and injection safety
 
-- **Decision**: `system_instruction` holds all rules (answer only from passages; cite every
+- **Decision**: the system message holds all rules (answer only from passages; cite every
   factual claim as [n]; never invent numbers, datasets, authors or citations; copy numbers
   exactly; at most ~150 words, ~300 if the question asks for detail; if the passages do not
   support an answer reply exactly with the not-found sentence; partial answers must say what
@@ -127,10 +136,10 @@ the installed package or official documentation on 2026-10-24.
 
 - `config` (new LLM settings) · `errors` (adds `LLMError`) · `prompts` (NOT_FOUND, system
   instruction, prompt builders, reply parsing: not-found and citations) · `llm` (the only module
-  importing `google.genai`; provider registry `{"gemini": ...}`; retries; scrubbing) ·
+  importing `openai`; default base URLs per provider label; retries; scrubbing) ·
   `service` (`ask()` orchestration: rewrite → retrieve → threshold → generate → validate) ·
   `library` (Feature 1 search, unchanged).
-- **Rationale**: adding a provider = one function in `llm.py` plus a registry entry (FR-013).
+- **Rationale**: switching to another OpenAI-compatible provider = settings only (FR-013).
 
 ## R11. Evaluation within this feature
 
@@ -138,3 +147,14 @@ the installed package or official documentation on 2026-10-24.
   `scripts/checkpoint_5_conversation.py`, which writes `eval/probe_answers.md` (question,
   standalone question, answer, citations, passages, verdict column for the reviewer). The full
   eval harness belongs to the evaluation feature.
+
+## R12. OpenRouter free-tier limits
+
+- **Verified** (OpenRouter limits docs, 2026-10-24): `:free` models allow **20 requests per
+  minute**; **50 requests per day** with fewer than $10 of lifetime credits purchased, **1,000
+  per day** after (the docs note the higher limit starts from 9 credits). The per-minute
+  limit is not shown by `GET https://openrouter.ai/api/v1/key`.
+- **Implications**: a question costs 1–2 requests. Checkpoints 4–5 (~15 questions, plus
+  calibration which needs none) fit in 50/day once; repeated runs or any evaluation harness
+  run (dozens of questions, several configurations) need the 1,000/day limit. The retry
+  policy handles the per-minute limit; the daily limit ends a run with a clear message.

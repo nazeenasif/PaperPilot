@@ -26,6 +26,9 @@ selected papers." instead of guessing."
   on-topic top score, off-topic rejection is best effort and its actual rate is recorded.
 - Q: How long is a "concise" answer? → A: At most about 150 words, unless the question
   explicitly asks for more detail (then up to about 300).
+- Q: Which language-model provider? → A: One OpenAI-compatible connection configured by base
+  URL, API key and model; the default is OpenRouter with a pinned free model (replaces the
+  earlier Gemini-only design).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -168,6 +171,10 @@ passages and confirm [9] is reported as invalid and [2] as valid.
 - The follow-up rewrite step fails: the original question is used for search, and the answer
   notes that no rewrite was applied.
 - A filter is given as an empty list: the whole library is searched (as in Feature 1).
+- The model spends its whole output allowance on internal reasoning and returns no visible
+  answer: the researcher gets a clear "output was cut off" error, not an empty answer.
+- The provider reports an error inside an otherwise successful response: treated like a
+  failed call (retried if temporary, otherwise a readable error).
 
 ## Requirements *(mandatory)*
 
@@ -228,13 +235,18 @@ passages and confirm [9] is reported as invalid and [2] as valid.
 
 **Provider, reliability and reporting**
 
-- **FR-013**: The language-model provider and model MUST be selected by settings
-  (`LLM_PROVIDER`, `LLM_MODEL`, provider API key from the local settings file); only one
-  component may communicate with the provider, so another provider can be added later
-  without changing any other component. This feature supports one provider (Gemini).
-- **FR-014**: Rate-limit and transient provider errors MUST be retried with exponentially
-  increasing waits up to a bounded number of attempts; persistent failure MUST produce a
-  short readable error message instead of a stack trace.
+- **FR-013**: The language model MUST be reached through one OpenAI-compatible connection
+  configured only by settings: `LLM_PROVIDER` (a label, default `openrouter`), `LLM_BASE_URL`
+  (default: the provider's endpoint), `LLM_API_KEY` and `LLM_MODEL` (default: a pinned free
+  model). Only one component may communicate with the provider; switching to another
+  OpenAI-compatible provider MUST need settings changes only.
+- **FR-014**: Rate-limit and transient provider errors MUST be retried up to a bounded number
+  of attempts, waiting as long as the provider's retry hint says (retry-after or rate-limit
+  reset) when it gives one, and with exponentially increasing waits otherwise; persistent
+  failure MUST produce a short readable error message instead of a stack trace.
+- **FR-014a**: When the model's output is cut off because it reached the output limit
+  (including limits used up by the model's internal reasoning), the system MUST report a clear
+  error and MUST NOT return the cut-off text as an answer.
 - **FR-015**: Missing or invalid provider settings MUST produce a clear message naming the
   setting; API key values MUST never appear in any output, log, error message or committed
   file.
@@ -298,16 +310,19 @@ passages and confirm [9] is reported as invalid and [2] as valid.
 
 - Feature 1 is complete: the library holds the 5 test papers and its search (including paper
   filters and 0–1 similarity scores) is reused unchanged.
-- The researcher has a free-tier Gemini API key stored in the local, untracked settings file;
-  `.env.example` contains placeholders only.
+- The researcher has an OpenRouter API key stored in the local, untracked settings file;
+  `.env.example` contains placeholders only. Free models allow 20 requests per minute and 50
+  per day before $10 of lifetime credits are purchased (1,000 per day after); checkpoint runs
+  fit the lower limit, but evaluation runs need the higher one.
 - Conversation history is supplied by the caller with each question; this feature does not
   store conversations.
 - A "turn" is one message from either the researcher or the assistant, so 6 turns are about
   three exchanges.
 - When a question is rewritten, the standalone question is used both for search and as the
   question the answer responds to.
-- Retries default to at most 4 attempts with waits roughly doubling from 1 second; each
-  provider call has a time limit (default 60 seconds).
+- Retries default to at most 4 attempts; waits follow the provider's retry hint (capped at
+  60 seconds) or double from 2 seconds; each provider call has a time limit (default 60
+  seconds).
 - Answers are in English and returned complete (no streaming).
 - Interaction is through Python functions and checkpoint scripts, as in Feature 1.
 
@@ -316,6 +331,7 @@ passages and confirm [9] is reported as invalid and [2] as valid.
 - Summaries and paper comparison.
 - Any user interface or network API.
 - Streaming answers.
-- Language-model providers other than Gemini.
+- Providers that are not OpenAI-compatible, and provider-specific features beyond the
+  output and reasoning limits.
 - The full evaluation harness (only the five probe questions are recorded here).
 - Reranking or hybrid keyword + vector search.

@@ -34,6 +34,10 @@
 - Iteration 1: one open question (invalid or missing citations: warn vs not-found).
 - Iteration 2: resolved with option A (not-found sentence plus warning with the invalid
   numbers and original answer text), consistent with constitution Principle V. All items pass.
-- "Gemini", `LLM_PROVIDER`/`LLM_MODEL` and the 6-turn window are kept because the user
-  stated them as requirements and the constitution mandates configuration via these
-  settings; no libraries, SDKs or code structure are named.
+- `LLM_PROVIDER`/`LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`, "OpenAI-compatible", OpenRouter's
+  free limits and the 6-turn window are kept because the user stated them as requirements and
+  the constitution mandates configuration via settings; no libraries, SDKs or code structure
+  are named.
+- Iteration 3 (2026-10-24): provider changed from Gemini to an OpenAI-compatible connection
+  (default OpenRouter, pinned free model); FR-013/FR-014 rewritten, FR-014a and two edge cases
+  added. All items still pass.

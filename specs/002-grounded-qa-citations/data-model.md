@@ -9,11 +9,12 @@ memory; the library from Feature 1 is read only.
 
 | Field | Env var | Type | Default | Validation |
 |---|---|---|---|---|
-| llm_provider | `LLM_PROVIDER` | str | `gemini` | one of the providers registered in `llm` (checked when asking) |
-| llm_model | `LLM_MODEL` | str | `""` | required when asking (`SettingsError` names it) |
-| gemini_api_key | `GEMINI_API_KEY` | str | `""` | required when provider is gemini; `repr=False`; `describe()` shows `set (hidden)` / `not set` |
+| llm_provider | `LLM_PROVIDER` | str | `openrouter` | label; selects the default base URL and appears in error messages |
+| llm_base_url | `LLM_BASE_URL` | str | `""` → `https://openrouter.ai/api/v1` for `openrouter` | required (explicitly) for any other provider label |
+| llm_api_key | `LLM_API_KEY` | str | `""` | required when asking; `repr=False`; `describe()` shows `set (hidden)` / `not set` |
+| llm_model | `LLM_MODEL` | str | `google/gemma-4-31b-it:free` | non-empty |
 | relevance_threshold | `RELEVANCE_THRESHOLD` | float | `0.60` | 0 ≤ value ≤ 1 |
-| llm_thinking_level | `LLM_THINKING_LEVEL` | str | `""` | optional; passed through when set |
+| llm_reasoning_effort | `LLM_REASONING_EFFORT` | str | `""` | optional; sent as `reasoning.effort` when set |
 
 Feature 1 behaviour is unchanged when the LLM settings are absent.
 
@@ -44,9 +45,9 @@ Feature 1 behaviour is unchanged when the LLM settings are absent.
 | Field | Type | Notes |
 |---|---|---|
 | text | str | model output |
-| input_tokens | int \| None | `prompt_token_count` |
-| output_tokens | int \| None | `candidates_token_count` (+ thinking tokens reported separately) |
-| thinking_tokens | int \| None | `thoughts_token_count` |
+| input_tokens | int \| None | `usage.prompt_tokens` |
+| output_tokens | int \| None | `usage.completion_tokens` (includes reasoning tokens) |
+| reasoning_tokens | int \| None | `usage.completion_tokens_details.reasoning_tokens` |
 | attempts | int | 1 + retries |
 | seconds | float | wall time including retries |
 
@@ -65,7 +66,7 @@ Feature 1 behaviour is unchanged when the LLM settings are absent.
 | rejected_answer | str \| None | the model's original text when it was replaced by `NOT_FOUND` |
 | llm_calls | int | 0, 1 (answer) or 2 (rewrite + answer) |
 | timings | dict[str, float] | `rewrite`, `retrieve`, `generate` (seconds; 0.0 when skipped) |
-| tokens | dict[str, int] | `input`, `output`, `thinking` summed over calls; keys omitted when unknown |
+| tokens | dict[str, int] | `input`, `output`, `reasoning` summed over calls; keys omitted when unknown |
 
 ## Flow and states
 

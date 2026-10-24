@@ -110,7 +110,7 @@ standalone question names LoRA.
 - [X] T025 [P] [US4] Add failing tests to `tests/test_service.py`: no history → no rewrite call (`llm_calls == 1`); with history → the first call uses `REWRITE_INSTRUCTION`, `library.search` receives the standalone question (spy), `standalone_question` and `rewrite_applied` are set, `llm_calls == 2`, `timings["rewrite"] > 0`; rewrite raising `LLMError` → original question used, `rewrite_applied is False`, `rewrite_fallback_reason == "rewrite_failed"`, answer still produced; rewrite returning empty text → same with `rewrite_fallback_reason == "rewrite_empty"`
 - [X] T026 [US4] Implement `REWRITE_INSTRUCTION`, `build_rewrite_prompt()` and `clean_rewrite()` in `paperpilot/prompts.py` (research R9); make T024 pass
 - [X] T027 [US4] Add the rewrite step with fallback to `ask()` in `paperpilot/service.py`; make T025 pass
-- [ ] T028 [US4] Create `scripts/checkpoint_5_conversation.py` (US4 part): `reset_request_count()`, ask "What is LoRA?", then ask "What are its limitations?" with the first exchange as history; print both standalone questions, answers and citation reports; PASS if the second standalone question contains "LoRA" (case-insensitive) and its citations are valid; print `LLM requests: N (budget 12)` and FAIL if over — **Checkpoint 5, US4 part** (SC-005)
+- [X] T028 [US4] Create `scripts/checkpoint_5_conversation.py` (US4 part): `reset_request_count()`, ask "What is LoRA?", then ask "What are its limitations?" with the first exchange as history; print both standalone questions, answers and citation reports; PASS if the second standalone question contains "LoRA" (case-insensitive) and its citations are valid; print `LLM requests: N (budget 12)` and FAIL if over — **Checkpoint 5, US4 part** (SC-005)
 
 ---
 

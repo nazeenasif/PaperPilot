@@ -134,7 +134,7 @@ the installed package or official documentation on 2026-10-24.
 
 ## R8. Relevance threshold
 
-- **Decision**: setting `RELEVANCE_THRESHOLD`, default **0.59**, the calibration script's own
+- **Decision**: setting `RELEVANCE_THRESHOLD`, default **0.58**, the calibration script's own
   suggestion (lowest on-topic top score − 0.03, rounded down); applied as a **gate on the top
   passage's score**: below it → not-found (`below_threshold`) with no LLM call; otherwise all
   top-k passages are sent unfiltered. Evidence: `eval/threshold_calibration.md` (FR-003).
@@ -151,17 +151,18 @@ the installed package or official documentation on 2026-10-24.
   rule and the citation checks.
 - **Calibration result** (2026-10-24, `scripts/calibrate_threshold.py`, 0 LLM requests):
 
-  | Group | Questions | Top scores | Rejected at 0.59 |
+  | Group | Questions | Top scores | Rejected at 0.58 |
   |---|---|---|---|
-  | On-topic (5 probe + 2 vague) | 7 | 0.629–0.844 | 0/7 |
+  | On-topic (5 probe + 3 vague/short + Claude) | 9 | 0.618–0.844 | 0/9 |
   | Clear off-topic | 6 | 0.449–0.544 | 6/6 |
-  | Word-level near-miss | 3 | 0.513–0.588 | 3/3 |
-  | Topic-level near-miss | 3 | 0.639–0.698 | 0/3 (expected) |
+  | Word-level near-miss | 3 | 0.513–0.588 | 2/3 |
+  | Topic-level near-miss | 3 | 0.662–0.698 | 0/3 (expected) |
 
-  Margins at 0.59: 0.039 below the lowest on-topic question ("What are the limitations?",
-  0.629); only 0.002 above the highest word-level near-miss ("How do electrical transformers
-  step down voltage?", 0.588) — a slightly closer near-miss would pass, which the rule accepts.
-  The provisional value was 0.60.
+  Adding "What is LoRA?" (top 0.618) to the on-topic group lowered the rule's value from 0.59
+  to **0.58** (0.618 − 0.03 = 0.588, rounded down). Margin: 0.038 below the lowest on-topic
+  question. The cost is accepted under the rule: "How do electrical transformers step down
+  voltage?" (0.588) now passes the gate and is left to the model's not-found rule (1 request).
+  History: provisional 0.60 → 0.59 (8 on-topic questions, lowest 0.629) → 0.58.
 - **Preliminary measurement** (5 test papers, k=6, scores 0–1):
 
   | Set | Top-1 scores |
@@ -180,7 +181,7 @@ the installed package or official documentation on 2026-10-24.
   "How do electrical transformers step down voltage?", "What is the attention span of a
   goldfish?", "Who invented the BERT muppet character?"), because those score closest to real
   questions.
-- **Risk**: vaguer real questions may score below 0.59, and near-miss questions may score
+- **Risk**: vaguer real questions may score below 0.58, and near-miss questions may score
   above it; the model's not-found rule and citation checks are the second line of defence.
 
 ## R9. Follow-up rewriting

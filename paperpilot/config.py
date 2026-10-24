@@ -42,7 +42,7 @@ class Settings:
     llm_base_url: str = ""  # empty: the provider's default (see llm.DEFAULT_BASE_URLS)
     llm_api_key: str = field(default="", repr=False)
     llm_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
-    relevance_threshold: float = 0.59  # calibrated for bge-small on the test library (research R8)
+    relevance_threshold: float = 0.58  # calibrated for bge-small on the test library (research R8)
     llm_reasoning_effort: str = ""  # empty: the model's default
     llm_timeout_seconds: int = 60  # per model request (research R13)
 

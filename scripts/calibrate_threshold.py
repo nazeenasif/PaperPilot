@@ -35,6 +35,8 @@ GROUPS: dict[str, list[str]] = {
         # ... plus vague questions, which score lowest.
         "what dataset was used for evaluation?",
         "What are the limitations?",
+        # Short definitional question; a false not-found in checkpoint 5 (research R8).
+        "What is LoRA?",
         # Answered by Lost in the Middle p. 5 (Claude-1.3: 8K; Claude-1.3 (100K): 100K tokens).
         "What is the context window of Claude?",
     ],

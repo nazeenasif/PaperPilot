@@ -13,7 +13,7 @@ memory; the library from Feature 1 is read only.
 | llm_base_url | `LLM_BASE_URL` | str | `""` → `https://openrouter.ai/api/v1` for `openrouter` | required (explicitly) for any other provider label |
 | llm_api_key | `LLM_API_KEY` | str | `""` | required when asking; `repr=False`; `describe()` shows `set (hidden)` / `not set` |
 | llm_model | `LLM_MODEL` | str | `nvidia/nemotron-3-ultra-550b-a55b:free` | non-empty |
-| relevance_threshold | `RELEVANCE_THRESHOLD` | float | `0.59` (calibrated) | 0 ≤ value ≤ 1 |
+| relevance_threshold | `RELEVANCE_THRESHOLD` | float | `0.58` (calibrated) | 0 ≤ value ≤ 1 |
 | llm_reasoning_effort | `LLM_REASONING_EFFORT` | str | `""` | optional; sent as `reasoning.effort` when set |
 | llm_timeout_seconds | `LLM_TIMEOUT_SECONDS` | int | `60` | ≥ 1; per model request (research R13) |
 

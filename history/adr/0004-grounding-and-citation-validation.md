@@ -19,8 +19,8 @@
 ## Decision
 
 - **Relevance gate before the model**: `RELEVANCE_THRESHOLD` gates the question on its **top
-  passage's score**, which is what the calibration measures (calibrated default 0.59; on-topic
-  top scores 0.629–0.844, clear off-topic 0.449–0.544, word-level near-misses 0.513–0.588 on the
+  passage's score**, which is what the calibration measures (calibrated default 0.58; on-topic
+  top scores 0.618–0.844, clear off-topic 0.449–0.544, word-level near-misses 0.513–0.588 on the
   test papers; see `eval/threshold_calibration.md`). If the top score is below it, the answer is
   the not-found sentence (`below_threshold`) and the model is not called; otherwise all top-k
   passages are sent unfiltered. The default sits just below the lowest on-topic top score and

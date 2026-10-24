@@ -1,6 +1,7 @@
 """Local embeddings and the persistent passage store (research R9, R10, ADR-0001)."""
 
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,9 @@ COLLECTION = "passages"
 
 _model = None  # SentenceTransformer, loaded on first use
 _collections: dict[Path, chromadb.Collection] = {}  # one per library folder
+# Held by every library write (upsert, delete, replacing a paper's passages); searches don't
+# take it. Reentrant so a caller can hold it across a delete and an upsert (research R3).
+write_lock = threading.RLock()
 
 
 @dataclass(frozen=True)
@@ -109,6 +113,12 @@ def upsert_passages(
 ) -> None:
     """Write a paper's passages and embeddings in one operation."""
     start = time.perf_counter()
+    with write_lock:
+        _upsert(passages, embeddings, source_file, page_count)
+    logger.info("Stored %d passages in %.2fs", len(passages), time.perf_counter() - start)
+
+
+def _upsert(passages: list[Passage], embeddings: list[list[float]], source_file: str, page_count: int) -> None:
     get_collection().upsert(
         ids=[p.passage_id for p in passages],
         embeddings=embeddings,
@@ -128,16 +138,33 @@ def upsert_passages(
             for p in passages
         ],
     )
-    logger.info("Stored %d passages in %.2fs", len(passages), time.perf_counter() - start)
 
 
 def delete_paper_passages(paper_id: str) -> int:
     """Delete every passage of a paper; return how many were removed."""
-    collection = get_collection()
-    ids = collection.get(where={"paper_id": paper_id})["ids"]
-    if ids:
-        collection.delete(ids=ids)
+    with write_lock:
+        collection = get_collection()
+        ids = collection.get(where={"paper_id": paper_id})["ids"]
+        if ids:
+            collection.delete(ids=ids)
     return len(ids)
+
+
+def paper_passages(paper_id: str) -> list[tuple[str, str]]:
+    """Return (passage_id, text) for every stored passage of a paper, in reading order."""
+    result = get_collection().get(where={"paper_id": paper_id}, include=["documents", "metadatas"])
+    rows = sorted(
+        zip(result["ids"], result["documents"], result["metadatas"]), key=lambda row: row[2]["position"]
+    )
+    return [(passage_id, text) for passage_id, text, _ in rows]
+
+
+def get_passage(passage_id: str) -> tuple[str, dict] | None:
+    """Return (text, metadata) of one stored passage, or None if it is not stored."""
+    result = get_collection().get(ids=[passage_id], include=["documents", "metadatas"])
+    if not result["ids"]:
+        return None
+    return result["documents"][0], result["metadatas"][0]
 
 
 def query(embedding: list[float], k: int, paper_ids: list[str] | None = None) -> list[Hit]:

@@ -41,6 +41,10 @@ class UnknownPaperError(PaperPilotError):
     """A paper ID is not in the library."""
 
 
+class UnknownPassageError(PaperPilotError):
+    """A passage ID is not in the library."""
+
+
 class EmptyQueryError(PaperPilotError):
     """A search query is empty or whitespace only."""
 

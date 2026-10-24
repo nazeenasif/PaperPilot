@@ -37,6 +37,13 @@ def paper_file(tmp_path, make_pdf):
     return make_pdf(tmp_path / "paper.pdf")
 
 
+def change_chunking(monkeypatch):
+    """Smaller passages than the stored ones (the generated paragraphs are ~60 words)."""
+    monkeypatch.setenv("CHUNK_WORDS", "30")
+    monkeypatch.setenv("CHUNK_OVERLAP", "5")
+    monkeypatch.setenv("MIN_CHUNK_WORDS", "5")
+
+
 def forget_pdf(library_dir, paper_id):
     """Simulate a paper added before Feature 3: passages stored, no PDF copy or layout."""
     for path in pdf_dir(library_dir).glob(f"{paper_id}*"):
@@ -90,8 +97,7 @@ def test_attach_with_different_chunking_stores_no_layout_and_marks_a_mismatch(
 ):
     first = library.add_paper(paper_file)
     forget_pdf(library_env, first.paper_id)
-    monkeypatch.setenv("CHUNK_WORDS", "60")
-    monkeypatch.setenv("CHUNK_OVERLAP", "10")
+    change_chunking(monkeypatch)
     result = library.add_paper(paper_file)
     assert result.outcome == "pdf_attached" and result.highlights == "mismatch"
     assert (pdf_dir(library_env) / f"{first.paper_id}.pdf").exists()
@@ -130,8 +136,7 @@ def test_get_passage_without_a_pdf_has_no_layout(library_env, fake_embedder, pap
 def test_get_passage_after_a_mismatch_offers_reprocessing(library_env, fake_embedder, paper_file, monkeypatch):
     result = library.add_paper(paper_file)
     forget_pdf(library_env, result.paper_id)
-    monkeypatch.setenv("CHUNK_WORDS", "60")
-    monkeypatch.setenv("CHUNK_OVERLAP", "10")
+    change_chunking(monkeypatch)
     library.add_paper(paper_file)
     view = library.get_passage(first_passage_id(result.paper_id))
     assert view.layout is None and view.layout_reason == "mismatch" and view.can_reprocess is True
@@ -174,8 +179,7 @@ def test_reprocess_rebuilds_passages_and_layout_and_clears_the_marker(
 ):
     first = library.add_paper(paper_file)
     forget_pdf(library_env, first.paper_id)
-    monkeypatch.setenv("CHUNK_WORDS", "60")
-    monkeypatch.setenv("CHUNK_OVERLAP", "10")
+    change_chunking(monkeypatch)
     library.add_paper(paper_file)  # mismatch: passages were made with 220/40
     result = library.reprocess_paper(first.paper_id)
     assert result.outcome == "reprocessed" and result.highlights == "exact"

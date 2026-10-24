@@ -23,6 +23,8 @@ _ENV_NAMES = {
     "relevance_threshold": "RELEVANCE_THRESHOLD",
     "llm_reasoning_effort": "LLM_REASONING_EFFORT",
     "llm_timeout_seconds": "LLM_TIMEOUT_SECONDS",
+    "daily_request_limit": "DAILY_REQUEST_LIMIT",
+    "frontend_origin": "FRONTEND_ORIGIN",
 }
 # Settings whose values must never be printed.
 _SECRET_FIELDS = {"llm_api_key"}
@@ -45,6 +47,8 @@ class Settings:
     relevance_threshold: float = 0.58  # calibrated for bge-small on the test library (research R8)
     llm_reasoning_effort: str = ""  # empty: the model's default
     llm_timeout_seconds: int = 60  # per model request (research R13)
+    daily_request_limit: int = 50  # free requests per UTC day; the provider's figure wins when known
+    frontend_origin: str = "http://127.0.0.1:3000"  # the only origin the web API accepts
 
     def describe(self) -> str:
         """Return one 'ENV_NAME = value' line per setting; secrets show only whether they are set."""
@@ -128,4 +132,6 @@ def load_settings() -> Settings:
         relevance_threshold=_read_fraction("RELEVANCE_THRESHOLD", defaults.relevance_threshold),
         llm_reasoning_effort=_read_text("LLM_REASONING_EFFORT", defaults.llm_reasoning_effort),
         llm_timeout_seconds=_read_int("LLM_TIMEOUT_SECONDS", defaults.llm_timeout_seconds, 1),
+        daily_request_limit=_read_int("DAILY_REQUEST_LIMIT", defaults.daily_request_limit, 1),
+        frontend_origin=_read_text("FRONTEND_ORIGIN", defaults.frontend_origin),
     )

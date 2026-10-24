@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from paperpilot import library, llm, prompts
 from paperpilot.config import load_settings
-from paperpilot.errors import EmptyQueryError
+from paperpilot.errors import EmptyQueryError, LLMError
 from paperpilot.prompts import CitationReport, NumberedPassage, Turn
 
 __all__ = ["Answer", "Turn", "ask"]
@@ -87,14 +87,15 @@ def ask(
     tokens: dict[str, int] = {}
 
     llm_calls = 0
+    standalone, rewrite_applied, rewrite_fallback_reason = question, False, None
 
     def finish(text: str, citations: CitationReport, fallback_reason: str | None = None) -> Answer:
         logger.info("Answered (%s) with %d passages in %.2f s",
                     fallback_reason or "answer", len(passages), sum(timings.values()))
         return Answer(
             question=question,
-            standalone_question=question,
-            rewrite_applied=False,
+            standalone_question=standalone,
+            rewrite_applied=rewrite_applied,
             text=text,
             not_found=text == prompts.NOT_FOUND,
             passages=passages,
@@ -102,15 +103,33 @@ def ask(
             warning=None,
             rejected_answer=None,
             fallback_reason=fallback_reason,
-            rewrite_fallback_reason=None,
+            rewrite_fallback_reason=rewrite_fallback_reason,
             word_count=prompts.word_count(text),
             llm_calls=llm_calls,
             timings=timings,
             tokens=tokens,
         )
 
+    if history:
+        # Turn a follow-up into a standalone question; fall back to the original (FR-010–FR-012).
+        start = time.perf_counter()
+        try:
+            rewrite = llm.generate(prompts.REWRITE_INSTRUCTION, prompts.build_rewrite_prompt(history, question))
+        except LLMError as error:
+            logger.info("Rewrite failed, using the original question: %s", error)
+            rewrite_fallback_reason = "rewrite_failed"
+        else:
+            _add_tokens(tokens, rewrite)
+            cleaned = prompts.clean_rewrite(rewrite.text)
+            if cleaned:
+                standalone, rewrite_applied = cleaned, True
+            else:
+                rewrite_fallback_reason = "rewrite_empty"
+        llm_calls += 1
+        timings["rewrite"] = time.perf_counter() - start
+
     start = time.perf_counter()
-    results = library.search(question, k=k, paper_ids=paper_ids)
+    results = library.search(standalone, k=k, paper_ids=paper_ids)
     # Passages below the calibrated threshold never reach the model (research R8).
     passages = _number([r for r in results if r.score >= settings.relevance_threshold])
     timings["retrieve"] = time.perf_counter() - start
@@ -120,7 +139,7 @@ def ask(
         return finish(prompts.NOT_FOUND, NO_CITATIONS, "below_threshold")
 
     start = time.perf_counter()
-    reply = llm.generate(prompts.SYSTEM_INSTRUCTION, prompts.build_answer_prompt(question, passages))
+    reply = llm.generate(prompts.SYSTEM_INSTRUCTION, prompts.build_answer_prompt(standalone, passages))
     timings["generate"] = time.perf_counter() - start
     llm_calls += 1
     _add_tokens(tokens, reply)

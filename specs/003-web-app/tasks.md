@@ -45,7 +45,7 @@ unplanned requests, FAIL if all requests exceed 2 × the plan.
 
 **Purpose**: dependencies and project scaffolding, all with exact pins (research R1).
 
-- [ ] T001 Add `fastapi==0.143.0`, `starlette==1.7.0`, `uvicorn==0.54.0`, `python-multipart==0.0.32` and `httpx==0.28.1` to `requirements.txt`. Install with `uv pip install -r requirements.txt`. Verify that `python -c "import fastapi.sse, multipart"` succeeds and `pytest` still passes. Commit `requirements.txt`.
+- [X] T001 Add `fastapi==0.143.0`, `starlette==1.7.0`, `uvicorn==0.54.0`, `python-multipart==0.0.32` and `httpx==0.28.1` to `requirements.txt`. Install with `uv pip install -r requirements.txt`. Verify that `python -c "import fastapi.sse, multipart"` succeeds and `pytest` still passes. Commit `requirements.txt`.
 - [ ] T002 Scaffold `frontend/` by hand (no `create-next-app`, to keep the pins exact).
   - **Dependencies** in `frontend/package.json`:
     - `next 16.4.0`, `react 19.3.0`, `react-dom 19.3.0`

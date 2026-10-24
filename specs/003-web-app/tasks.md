@@ -440,7 +440,7 @@ the fallback cases show the passage text.
 **Independent test**: drop PDFs and watch the phases. Duplicates show as already present and
 attaches show "Mapping highlights" then "PDF attached". The cards show their counts.
 
-- [ ] T057 [P] [US3] Create failing tests in `frontend/tests/library.test.tsx`:
+- [X] T057 [P] [US3] Create failing tests in `frontend/tests/library.test.tsx`:
   - **Adding files:** `DropZone` accepts drag-and-drop and the file chooser (several files) and posts the multipart request.
   - **Upload rows** (`UploadRow`):
     - Shows Parsing → Chunking → Embedding with a percentage → Ready.

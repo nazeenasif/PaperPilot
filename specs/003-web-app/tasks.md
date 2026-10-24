@@ -236,7 +236,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
     - Success: replaces the passages only after embedding succeeds, clears the marker, returns outcome `reprocessed`.
     - Embedding failure: the old passages stay intact.
 - [X] T025 [US2] Implement the stored PDFs, `attach_pdf`, `get_passage`, `pdf_path`, `reprocess_paper` and the PDF/layout removal on delete in `paperpilot/library.py`, plus `store.write_lock` held by upsert and delete in `paperpilot/store.py` (research R3, R14). T024 and the full `pytest` must pass.
-- [ ] T026 [US2] Create `scripts/checkpoint_6_geometry.py` (0 model requests, no embedding).
+- [X] T026 [US2] Create `scripts/checkpoint_6_geometry.py` (0 model requests, no embedding).
   - For each PDF in `papers/` (or given paths), it runs `parse_pdf`, `chunk_sections` and `build_layout`.
   - It prints, per paper, the share of passages with word-level regions, those that fell back to line boxes, and those without regions.
   - PASS if at least 90% of passages across the 5 test papers have word-level regions (the SC-002 proxy).

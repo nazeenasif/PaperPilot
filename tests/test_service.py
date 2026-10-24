@@ -263,3 +263,102 @@ def test_empty_rewrite_falls_back_to_the_original_question(answer_env, fake_answ
     assert search_spy == ["Which dataset does it use?"]
     assert answer.rewrite_applied is False
     assert answer.rewrite_fallback_reason == "rewrite_empty"
+
+
+# --- US5: invalid citations are caught ---
+
+
+def test_invalid_citation_rejects_the_answer():
+    from paperpilot.service import review_reply
+
+    reply = "The model was trained on WMT 2014 [2]. It used 8 GPUs [9]."
+    text, citations, warning, rejected, reason = review_reply(reply, 6)
+    assert text == prompts.NOT_FOUND
+    assert citations.invalid == [9] and citations.valid == [2]
+    assert "[9]" in warning and "[2]" not in warning
+    assert rejected == reply
+    assert reason == "invalid_citations"
+
+
+def test_several_invalid_citations_are_all_listed():
+    from paperpilot.service import review_reply
+
+    _, _, warning, _, reason = review_reply("A [0]. B [7, 8].", 6)
+    assert all(f"[{n}]" in warning for n in (0, 7, 8))
+    assert reason == "invalid_citations"
+
+
+def test_answer_without_citations_is_rejected():
+    from paperpilot.service import review_reply
+
+    reply = "The model was trained on WMT 2014."
+    text, citations, warning, rejected, reason = review_reply(reply, 6)
+    assert text == prompts.NOT_FOUND
+    assert citations.valid == [] and citations.invalid == []
+    assert "no citations" in warning.lower()
+    assert rejected == reply
+    assert reason == "no_citations"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        prompts.NOT_FOUND,
+        f'"{prompts.NOT_FOUND}"',
+        f"  {prompts.NOT_FOUND}  \n",
+        prompts.NOT_FOUND.rstrip("."),
+    ],
+)
+def test_not_found_reply_is_never_treated_as_missing_citations(reply):
+    from paperpilot.service import review_reply
+
+    text, citations, warning, rejected, reason = review_reply(reply, 6)
+    assert text == prompts.NOT_FOUND
+    assert citations.valid == [] and citations.invalid == []
+    assert warning is None
+    assert rejected is None
+    assert reason == "model_not_found"
+
+
+def test_uncited_sentence_gives_a_warning_but_keeps_the_answer():
+    from paperpilot.service import review_reply
+
+    reply = "The model was trained on WMT 2014 [1]. This was a large dataset."
+    text, citations, warning, rejected, reason = review_reply(reply, 6)
+    assert text == reply
+    assert citations.valid == [1]
+    assert "This was a large dataset." in warning
+    assert rejected is None
+    assert reason is None
+
+
+def test_fully_cited_answer_has_no_warning():
+    from paperpilot.service import review_reply
+
+    reply = "Trained on WMT 2014 [1]. With 8 GPUs [2, 3]."
+    text, _, warning, rejected, reason = review_reply(reply, 3)
+    assert (text, warning, rejected, reason) == (reply, None, None, None)
+
+
+def test_ask_rejects_a_reply_citing_a_missing_passage(answer_env, fake_answers):
+    reply = "Evaluated on a benchmark [9]."
+    fake_answers.add(reply)
+    answer = ask(QUESTION, k=1)
+    assert len(answer.passages) == 1
+    assert answer.text == prompts.NOT_FOUND
+    assert answer.not_found is True
+    assert answer.fallback_reason == "invalid_citations"
+    assert "[9]" in answer.warning
+    assert answer.rejected_answer == reply
+    assert answer.citations.invalid == [9]
+    assert answer.word_count == prompts.word_count(prompts.NOT_FOUND)
+
+
+def test_ask_keeps_an_answer_with_an_uncited_sentence(answer_env, fake_answers):
+    reply = "Evaluated on a benchmark [1]. It is widely used."
+    fake_answers.add(reply)
+    answer = ask(QUESTION)
+    assert answer.text == reply
+    assert "It is widely used." in answer.warning
+    assert answer.rejected_answer is None
+    assert answer.fallback_reason is None

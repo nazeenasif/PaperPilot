@@ -313,7 +313,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 
 ### US2: passages and PDFs
 
-- [ ] T037 [P] [US2] Create failing tests in `tests/api/test_passages.py`:
+- [X] T037 [P] [US2] Create failing tests in `tests/api/test_passages.py`:
   - `GET /api/passages/{id}` returns the PassageView with layout regions for a laid-out paper.
   - It returns `layout:null` with `layout_reason:"no_pdf"`, or with `"mismatch"` and `can_reprocess:true`.
   - An unknown id gives `404 unknown_passage`.

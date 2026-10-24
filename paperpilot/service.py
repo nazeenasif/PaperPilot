@@ -17,6 +17,8 @@ __all__ = ["Answer", "Turn", "ask"]
 
 logger = logging.getLogger(__name__)
 
+NO_CITATIONS = CitationReport(valid=[], invalid=[], uncited_sentences=[])
+
 
 @dataclass(frozen=True)
 class Answer:
@@ -84,32 +86,46 @@ def ask(
     timings = {"rewrite": 0.0, "retrieve": 0.0, "generate": 0.0}
     tokens: dict[str, int] = {}
 
+    llm_calls = 0
+
+    def finish(text: str, citations: CitationReport, fallback_reason: str | None = None) -> Answer:
+        logger.info("Answered (%s) with %d passages in %.2f s",
+                    fallback_reason or "answer", len(passages), sum(timings.values()))
+        return Answer(
+            question=question,
+            standalone_question=question,
+            rewrite_applied=False,
+            text=text,
+            not_found=text == prompts.NOT_FOUND,
+            passages=passages,
+            citations=citations,
+            warning=None,
+            rejected_answer=None,
+            fallback_reason=fallback_reason,
+            rewrite_fallback_reason=None,
+            word_count=prompts.word_count(text),
+            llm_calls=llm_calls,
+            timings=timings,
+            tokens=tokens,
+        )
+
     start = time.perf_counter()
-    passages = _number(library.search(question, k=k, paper_ids=paper_ids))
+    results = library.search(question, k=k, paper_ids=paper_ids)
+    # Passages below the calibrated threshold never reach the model (research R8).
+    passages = _number([r for r in results if r.score >= settings.relevance_threshold])
     timings["retrieve"] = time.perf_counter() - start
+    if not results:
+        return finish(prompts.NOT_FOUND, NO_CITATIONS, "no_passages")
+    if not passages:
+        return finish(prompts.NOT_FOUND, NO_CITATIONS, "below_threshold")
 
     start = time.perf_counter()
     reply = llm.generate(prompts.SYSTEM_INSTRUCTION, prompts.build_answer_prompt(question, passages))
     timings["generate"] = time.perf_counter() - start
+    llm_calls += 1
     _add_tokens(tokens, reply)
 
     text = reply.text.strip()
-    citations = prompts.check_citations(text, len(passages))
-    logger.info("Answered with %d passages in %.2f s", len(passages), sum(timings.values()))
-    return Answer(
-        question=question,
-        standalone_question=question,
-        rewrite_applied=False,
-        text=text,
-        not_found=False,
-        passages=passages,
-        citations=citations,
-        warning=None,
-        rejected_answer=None,
-        fallback_reason=None,
-        rewrite_fallback_reason=None,
-        word_count=prompts.word_count(text),
-        llm_calls=1,
-        timings=timings,
-        tokens=tokens,
-    )
+    if prompts.is_not_found(text):
+        return finish(prompts.NOT_FOUND, NO_CITATIONS, "model_not_found")
+    return finish(text, prompts.check_citations(text, len(passages)))

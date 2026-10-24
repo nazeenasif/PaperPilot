@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterable
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
@@ -68,6 +68,57 @@ async def ask_question(request: Request, body: AskIn = Depends(start_question)) 
             yield ServerSentEvent(event="answer", data=answer_body(answer, requests))
         else:
             yield ServerSentEvent(event="error", data=error_for(item[1]).body())
+
+
+@router.get("/papers")
+def get_papers() -> dict:
+    """The library's paper cards, sorted by title, and the passage total (FR-019)."""
+    papers = library.list_papers()
+    cards = [{key: value for key, value in asdict(p).items() if key != "source_file"} for p in papers]
+    return {"papers": cards, "total_passages": sum(p.passage_count for p in papers)}
+
+
+@router.post("/papers", status_code=202)
+async def upload_papers(request: Request, files: list[UploadFile] = File(...)) -> dict:
+    """Queue one job per dropped file; rejected files get a job that has already failed (FR-016)."""
+    jobs = [await request.app.state.jobs.add_upload(upload) for upload in files]
+    return {"jobs": [{"job_id": job.job_id, "file_name": job.file_name} for job in jobs]}
+
+
+@router.get("/jobs")
+def get_jobs(request: Request) -> dict:
+    """Every recent job: for page load, reconnects and polling."""
+    return {"jobs": request.app.state.jobs.snapshot()}
+
+
+@router.get("/jobs/events", response_class=EventSourceResponse)
+async def job_events(request: Request) -> AsyncIterable[ServerSentEvent]:
+    """Unfinished jobs, then a `job` event on every change (FR-017); pings keep it open."""
+    async for body in request.app.state.jobs.events():
+        yield ServerSentEvent(event="job", data=body)
+
+
+@router.post("/papers/{paper_id}/reprocess", status_code=202)
+def reprocess_paper(paper_id: str, request: Request) -> dict:
+    """Re-process a paper from its stored PDF as a job (FR-018a)."""
+    try:
+        library.pdf_path(paper_id)
+    except UnknownPaperError:
+        raise ApiError("unknown_paper", paper_id=paper_id) from None
+    except PdfMissingError:
+        raise ApiError("pdf_missing", paper_id=paper_id) from None
+    title = store.paper_metadata(paper_id)[0]["title"]
+    job = request.app.state.jobs.add_reprocess(paper_id, title)
+    return {"job_id": job.job_id, "file_name": job.file_name}
+
+
+@router.delete("/papers/{paper_id}")
+def delete_paper(paper_id: str) -> dict:
+    """Remove a paper's passages, PDF and layout (FR-018)."""
+    try:
+        return {"removed_passages": library.delete_paper(paper_id)}
+    except UnknownPaperError:
+        raise ApiError("unknown_paper", paper_id=paper_id) from None
 
 
 @router.get("/passages/{passage_id}")

@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from api.errors import error_response, install_error_handlers
+from api.jobs import JobRegistry
 from api.routes import router
 from api.security import HEADER_NAME, OriginGuard
 from api.state import AppState
@@ -73,6 +74,7 @@ def create_app(loader: Callable[[], None] | None = None) -> FastAPI:
     """Build the API. The loader runs in a background thread so /api/status answers at once."""
     settings = load_settings()
     app_state = AppState()
+    jobs = JobRegistry(settings.library_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -81,14 +83,17 @@ def create_app(loader: Callable[[], None] | None = None) -> FastAPI:
             target=app_state.run_loader, args=(loader or default_loader,), name="paperpilot-loader", daemon=True
         )
         thread.start()
+        jobs.start()
         try:
             yield
         finally:
+            jobs.stop()
             _close_log(handler)
 
     app = FastAPI(title="PaperPilot API", lifespan=lifespan)
     app.state.settings = settings
     app.state.paperpilot = app_state
+    app.state.jobs = jobs
 
     @app.middleware("http")
     async def require_ready(request: Request, call_next):

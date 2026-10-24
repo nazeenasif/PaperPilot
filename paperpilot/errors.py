@@ -34,6 +34,10 @@ class PdfReadError(PaperPilotError):
     """The file is missing, not a PDF, corrupt, or cannot be opened."""
 
 
+class PasswordProtectedError(PdfReadError):
+    """The PDF is encrypted and needs a password to open."""
+
+
 class NoTextError(PaperPilotError):
     """The PDF has no extractable text (for example, a scanned document)."""
 

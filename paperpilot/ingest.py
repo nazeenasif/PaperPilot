@@ -13,7 +13,7 @@ from typing import Sequence
 import pymupdf
 
 from paperpilot.config import Settings
-from paperpilot.errors import NoTextError, PdfReadError
+from paperpilot.errors import NoTextError, PasswordProtectedError, PdfReadError
 
 logger = logging.getLogger(__name__)
 
@@ -422,7 +422,7 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
 
     with doc:
         if doc.needs_pass:
-            raise PdfReadError(f"{path.name} is password-protected")
+            raise PasswordProtectedError(f"{path.name} is password-protected")
         blocks: list[Block] = []
         page1_spans = page_spans(doc[0]) if doc.page_count else []
         arxiv_id = find_arxiv_id(doc[0].get_text()) if doc.page_count else None

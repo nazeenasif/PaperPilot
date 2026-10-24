@@ -341,7 +341,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - **Re-processing:** `POST /api/papers/{id}/reprocess` returns 202 and runs to `reprocessed`. A second one while it is queued gets `409 busy_job`.
   - **Deleting:** `DELETE /api/papers/{id}` returns `removed_passages`.
   - **Not blocking questions:** an ask completes while an ingest job is held at `embedding` (blocked through a fake-embedder event).
-- [ ] T041 [US3] Implement `api/jobs.py`: the job registry; the single ingest worker thread (FIFO); chunked upload reading that aborts above 25 MB; the `%PDF-` check; temporary files under `<LIBRARY_DIR>/tmp` removed after each job; and the fan-out of job events to SSE subscribers. Add the papers, jobs, reprocess and delete routes in `api/routes.py`, so T040 passes.
+- [X] T041 [US3] Implement `api/jobs.py`: the job registry; the single ingest worker thread (FIFO); chunked upload reading that aborts above 25 MB; the `%PDF-` check; temporary files under `<LIBRARY_DIR>/tmp` removed after each job; and the fan-out of job events to SSE subscribers. Add the papers, jobs, reprocess and delete routes in `api/routes.py`, so T040 passes.
 - [ ] T042 [US3] Add part `library` to `scripts/checkpoint_6_web.py` (0 model requests).
   - **Attaching the existing papers:** it uploads every PDF in `papers/` and waits for the jobs. Each must end `pdf_attached` (highlights `exact`) or `already_present`, with the attach finishing within 10 s (SC-004).
   - **Rejected and duplicate uploads:**

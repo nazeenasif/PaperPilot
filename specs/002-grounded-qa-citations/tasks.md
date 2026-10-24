@@ -94,7 +94,7 @@ not-found sentence and 0 LLM requests.
 passages come from BERT.
 
 - [X] T021 [US3] Add failing tests to `tests/test_service.py` (two generated papers): filtered `ask()` sends only passages from the selected paper; an unknown paper ID raises `UnknownPaperError` before any model call; `paper_ids=[]` behaves like no filter
-- [ ] T022 [US3] Pass `paper_ids` through `ask()` to `library.search` in `paperpilot/service.py`, making sure the filter is checked before any model call; make T021 pass
+- [X] T022 [US3] Pass `paper_ids` through `ask()` to `library.search` in `paperpilot/service.py`, making sure the filter is checked before any model call; make T021 pass — no code change needed: `ask()` has passed `paper_ids` to `library.search` since T013, and `search` raises `UnknownPaperError` before any model call; T021 passed on first run
 - [ ] T023 [US3] Extend `scripts/checkpoint_4_answer.py`: ask "What are the two pre-training tasks of BERT?" filtered to the BERT paper ID (looked up with `list_papers()`); PASS if every passage is from BERT and every citation is valid — **Checkpoint 4, US3 part** (SC-004)
 
 ---

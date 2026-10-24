@@ -24,6 +24,24 @@ from the same query run with k=60.
 - Scores cluster tightly within a query (e.g. Q2 0.796–0.844), so small embedding
   differences decide the order.
 
+## Filtered search (BERT only)
+
+Same Q2 search restricted to the BERT paper (`paper_ids=["a7b7a17d0cf9"]`, 42 passages),
+k=60, no LLM requests:
+
+| Evidence | Rank within BERT | Score | Rank library-wide (above) |
+|---|---|---|---|
+| "Task #1: Masked LM" (`a7b7a17d0cf9-11`, BERT, p. 4) | 13 | 0.762 | 13 |
+| "Task #2: Next Sentence Prediction (NSP)" (`a7b7a17d0cf9-14`, BERT, p. 4) | 22 | 0.725 | 25 |
+
+The top 6 within BERT score 0.796–0.844 and are general passages about BERT (pre-training
+data, framework, abstract). Checkpoint 4's US3 part asked Q2 filtered to BERT and the model
+correctly replied not-found from those passages.
+
+**Filtering to one paper does not fix within-paper ranking; Q2 is a false not-found under
+the filter.** A filtered question whose evidence does rank first ("What data was BERT
+pre-trained on?", BooksCorpus passage at rank 1) gets a correct cited answer.
+
 ## Baseline
 
 Configuration: library-wide search, k=6, `BAAI/bge-small-en-v1.5`, chunking 220/40.
@@ -37,7 +55,9 @@ Five queries are too few for conclusions; treat this as a smoke test, not a benc
 
 ## Candidate experiments (for the evaluation feature, in this order)
 
-1. Cross-encoder reranking of the top 20 vector results.
+1. **Top priority:** cross-encoder reranking of the top 20 vector results. The Q2 and Q4
+   misses, and the Q2 false not-found under a paper filter, are within-paper ranking problems
+   that a filter cannot fix; reranking addresses them directly.
 2. Hybrid search: BM25 keyword scores combined with vector scores.
 3. Paper title and section name prepended to passage text before embedding.
 

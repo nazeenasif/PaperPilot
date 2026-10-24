@@ -88,3 +88,14 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
   evaluation feature.
 - **The first search after startup is slower.** Opening the library and loading the embedding
   model are one-time costs (about 1–2 s and 2–8 s); later searches take well under a second.
+
+## Question answering
+
+- **A correct answer can be missed when its passage ranks low (false not-found).** The model
+  only sees the top passages (6 by default). If the passage that holds the answer ranks below
+  them, the model correctly says "I couldn't find that in the selected papers." even though
+  the paper does answer the question. Example: "What are the two pre-training tasks of BERT?"
+  filtered to the BERT paper — the Masked LM and Next Sentence Prediction passages rank 13 and
+  22 within BERT, so the answer is not-found. Filtering to one paper does not fix this, because
+  the problem is ranking inside the paper. Reranking is the top-priority experiment for the
+  evaluation feature (`eval/probe_notes.md`).

@@ -34,7 +34,12 @@ NEARMISS_QUESTIONS = [
     "How does Llama 2 handle safety tuning?",
 ]
 NEARMISS_BUDGET = 3
-US3_QUESTION = "What are the two pre-training tasks of BERT?"
+# (question, must get a cited answer). The tasks question is a known false not-found: its
+# answer passages rank 13 and 22 within BERT (eval/probe_notes.md), outside the top 6.
+US3_QUESTIONS = [
+    ("What are the two pre-training tasks of BERT?", False),
+    ("What data was BERT pre-trained on?", True),
+]
 US3_PAPER_TITLE_PREFIX = "BERT:"
 PARTS = ("us1", "us2", "us3", "nearmiss")
 PREVIEW_CHARS = 160
@@ -142,14 +147,21 @@ def main() -> int:
                 check(results, False, f"a paper titled '{US3_PAPER_TITLE_PREFIX}…' is in the library")
             else:
                 paper = bert[0]
-                print(f"\n=== US3: {US3_QUESTION}  (filtered to {paper.paper_id}: {paper.title})")
-                answer = record(ask(US3_QUESTION, paper_ids=[paper.paper_id]))
-                show(answer)
-                papers_used = sorted({p.title for p in answer.passages})
-                print(f"\nPapers of the passages used: {papers_used or 'none'}")
-                check(results, all(p.paper_id == paper.paper_id for p in answer.passages),
-                      "every passage comes from the selected paper (SC-004)")
-                check(results, not answer.citations.invalid, "every citation maps to a provided passage")
+                for question, must_answer in US3_QUESTIONS:
+                    print(f"\n=== US3: {question}  (filtered to {paper.paper_id}: {paper.title})")
+                    answer = record(ask(question, paper_ids=[paper.paper_id]))
+                    show(answer)
+                    papers_used = sorted({p.title for p in answer.passages})
+                    print(f"\nPapers of the passages used: {papers_used or 'none'}")
+                    check(results, all(p.paper_id == paper.paper_id for p in answer.passages),
+                          "every passage comes from the selected paper (SC-004)")
+                    check(results, not answer.citations.invalid, "every citation maps to a provided passage")
+                    if must_answer:
+                        check(results, not answer.not_found and bool(answer.citations.valid),
+                              "a cited answer came back through the filter")
+                    elif answer.not_found:
+                        print("INFO: known false not-found (answer passages rank 13 and 22 within BERT; "
+                              "see eval/probe_notes.md)")
 
         if "nearmiss" in parts:
             before = llm.request_count()

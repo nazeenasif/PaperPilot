@@ -410,7 +410,7 @@ revealed answer with numbered chips and the verified badge.
   - `frontend/lib/useAsk.ts`, a hook driving `POST /api/ask` through `lib/sse.ts`.
   - `frontend/app/page.tsx`.
   - The reveal uses `motion` with `useReducedMotion()` and `lib/reveal.ts`.
-- [ ] T053 [US1] Create `frontend/e2e/fake-backend.ts` (Playwright `page.route` fixtures replaying recorded `/api/*` JSON and SSE bodies from `frontend/e2e/fixtures/`) and `frontend/e2e/smoke.spec.ts` with test "US1 ask".
+- [X] T053 [US1] Create `frontend/e2e/fake-backend.ts` (Playwright `page.route` fixtures replaying recorded `/api/*` JSON and SSE bodies from `frontend/e2e/fixtures/`) and `frontend/e2e/smoke.spec.ts` with test "US1 ask".
   - The test asks a question, sees the progress, then the answer with chips and the badge, with no answer text before the reveal.
   - **Story check**: `npm --prefix frontend test` and `npm --prefix frontend run test:e2e -- -g "US1"`.
 

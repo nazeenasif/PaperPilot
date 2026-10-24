@@ -11,9 +11,10 @@ describe("splitSentences (same rule as the engine's uncited-sentence check)", ()
     ]);
   });
 
-  it("keeps a citation that follows the full stop with its sentence", () => {
-    expect(splitSentences("LoRA is efficient. [3] It allows task switching. [1, 2]")).toEqual([
-      "LoRA is efficient. [3]",
+  it("keeps a citation that follows the last full stop with its sentence", () => {
+    // Like the engine, only a citation group standing alone at the end joins the sentence before.
+    expect(splitSentences("LoRA is efficient [3]. It allows task switching. [1, 2]")).toEqual([
+      "LoRA is efficient [3].",
       "It allows task switching. [1, 2]",
     ]);
   });

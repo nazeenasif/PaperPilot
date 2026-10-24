@@ -404,7 +404,7 @@ revealed answer with numbered chips and the verified badge.
   - **Composer:** an empty question shows "Type a question first" and sends nothing. Enter sends and Shift+Enter adds a newline. The composer is disabled while answering.
   - **Progress:** `ProgressSteps` shows "Searching…", "Reading 6 passages from 2 papers…" and "Checking citations…" from the events, and no answer text appears before the `answer` event.
   - **Answer:** `AnswerView` renders a chip `[n]` per citation as a button, with an accessible name such as "Citation 1: LoRA, page 5". The "All citations verified" badge appears only when `verified` is true. The answer meta shows passages read, time and model. The not-found text is rendered exactly as received.
-- [ ] T051 [US1] Implement `frontend/lib/sentences.ts` and `frontend/lib/reveal.ts` so T049 passes.
+- [X] T051 [US1] Implement `frontend/lib/sentences.ts` and `frontend/lib/reveal.ts` so T049 passes.
 - [ ] T052 [US1] Implement the Ask screen so T050 passes:
   - `frontend/components/ask/Composer.tsx`, `ProgressSteps.tsx`, `AnswerView.tsx`, `CitationChip.tsx` and `VerifiedBadge.tsx`.
   - `frontend/lib/useAsk.ts`, a hook driving `POST /api/ask` through `lib/sse.ts`.

@@ -40,6 +40,13 @@ summaries, comparison, user accounts, deployment."
 - Q: What happens when the provider asks for a wait longer than the retry cap? → A: No retry:
   the question ends at once and shows the daily-limit state, or "try again at <time>" when it is
   not the daily limit.
+- Refinements from the researcher after the questions: both the API and the frontend dev server
+  bind explicitly to 127.0.0.1 (the frontend dev server otherwise listens on all interfaces) and
+  the API accepts cross-origin requests only from the frontend's localhost origin; network
+  access, authentication and deployment are a later feature. A long requested wait raises a
+  readable "rate limited until <time>" error from the engine. X-RateLimit-Reset is trusted only
+  when it resolves to a future time within 48 hours, otherwise normal backoff applies; its units
+  are confirmed from the first real 429. The daily-counter rules (FR-025) are restated unchanged.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -261,8 +268,10 @@ designed presentation, with no raw error text anywhere.
   results (constitution Principles II and IX).
 - **FR-002**: The browser MUST NOT contact the language model or hold any API key; no secret may
   appear in anything delivered to the browser.
-- **FR-002a**: The server MUST accept connections only from the same machine (localhost); it
-  MUST NOT be reachable from other devices on the network, and it requires no sign-in.
+- **FR-002a**: Both the API server and the frontend dev server MUST bind explicitly to 127.0.0.1,
+  never to all interfaces (the frontend dev server's default), so neither is reachable from other
+  devices on the network; the API MUST accept cross-origin requests only from the frontend's
+  localhost origin. No sign-in is required.
 - **FR-003**: The embedding model and the library MUST be loaded once when the server starts; the
   app MUST report a "getting ready" status until loading is complete.
 
@@ -330,9 +339,16 @@ designed presentation, with no raw error text anywhere.
 - **FR-023**: When the engine waits before retrying a model request, the app MUST show the wait as
   a live countdown with the attempt number and the maximum number of attempts.
 - **FR-023a**: When the provider asks for a wait longer than the engine's retry wait cap
-  (currently 60 seconds), the engine MUST NOT retry: the question MUST end at once with no
-  further model requests, and the app MUST show the daily-limit state when the provider reports
-  the daily limit, otherwise a "try again at <local time>" state with the question kept.
+  (60 seconds), the engine MUST stop retrying at once, make no further model requests, and raise
+  a readable "rate limited until <time>" error. The app MUST show the daily-limit state when the
+  daily quota is exhausted, otherwise a "try again at <local time>" state with the question kept.
+- **FR-023b**: The engine MUST trust a rate-limit reset time from the provider (X-RateLimit-Reset)
+  only when it resolves to a time in the future and within 48 hours; any other value MUST be
+  ignored and the normal backoff applied. The header's units MUST be confirmed from the first
+  real 429 response and recorded (research), and the engine adjusted if they differ.
+- **FR-023c**: FR-023a and FR-023b MUST be implemented in the engine's single LLM module and
+  covered by offline tests with the fake model client (long wait, wait at the cap, reset in the
+  past, reset beyond 48 hours, reset in the wrong units).
 - **FR-024**: The app MUST always show today's model request usage against the daily free limit
   (for example "Requests today 33 / 50") and the configured model, labelled as free when it is a
   free model.
@@ -417,12 +433,20 @@ designed presentation, with no raw error text anywhere.
 - **SC-011**: No answer text is visible before its citations are checked, and a checked answer
   finishes appearing (text, chips and badge) within 0.5 seconds; with reduced motion it appears in
   a single step.
+- **SC-012**: Neither the API nor the frontend accepts a connection on the machine's network
+  address (only on 127.0.0.1), and the API refuses cross-origin requests from any origin other
+  than the frontend's.
+- **SC-013**: When the provider asks for a wait longer than 60 seconds, the question ends with
+  exactly one model request spent and the matching designed state shown.
 
 ## Assumptions
 
 - PaperPilot runs on the researcher's own machine for a single user; the server and the app are
-  opened locally and the server listens on localhost only (FR-002a), so no accounts are needed
-  (accounts and deployment are out of scope).
+  opened locally and both servers listen on 127.0.0.1 only (FR-002a), so no accounts are needed.
+- Two provider facts are unverified and must be checked during planning or the first real
+  run: the daily reset time (expected 00:00 UTC) and the units of X-RateLimit-Reset (currently
+  read as epoch milliseconds; the 48-hour rule of FR-023b makes a wrong unit fall back safely to
+  normal backoff).
 - The five test papers' files are dropped into the app once to attach their PDFs (no
   re-processing); until then User Story 2 scenario 5 applies.
 - The provider's daily free limit resets at midnight UTC (OpenRouter); the app shows the reset in
@@ -441,8 +465,9 @@ designed presentation, with no raw error text anywhere.
 - Engine additions this feature needs, kept inside the engine (FR-001): storing a copy of each
   added PDF, and attaching a PDF to a paper already in the library without reprocessing;
   reporting ingest phases and embedding progress; reporting retry waits and attempt numbers
-  during a question; not retrying when the provider's requested wait exceeds the cap (FR-023a,
-  an amendment to ADR-0003's retry policy); a persistent, shared daily request count that
+  during a question; not retrying when the provider's requested wait exceeds the cap, and
+  trusting X-RateLimit-Reset only within 48 hours (FR-023a–FR-023c, an amendment to ADR-0003's
+  retry policy); a persistent, shared daily request count that
   accepts the provider's remaining-requests figure; per-paper section and text/table passage
   counts; and the arXiv identifier when present.
 - Constitution v1.3.0 Principle IX and the web stack it names.
@@ -451,6 +476,7 @@ designed presentation, with no raw error text anywhere.
 
 - Paper summaries ("Summarize" on the cards) and paper comparison (the "Compare" tab); they appear
   in the mock-ups but are not built and are not shown.
-- User accounts, sharing, and deployment beyond the researcher's own machine.
+- Network access from other devices, authentication, user accounts, sharing and deployment;
+  these are a later feature (this one is localhost only, FR-002a).
 - Storing conversations across page reloads.
 - Changing answering, retrieval or citation rules; this feature presents the engine's behaviour.

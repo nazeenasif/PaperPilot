@@ -35,6 +35,10 @@
   entrance animation (instant with reduced motion). Also added: re-adding a known paper without a
   stored PDF attaches the PDF ("PDF attached") without reprocessing (US3 scenario 4, FR-018).
 - All items pass.
+- Deliberate technical detail at the researcher's request (2026-10-24): FR-002a names the
+  127.0.0.1 binding and the CORS origin rule; FR-023b–FR-023c name the X-RateLimit-Reset header
+  and the engine's LLM module. Kept because they are security and correctness constraints the
+  plan must not reinterpret.
 - The stack (FastAPI, Next.js) appears only in the quoted user input and in the constitution
   reference; requirements describe behaviour, not technology.
 - Mock-up elements deliberately excluded: Summarize, Compare (out of scope); "attempt 1 of 3"

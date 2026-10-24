@@ -3,7 +3,7 @@
 Calls the configured model (OpenRouter free tier by default) and prints how many requests
 it used; it stops with FAIL if it exceeds its request budget.
 
-Usage: python scripts/checkpoint_4_answer.py
+Usage: python scripts/checkpoint_4_answer.py [us1] [us2]   (default: all parts)
 """
 
 import logging
@@ -23,6 +23,8 @@ REQUEST_BUDGET = 6
 WORD_LIMIT = 165  # 150 + 10% margin (SC-011); reported, never enforced
 # Its top passage (Attention, Introduction) contains the paper's own markers such as "[13]".
 US1_QUESTION = "What recurrent models were state of the art for sequence modelling before the Transformer?"
+US2_QUESTION = "What is the capital of France?"
+PARTS = ("us1", "us2")
 PREVIEW_CHARS = 160
 
 
@@ -53,6 +55,11 @@ def check(results: list[tuple[bool, str]], passed: bool, description: str) -> No
 def main() -> int:
     """Run the checkpoint; return 0 if every check passes."""
     logging.basicConfig(level=logging.WARNING)
+    parts = [a.lower() for a in sys.argv[1:]] or list(PARTS)
+    unknown = [p for p in parts if p not in PARTS]
+    if unknown:
+        print(f"Unknown part(s) {unknown}; choose from {', '.join(PARTS)} (default: all)")
+        return 2
     settings = load_settings()
     print("Checkpoint 4: grounded answers")
     print(f"Provider: {settings.llm_provider}   Model: {settings.llm_model}   "
@@ -72,16 +79,25 @@ def main() -> int:
     try:
         check(results, llm.model_is_listed(), f"model {settings.llm_model} is listed by the provider")
 
-        print(f"\n=== US1: {US1_QUESTION}")
-        answer = ask(US1_QUESTION)
-        show(answer)
-        markers = sum(1 for p in answer.passages if prompts.strip_reference_markers(p.text) != p.text)
-        print(f"\nINFO: {markers} of {len(answer.passages)} passages contained the papers' own reference "
-              "markers; they were removed from the prompt")
-        check(results, bool(answer.citations.valid), "the answer has at least one citation")
-        check(results, not answer.citations.invalid, "every citation maps to a provided passage")
-        level = "INFO" if answer.word_count <= WORD_LIMIT else "WARN"
-        print(f"{level}: answer length {answer.word_count} words (limit {WORD_LIMIT}, reported only)")
+        if "us1" in parts:
+            print(f"\n=== US1: {US1_QUESTION}")
+            answer = ask(US1_QUESTION)
+            show(answer)
+            markers = sum(1 for p in answer.passages if prompts.strip_reference_markers(p.text) != p.text)
+            print(f"\nINFO: {markers} of {len(answer.passages)} passages contained the papers' own reference "
+                  "markers; they were removed from the prompt")
+            check(results, bool(answer.citations.valid), "the answer has at least one citation")
+            check(results, not answer.citations.invalid, "every citation maps to a provided passage")
+            level = "INFO" if answer.word_count <= WORD_LIMIT else "WARN"
+            print(f"{level}: answer length {answer.word_count} words (limit {WORD_LIMIT}, reported only)")
+
+        if "us2" in parts:
+            print(f"\n=== US2: {US2_QUESTION}")
+            before = llm.request_count()
+            answer = ask(US2_QUESTION)
+            show(answer)
+            check(results, answer.text == prompts.NOT_FOUND, "the answer is exactly the not-found sentence")
+            check(results, llm.request_count() == before, "no LLM request was made (rejected by the threshold)")
     except PaperPilotError as error:
         check(results, False, f"{type(error).__name__}: {error}")
 

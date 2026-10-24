@@ -103,7 +103,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
   - `client`: a `TestClient` used as a context manager so the lifespan runs. It waits until `/api/status` is `ready` and combines `library_env`, `fake_embedder`, `llm_env` and `fake_answers` with `RELEVANCE_THRESHOLD=0.0`.
   - `client_with_paper`: one generated paper added through the engine.
   - **Guard**: every test fails if the key value `llm_env` appears in any response body.
-- [ ] T011 Create failing tests in `tests/api/test_app.py`:
+- [X] T011 Create failing tests in `tests/api/test_app.py`:
   - `GET /api/status` answers `loading` while the loader is blocked, then `ready`.
   - `GET /api/papers` answers `503 {"kind": "not_ready"}` while loading.
   - CORS: origin `http://127.0.0.1:3000` gets `access-control-allow-origin`; `http://evil.example` and `http://localhost:3000` don't.

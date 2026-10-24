@@ -328,7 +328,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 
 ### US3: library, uploads, jobs
 
-- [ ] T040 [P] [US3] Create failing tests in `tests/api/test_papers_jobs.py`:
+- [X] T040 [P] [US3] Create failing tests in `tests/api/test_papers_jobs.py`:
   - **Listing:** `GET /api/papers` returns cards with every field and `total_passages`.
   - **Uploading:**
     - `POST /api/papers` with two PDFs returns two job ids.

@@ -197,7 +197,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 
 ### US1 (P1): progress while a question is answered
 
-- [ ] T019 [P] [US1] Create failing tests in `tests/test_service_events.py` (`answer_env`):
+- [X] T019 [P] [US1] Create failing tests in `tests/test_service_events.py` (`answer_env`):
   - With `on_event`, a plain question emits `searching`, `reading` (`passages`, and `papers` as distinct papers), `generating` and `checking`, in that order.
   - With history, `rewriting` comes first.
   - Below the threshold, only `searching` is emitted, then the result.

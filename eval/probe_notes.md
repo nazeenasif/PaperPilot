@@ -63,3 +63,35 @@ Five queries are too few for conclusions; treat this as a smoke test, not a benc
 
 Each should be measured against this baseline on the same queries (extended into the eval
 harness), one change at a time.
+
+## Faithfulness cases
+
+Citation validation (ADR-0004) checks only that each [n] points to a provided passage. These
+cases passed it but the cited passage does not fully support the claim. They are the
+evaluation feature's faithfulness test cases (claim-level support, not citation range).
+
+### F1. Correct fact, wrong passage (checkpoint 5, 2026-10-24)
+
+- **Question**: "How does that method reduce the number of trainable parameters?", rewritten
+  to "How does LoRA reduce the number of trainable parameters?" (model
+  `nvidia/nemotron-3-ultra-550b-a55b:free`, threshold 0.59, filter semantics).
+- **Sentence**: "The authors further limit adaptation to attention weights (e.g., Wq and Wv)
+  while freezing MLP modules for parameter efficiency [2]."
+- **Passage [2]** (LoRA, Our Method p. 5, §4.2) supports "attention weights" and "freeze the
+  MLP modules … for simplicity and parameter-efficiency", but lists all four attention
+  matrices (Wq, Wk, Wv, Wo) and never singles out Wq and Wv.
+- **Where the fact is**: passage [1] (Empirical Experiments p. 6), also provided: "we only
+  apply LoRA to Wq and Wv in most experiments for simplicity". The fact is correct and
+  grounded, but attributed to the wrong passage; [1, 2] would have been faithful.
+- **Validation result**: citations valid [1, 2, 5, 6], invalid [] → passed, no warning.
+
+### F2. Merged claims stretched across sources (threshold-gate rerun, 2026-10-24)
+
+- **Question**: "What is LoRA?" (threshold 0.58, top-score gate, all 6 passages sent).
+- **Sentence**: "LoRA matches or exceeds full fine-tuning performance on NLU and NLG tasks with
+  comparable or fewer trainable parameters [2, 4, 6]."
+- **Passages**: [4] says "matches or exceeds the fine-tuning baseline" for GPT-3 175B only;
+  [2] calls LoRA "a competitive alternative to full fine-tuning on NLU"; [6] (Table 3) says
+  LoRA "outperforms several baselines with comparable or fewer trainable parameters" on
+  NLG. The sentence applies [4]'s strongest wording to all three.
+- **Validation result**: citations valid [2, 3, 4, 6], invalid [] → passed, no warning.

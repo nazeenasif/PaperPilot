@@ -86,3 +86,53 @@ def test_empty_question_is_rejected_without_a_call(answer_env, fake_answers, que
     with pytest.raises(EmptyQueryError):
         ask(question)
     assert fake_answers.calls == []
+
+
+# --- US2: unsupported questions get the not-found sentence ---
+
+
+def test_all_passages_below_threshold_gives_not_found_without_a_call(answer_env, fake_answers, monkeypatch):
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", "0.99")
+    answer = ask(QUESTION)
+    assert answer.text == prompts.NOT_FOUND
+    assert answer.not_found is True
+    assert answer.passages == []
+    assert answer.llm_calls == 0
+    assert answer.fallback_reason == "below_threshold"
+    assert answer.citations.valid == [] and answer.citations.invalid == []
+    assert fake_answers.calls == []
+
+
+def test_threshold_keeps_only_passages_at_or_above_it(answer_env, fake_answers, monkeypatch):
+    from paperpilot.library import search
+
+    scores = sorted(r.score for r in search(QUESTION))
+    threshold = scores[len(scores) // 2]
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", str(threshold))
+    fake_answers.add("Evaluated on a benchmark [1].")
+    answer = ask(QUESTION)
+    assert answer.passages
+    assert all(p.score >= threshold for p in answer.passages)
+    assert len(answer.passages) == sum(1 for s in scores if s >= threshold) < len(scores)
+    assert [p.number for p in answer.passages] == list(range(1, len(answer.passages) + 1))
+
+
+def test_model_not_found_reply_becomes_the_exact_sentence(answer_env, fake_answers):
+    quoted_without_period = '"' + prompts.NOT_FOUND.rstrip(".") + '"'
+    fake_answers.add(quoted_without_period)
+    answer = ask(QUESTION)
+    assert answer.text == prompts.NOT_FOUND
+    assert answer.not_found is True
+    assert answer.fallback_reason == "model_not_found"
+    assert answer.warning is None
+    assert answer.llm_calls == 1
+
+
+def test_empty_library_gives_not_found_without_a_call(library_env, fake_embedder, llm_env, fake_answers, monkeypatch):
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", "0.0")
+    answer = ask(QUESTION)
+    assert answer.text == prompts.NOT_FOUND
+    assert answer.passages == []
+    assert answer.llm_calls == 0
+    assert answer.fallback_reason == "no_passages"
+    assert fake_answers.calls == []

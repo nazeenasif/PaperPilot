@@ -400,7 +400,7 @@ revealed answer with numbered chips and the verified badge.
   - `splitSentences` in `lib/sentences.ts` matches the engine's rule: it keeps citations with their sentence, including after the full stop.
   - `revealPlan(sentenceCount)` in `lib/reveal.ts` returns delays: 40 ms apart, 160 ms per fade, chips after the last sentence and the badge last, with the total at most 450 ms for any length.
   - With reduced motion, every delay is 0.
-- [ ] T050 [P] [US1] Create failing tests in `frontend/tests/ask.test.tsx` (mocked `fetch` stream):
+- [X] T050 [P] [US1] Create failing tests in `frontend/tests/ask.test.tsx` (mocked `fetch` stream):
   - **Composer:** an empty question shows "Type a question first" and sends nothing. Enter sends and Shift+Enter adds a newline. The composer is disabled while answering.
   - **Progress:** `ProgressSteps` shows "Searching…", "Reading 6 passages from 2 papers…" and "Checking citations…" from the events, and no answer text appears before the `answer` event.
   - **Answer:** `AnswerView` renders a chip `[n]` per citation as a button, with an accessible name such as "Citation 1: LoRA, page 5". The "All citations verified" badge appears only when `verified` is true. The answer meta shows passages read, time and model. The not-found text is rendered exactly as received.

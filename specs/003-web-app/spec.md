@@ -31,6 +31,15 @@ summaries, comparison, user accounts, deployment."
 - Q (added by the researcher): What happens when a paper already in the library is added again
   but has no stored PDF? → A: The PDF is saved without re-parsing or re-embedding, and the upload
   reports "PDF attached" instead of "already present".
+- Q: Who can reach the app over the network? → A: Localhost only — the server accepts
+  connections only from the same machine; phone width is a narrow-window layout requirement,
+  not access from other devices.
+- Q: Which requests does the "Requests today" counter include? → A: Every request the engine
+  makes — web app, checkpoint scripts and any other caller — in one shared, persistent daily
+  counter.
+- Q: What happens when the provider asks for a wait longer than the retry cap? → A: No retry:
+  the question ends at once and shows the daily-limit state, or "try again at <time>" when it is
+  not the daily limit.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -205,19 +214,22 @@ designed presentation, with no raw error text anywhere.
    "Search all papers" re-asks with every paper selected.
 2. **Given** the model is rate-limited and the engine waits before retrying, **Then** a countdown
    shows the wait and the attempt number, and the answer appears normally if a retry succeeds.
-3. **Given** all retries fail, **Then** a friendly message says the free model is busy and offers
+3. **Given** the provider asks for a wait longer than the retry cap (for example until its
+   daily reset), **Then** no retry is made and the daily-limit state (or "try again at <time>")
+   appears at once.
+4. **Given** all retries fail, **Then** a friendly message says the free model is busy and offers
    to try again, keeping the question text.
-4. **Given** today's usage has reached the daily limit, **When** the researcher asks a question,
+5. **Given** today's usage has reached the daily limit, **When** the researcher asks a question,
    **Then** no model request is made and the daily-limit state appears; "Browse passages instead"
    shows the matching passages for the question with their papers, sections and pages.
-5. **Given** an answer held back for invalid or missing citations, **When** the researcher chooses
+6. **Given** an answer held back for invalid or missing citations, **When** the researcher chooses
    "View the unverified answer", **Then** the original text appears, clearly labelled as not
    verified, with its invalid citation numbers indicated.
-6. **Given** an answer with uncited sentences, **Then** those sentences are visually flagged and the
+7. **Given** an answer with uncited sentences, **Then** those sentences are visually flagged and the
    badge does not claim that every sentence is cited.
-7. **Given** the server is not running or stops responding, **Then** the app shows that PaperPilot
+8. **Given** the server is not running or stops responding, **Then** the app shows that PaperPilot
    cannot be reached and how to start it, and recovers by itself when the server returns.
-8. **Given** the server is still loading the embedding model at startup, **Then** the app shows a
+9. **Given** the server is still loading the embedding model at startup, **Then** the app shows a
    "Getting ready" state instead of failing requests.
 
 ### Edge Cases
@@ -249,6 +261,8 @@ designed presentation, with no raw error text anywhere.
   results (constitution Principles II and IX).
 - **FR-002**: The browser MUST NOT contact the language model or hold any API key; no secret may
   appear in anything delivered to the browser.
+- **FR-002a**: The server MUST accept connections only from the same machine (localhost); it
+  MUST NOT be reachable from other devices on the network, and it requires no sign-in.
 - **FR-003**: The embedding model and the library MUST be loaded once when the server starts; the
   app MUST report a "getting ready" status until loading is complete.
 
@@ -315,12 +329,20 @@ designed presentation, with no raw error text anywhere.
   getting ready. No raw error text, stack trace or provider message MAY be shown.
 - **FR-023**: When the engine waits before retrying a model request, the app MUST show the wait as
   a live countdown with the attempt number and the maximum number of attempts.
+- **FR-023a**: When the provider asks for a wait longer than the engine's retry wait cap
+  (currently 60 seconds), the engine MUST NOT retry: the question MUST end at once with no
+  further model requests, and the app MUST show the daily-limit state when the provider reports
+  the daily limit, otherwise a "try again at <local time>" state with the question kept.
 - **FR-024**: The app MUST always show today's model request usage against the daily free limit
   (for example "Requests today 33 / 50") and the configured model, labelled as free when it is a
   free model.
-- **FR-025**: Request usage MUST count every model request PaperPilot makes (first attempts and
-  retries), persist across server restarts, and reset at the provider's daily reset time; the
-  daily limit MUST be a setting (default 50).
+- **FR-025**: Request usage MUST count every model request the PaperPilot engine makes, whoever
+  the caller is (the web app, checkpoint and calibration scripts, or any other use of the
+  engine), including first attempts and retries, in one shared daily counter that persists
+  across restarts and resets at the provider's daily reset time (to be verified during planning;
+  expected 00:00 UTC); the daily limit MUST be a setting (default 50). Whenever a provider
+  response reports its own remaining-requests figure, that figure MUST replace PaperPilot's
+  estimate. Callers running at the same time (the app and a script) MUST NOT lose counts.
 - **FR-026**: When usage has reached the daily limit, asking MUST NOT contact the model; the app
   MUST show the daily-limit state with the local time when answers resume, and MUST keep search
   and the source viewer working, including "Browse passages instead", which lists the passages
@@ -334,8 +356,8 @@ designed presentation, with no raw error text anywhere.
   panels, teal for verified and grounded elements, amber for citations and highlights, and
   separate typefaces for headings, body text and system details (palette and fonts as in the
   feature description).
-- **FR-029**: Every user story MUST be completable at phone width (375 px) without horizontal
-  scrolling; on narrow screens the library panel and the source viewer open as overlays.
+- **FR-029**: Every user story MUST be completable in a phone-width window (375 px) without
+  horizontal scrolling (a layout requirement; the app is used on the same machine, FR-002a); on narrow screens the library panel and the source viewer open as overlays.
 - **FR-030**: Every user story MUST be completable with the keyboard alone, with a visible focus
   indicator, and citation chips, checkboxes and the viewer MUST be reachable and operable by
   keyboard and announced meaningfully by screen readers.
@@ -381,8 +403,9 @@ designed presentation, with no raw error text anywhere.
   seconds with no parsing or embedding.
 - **SC-005**: After the app reports ready, the first question's search step takes under 2
   seconds (no model loading happens per request).
-- **SC-006**: The request usage shown in the app equals the number of model requests PaperPilot
-  made today, including retries, and is unchanged by a server restart.
+- **SC-006**: The request usage shown in the app equals the number of model requests the engine
+  made today from any caller (app and scripts), including retries, and is unchanged by a server
+  restart.
 - **SC-007**: With usage at the daily limit, asking makes zero model requests and "Browse
   passages instead" returns matching passages.
 - **SC-008**: All five user stories can be completed at 375 px width without horizontal
@@ -398,12 +421,14 @@ designed presentation, with no raw error text anywhere.
 ## Assumptions
 
 - PaperPilot runs on the researcher's own machine for a single user; the server and the app are
-  opened locally (no accounts, no deployment — both out of scope).
+  opened locally and the server listens on localhost only (FR-002a), so no accounts are needed
+  (accounts and deployment are out of scope).
 - The five test papers' files are dropped into the app once to attach their PDFs (no
   re-processing); until then User Story 2 scenario 5 applies.
 - The provider's daily free limit resets at midnight UTC (OpenRouter); the app shows the reset in
-  the researcher's local time. Requests made outside PaperPilot with the same key cannot be seen
-  and are not counted; the provider's own daily-limit response covers that case (FR-027).
+  the researcher's local time. Requests made with the same key outside the PaperPilot engine
+  (other tools, the provider's website) cannot be seen and are not counted; the provider's own
+  remaining-requests figure and daily-limit response cover that case (FR-025, FR-027).
 - The maximum number of attempts in the busy state comes from the engine's retry policy (currently
   4), not from the design mock-up's "attempt 1 of 3".
 - Conversations are kept in the browser only for the current page session, as in Feature 2,
@@ -414,9 +439,12 @@ designed presentation, with no raw error text anywhere.
 
 - Features 1 and 2 (library, search, `ask()` with citation checks and follow-up rewriting).
 - Engine additions this feature needs, kept inside the engine (FR-001): storing a copy of each
-  added PDF, and attaching a PDF to a paper already in the library without reprocessing; reporting ingest phases and embedding progress; reporting retry waits and attempt
-  numbers during a question; a persistent daily request count; per-paper section and text/table
-  passage counts; and the arXiv identifier when present.
+  added PDF, and attaching a PDF to a paper already in the library without reprocessing;
+  reporting ingest phases and embedding progress; reporting retry waits and attempt numbers
+  during a question; not retrying when the provider's requested wait exceeds the cap (FR-023a,
+  an amendment to ADR-0003's retry policy); a persistent, shared daily request count that
+  accepts the provider's remaining-requests figure; per-paper section and text/table passage
+  counts; and the arXiv identifier when present.
 - Constitution v1.3.0 Principle IX and the web stack it names.
 
 ## Out of Scope

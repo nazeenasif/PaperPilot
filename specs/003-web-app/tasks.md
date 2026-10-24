@@ -212,7 +212,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 
 ### US2 (P1): stored PDFs, highlight geometry, attach with layout, passage views
 
-- [ ] T022 [P] [US2] Create failing tests in `tests/test_ingest_layout.py`, using generated PDFs; extend `write_pdf` in `tests/conftest.py` to place hyphenated line breaks and two-page paragraphs.
+- [X] T022 [P] [US2] Create failing tests in `tests/test_ingest_layout.py`, using generated PDFs; extend `write_pdf` in `tests/conftest.py` to place hyphenated line breaks and two-page paragraphs.
   - `parse_pdf` keeps each block's word boxes and every page's size.
   - The new pure function `align_words(cleaned_words, raw_words)` handles hyphen joins (`repre-` + `sentation`) and falls back on a mismatch.
   - `chunk_sections` fills `Passage.regions` covering every word of each passage, including overlap words. Rectangles lie within the page box, one per line segment, and the pages are correct for a passage spanning two pages.

@@ -23,6 +23,8 @@ ENV_VARS = [
     "RELEVANCE_THRESHOLD",
     "LLM_REASONING_EFFORT",
     "LLM_TIMEOUT_SECONDS",
+    "DAILY_REQUEST_LIMIT",
+    "FRONTEND_ORIGIN",
 ]
 
 
@@ -184,3 +186,33 @@ def test_invalid_llm_timeout_names_variable_and_value(monkeypatch, value):
         load_settings()
     assert "LLM_TIMEOUT_SECONDS" in str(exc.value)
     assert value in str(exc.value)
+
+
+# --- Web app settings (Feature 3) ---
+
+
+def test_daily_request_limit_default_and_override(monkeypatch):
+    assert load_settings().daily_request_limit == 50
+    monkeypatch.setenv("DAILY_REQUEST_LIMIT", "1000")
+    assert load_settings().daily_request_limit == 1000
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "lots"])
+def test_invalid_daily_request_limit_names_variable_and_value(monkeypatch, value):
+    monkeypatch.setenv("DAILY_REQUEST_LIMIT", value)
+    with pytest.raises(SettingsError) as exc:
+        load_settings()
+    assert "DAILY_REQUEST_LIMIT" in str(exc.value)
+    assert value in str(exc.value)
+
+
+def test_frontend_origin_default_and_override(monkeypatch):
+    assert load_settings().frontend_origin == "http://127.0.0.1:3000"
+    monkeypatch.setenv("FRONTEND_ORIGIN", "http://127.0.0.1:3100")
+    assert load_settings().frontend_origin == "http://127.0.0.1:3100"
+
+
+def test_describe_lists_web_app_settings():
+    text = load_settings().describe()
+    assert "DAILY_REQUEST_LIMIT = 50" in text
+    assert "FRONTEND_ORIGIN = http://127.0.0.1:3000" in text

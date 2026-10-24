@@ -88,7 +88,7 @@ unplanned requests, FAIL if all requests exceed 2 × the plan.
 **Purpose**: shared engine settings and errors, the API skeleton (readiness, CORS, trusted
 hosts, error kinds), the frontend shell, and the boundary check.
 
-- [ ] T007 [P] Add failing tests to `tests/test_settings.py`:
+- [X] T007 [P] Add failing tests to `tests/test_settings.py`:
   - `DAILY_REQUEST_LIMIT`: default 50; must be ≥ 1; an invalid value raises an error naming the variable and the value.
   - `FRONTEND_ORIGIN`: default `http://127.0.0.1:3000`.
   - `describe()` lists both.

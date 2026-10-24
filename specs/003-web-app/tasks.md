@@ -132,7 +132,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
     - Ping comments ignored.
     - Stream end.
     - Abort.
-- [ ] T014 Implement `frontend/lib/types.ts` (types mirroring contracts/web-api.md), `frontend/lib/api.ts` and `frontend/lib/sse.ts` so T013 passes.
+- [X] T014 Implement `frontend/lib/types.ts` (types mirroring contracts/web-api.md), `frontend/lib/api.ts` and `frontend/lib/sse.ts` so T013 passes.
 - [ ] T015 [P] Add `frontend/tests/contrast.test.ts`.
   - It reads the colour tokens from `frontend/app/globals.css` and asserts a WCAG contrast of at least 4.5:1 for every pair in research R12: text on ink and on panel; muted on ink and on panel; teal and amber on ink and on panel; ink on teal and on amber; passage text on highlight and on page.
   - It also asserts that a fixture colour `#6B7280` on the panel fails, which proves the checker works (spec FR-031, SC-009).

@@ -142,7 +142,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
   - It renders its children when `ready`.
   - `Header` shows the PaperPilot name and a model chip such as "nemotron-3-ultra · free".
 - [X] T017 Implement `frontend/components/app/StatusGate.tsx`, `frontend/components/app/Header.tsx`, `frontend/components/states/GettingReady.tsx` and `frontend/components/states/Unreachable.tsx`, and wire them in `frontend/app/layout.tsx`, so T016 passes. Status polls every 2 s while not ready and every 30 s once ready.
-- [ ] T018 Create `scripts/checkpoint_6_web.py` with the shared harness and part `boundary` (0 model requests).
+- [X] T018 Create `scripts/checkpoint_6_web.py` with the shared harness and part `boundary` (0 model requests).
   - **Shared harness**:
     - UTF-8 stdout and stderr.
     - Parts selected from the command line.

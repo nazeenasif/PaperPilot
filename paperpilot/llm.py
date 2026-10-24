@@ -187,6 +187,20 @@ def _failure_message(error: Exception, attempts: int, settings: Settings) -> str
     return f"{label} request failed (status {status}) after {attempts} attempt(s). Details: {detail}"
 
 
+def _retry_reason(error: Exception) -> str:
+    """A short reason for a retry log line: never the provider's message, the key or the prompt."""
+    if isinstance(error, ProviderError):
+        return f"error in a 200 response (code {error.status_code})"
+    if isinstance(error, openai.APITimeoutError):
+        return "timeout"
+    if isinstance(error, openai.APIConnectionError):
+        return "connection error"
+    status = getattr(error, "status_code", None)
+    if status == 429:
+        return "rate limited (HTTP 429)"
+    return f"HTTP {status}"
+
+
 def _raise_for_error_body(response) -> None:
     """OpenRouter can report a failure inside an HTTP 200 body with no choices."""
     error = getattr(response, "error", None)
@@ -267,8 +281,8 @@ def generate(system: str, prompt: str) -> LLMReply:
             if wait is None or attempt == MAX_ATTEMPTS:
                 message = _failure_message(error, attempt, settings)
                 raise LLMError(_scrub(message, settings.llm_api_key)) from None
-            logger.info("LLM request %d failed (status %s); retrying in %.1f s", attempt,
-                        getattr(error, "status_code", "-"), wait)
+            logger.warning("LLM request attempt %d of %d failed: %s; retrying in %.1f s",
+                           attempt, MAX_ATTEMPTS, _retry_reason(error), wait)
             _sleep(wait)
             continue
         reply = _to_reply(response, attempt, time.perf_counter() - start)

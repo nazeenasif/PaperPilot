@@ -208,6 +208,56 @@ def test_a_failed_call_counts_one_planned_request_and_its_retries(fake):
     assert llm.request_counts() == llm.RequestCounts(planned=1, retries=llm.MAX_ATTEMPTS - 1)
 
 
+PROMPT = "SECRET-PROMPT-TEXT about the papers"
+
+
+def retry_warnings(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name == "paperpilot.llm" and r.levelname == "WARNING"]
+
+
+@pytest.mark.parametrize(
+    "error, reason, wait",
+    [
+        (f.rate_limited(retry_after="3"), "rate limited (HTTP 429)", 3.0),  # server's Retry-After
+        (f.timeout(), "timeout", 2.0),  # first backoff step
+        (f.error_body(503, "upstream overloaded"), "error in a 200 response (code 503)", 2.0),
+        (f.status_error(502, "bad gateway"), "HTTP 502", 2.0),
+    ],
+)
+def test_each_retry_is_logged_at_warning_with_attempt_reason_and_wait(fake, caplog, llm_env, error, reason, wait):
+    client = fake(error, f.ok("Answer [1]."))
+    with caplog.at_level("WARNING", logger="paperpilot.llm"):
+        llm.generate("system rules", PROMPT)
+    messages = retry_warnings(caplog)
+    assert len(messages) == 1
+    message = messages[0]
+    assert "attempt 1 of 4" in message
+    assert reason in message
+    assert f"retrying in {wait:.1f} s" in message
+    assert client.sleeps == [wait]
+    for record in caplog.records:
+        assert llm_env not in record.getMessage()
+        assert PROMPT not in record.getMessage()
+
+
+def test_every_retry_of_a_failing_call_is_logged(fake, caplog):
+    fake(*[f.rate_limited(retry_after="1")] * llm.MAX_ATTEMPTS)
+    with caplog.at_level("WARNING", logger="paperpilot.llm"):
+        with pytest.raises(LLMError):
+            llm.generate("s", PROMPT)
+    messages = retry_warnings(caplog)
+    assert [m.split(":")[0] for m in messages] == [
+        f"LLM request attempt {n} of {llm.MAX_ATTEMPTS} failed" for n in range(1, llm.MAX_ATTEMPTS)
+    ]
+
+
+def test_a_first_try_success_logs_no_warning(fake, caplog):
+    fake(f.ok("Answer [1]."))
+    with caplog.at_level("WARNING", logger="paperpilot.llm"):
+        llm.generate("s", PROMPT)
+    assert retry_warnings(caplog) == []
+
+
 def test_request_counts_subtract_for_a_part_of_a_run(fake):
     fake(f.ok("Answer [1]."), f.timeout(), f.ok("Answer [2]."))
     llm.generate("s", "p")

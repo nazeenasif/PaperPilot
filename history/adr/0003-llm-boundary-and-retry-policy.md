@@ -32,6 +32,10 @@
   object with a retryable code. Wait `Retry-After` seconds, else until `X-RateLimit-Reset`,
   capped at 60 s; otherwise 2, 4, 8 s. Never retry 400, 401, 403, 404, or 402 without
   `Retry-After`. `retry_wait()` is a pure function; the sleep is injectable for tests.
+  Every retry is logged at WARNING with the attempt number, a short reason (HTTP 429,
+  timeout, connection error, error in a 200 response with its code, or the status code) and
+  the wait, never the key, prompt or provider message. First attempts and retries are counted
+  separately (`request_counts()`) so checkpoints can budget them differently.
 - **Cut-off output**: `finish_reason == "length"` or empty content raises `LLMError` with a
   hint (lower `LLM_REASONING_EFFORT` or change model); it is never returned as an answer and
   never retried.

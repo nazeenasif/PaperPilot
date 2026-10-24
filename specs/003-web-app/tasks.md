@@ -136,7 +136,7 @@ hosts, error kinds), the frontend shell, and the boundary check.
 - [X] T015 [P] Add `frontend/tests/contrast.test.ts`.
   - It reads the colour tokens from `frontend/app/globals.css` and asserts a WCAG contrast of at least 4.5:1 for every pair in research R12: text on ink and on panel; muted on ink and on panel; teal and amber on ink and on panel; ink on teal and on amber; passage text on highlight and on page.
   - It also asserts that a fixture colour `#6B7280` on the panel fails, which proves the checker works (spec FR-031, SC-009).
-- [ ] T016 [P] Create failing tests in `frontend/tests/app-shell.test.tsx`:
+- [X] T016 [P] Create failing tests in `frontend/tests/app-shell.test.tsx`:
   - `StatusGate` shows `GettingReady` while `/api/status` is `loading`.
   - It shows `Unreachable`, with how to start the server, when the fetch fails, and recovers on the next successful poll.
   - It renders its children when `ready`.

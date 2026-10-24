@@ -191,7 +191,7 @@ def test_build_layout_describes_pages_and_every_passage(tmp_path, make_pdf):
 
 
 def test_parse_pdf_reads_the_arxiv_identifier_from_page_one(tmp_path):
-    path = write_layout_pdf(tmp_path / "arxiv.pdf", [[("arXiv:2106.09685v2 [cs.CL] 16 Oct 2021", 9, 14),
+    path = write_layout_pdf(tmp_path / "arxiv.pdf", [[("arXiv:2106.09685v2 [cs.CL] 16 Oct 2021", 9, 20),
                                                        ("A Paper Posted On The Preprint Server", 16, 30),
                                                        ("1 Introduction", 12, 24), (FILLER, 10, 70)]])
     assert parse_pdf(path).arxiv_id == "2106.09685"

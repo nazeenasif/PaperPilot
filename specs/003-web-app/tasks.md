@@ -221,7 +221,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - `build_layout(paper, passages, settings)` returns the document described in data-model.md, including the chunk settings.
   - Passage texts and ids are unchanged compared with the existing tests.
   - `parse_pdf` sets `arxiv_id` from an `arXiv:2106.09685v2` stamp on page 1, and `None` without one.
-- [ ] T023 [US2] Implement the geometry in `paperpilot/ingest.py` (research R4, ADR-0006): word boxes on `Block`, `ParsedPaper.page_sizes` and `arxiv_id`, `align_words`, `Region`, `Passage.regions`, and `build_layout`. T022 and the full `pytest` must pass, which confirms the existing chunk output is unchanged.
+- [X] T023 [US2] Implement the geometry in `paperpilot/ingest.py` (research R4, ADR-0006): word boxes on `Block`, `ParsedPaper.page_sizes` and `arxiv_id`, `align_words`, `Region`, `Passage.regions`, and `build_layout`. T022 and the full `pytest` must pass, which confirms the existing chunk output is unchanged.
 - [ ] T024 [P] [US2] Create failing tests in `tests/test_library_pdfs.py` (`library_env`, `fake_embedder`, `make_pdf`).
   - **Adding:** `add_paper` copies the PDF to `<LIBRARY_DIR>/pdfs/<id>.pdf` and writes `<id>.layout.json` atomically. Outcome `added`, highlights `exact`.
   - **Known content, PDF stored:** returns `already_present` without calling `parse_pdf` (spy).

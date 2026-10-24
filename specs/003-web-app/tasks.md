@@ -497,7 +497,7 @@ the usage meter shows today's count.
     - PassageGone: a chip whose passage no longer exists shows "This passage is no longer in your library".
     - UploadInvalid shows its copy.
   - **Raw errors:** no component ever renders `error.message` from the network.
-- [ ] T064 [US5] Implement `frontend/components/states/NotFound.tsx`, `Busy.tsx`, `ModelBusy.tsx`, `DailyLimit.tsx`, `RateLimited.tsx`, `HeldBack.tsx`, `UncitedFlag.tsx`, `ModelUnavailable.tsx` and `PassageGone.tsx`, plus `frontend/lib/errorKinds.ts` (kind → component, with all copy owned here), and wire them into `AnswerView` and `useAsk`, so T063 passes.
+- [X] T064 [US5] Implement `frontend/components/states/NotFound.tsx`, `Busy.tsx`, `ModelBusy.tsx`, `DailyLimit.tsx`, `RateLimited.tsx`, `HeldBack.tsx`, `UncitedFlag.tsx`, `ModelUnavailable.tsx` and `PassageGone.tsx`, plus `frontend/lib/errorKinds.ts` (kind → component, with all copy owned here), and wire them into `AnswerView` and `useAsk`, so T063 passes.
 - [ ] T065 [P] [US5] Create failing tests in `frontend/tests/usage-meter.test.tsx`, then implement `frontend/components/app/UsageMeter.tsx` and wire it into `Header.tsx`:
   - It shows "Requests today 34 / 50".
   - It refreshes after each answer, from the answer's `usage`, and every 60 s.

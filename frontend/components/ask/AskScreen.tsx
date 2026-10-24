@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 
+import { useStatus } from "@/components/app/StatusGate";
 import { AnswerView } from "@/components/ask/AnswerView";
-import { Composer } from "@/components/ask/Composer";
+import { COMPOSER_ID, Composer } from "@/components/ask/Composer";
 import { ProgressSteps } from "@/components/ask/ProgressSteps";
 import { SourceViewer } from "@/components/source/SourceViewer";
+import { Busy } from "@/components/states/Busy";
+import { HeldBack } from "@/components/states/HeldBack";
+import { NotFound } from "@/components/states/NotFound";
+import { TurnFailure } from "@/components/states/TurnFailure";
 import type { NumberedPassage } from "@/lib/types";
 import { useAsk } from "@/lib/useAsk";
 
@@ -14,6 +19,9 @@ import { useAsk } from "@/lib/useAsk";
 export function AskScreen() {
   const { turns, busy, ask } = useAsk();
   const [openPassage, setOpenPassage] = useState<NumberedPassage | null>(null);
+  const connection = useStatus();
+  const status = connection.kind === "status" ? connection.status : null;
+  const rephrase = () => document.getElementById(COMPOSER_ID)?.focus();
 
   return (
     <main className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-3xl flex-col px-4 pt-8 pb-6">
@@ -24,14 +32,37 @@ export function AskScreen() {
             <p className="ml-auto w-fit max-w-[85%] rounded-2xl border border-line bg-panel px-4 py-2.5 whitespace-pre-wrap text-text">
               {turn.question}
             </p>
-            {turn.state === "asking" && <ProgressSteps progress={turn.progress} retry={turn.retry} />}
+            {turn.state === "asking" &&
+              (turn.retry && turn.retrySince !== null ? (
+                <Busy retry={turn.retry} since={turn.retrySince} />
+              ) : (
+                <ProgressSteps progress={turn.progress} retry={turn.retry} />
+              ))}
             {turn.state === "answered" && turn.answer && (
-              <AnswerView answer={turn.answer} onOpenCitation={setOpenPassage} />
+              turn.answer.not_found && turn.answer.rejected_answer ? (
+                <HeldBack answer={turn.answer} />
+              ) : turn.answer.not_found ? (
+                // Every paper is searched until scope selection exists (US4).
+                <NotFound
+                  sentence={turn.answer.text}
+                  canSearchAll={false}
+                  onSearchAll={() => void ask(turn.question)}
+                  onRephrase={rephrase}
+                />
+              ) : (
+                <AnswerView answer={turn.answer} onOpenCitation={setOpenPassage} />
+              )
             )}
-            {turn.state === "failed" && (
-              <p role="alert" className="rounded-xl border border-amber/40 bg-panel px-4 py-3 text-text">
-                PaperPilot couldn&apos;t finish this answer. Please try again in a moment.
-              </p>
+            {turn.state === "failed" && turn.error && (
+              <TurnFailure
+                kind={turn.error.kind}
+                fields={turn.error.fields}
+                question={turn.question}
+                model={status?.model}
+                dailyLimit={status?.daily_limit}
+                onRetry={() => void ask(turn.question)}
+                onOpenPassage={setOpenPassage}
+              />
             )}
           </li>
         ))}

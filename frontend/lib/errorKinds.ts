@@ -41,3 +41,57 @@ export function uploadFailure(error: UploadJob["error"]): FailureCopy {
   if (error?.kind === "unknown_paper" || error?.kind === "pdf_missing") return GONE;
   return UNKNOWN_FAILURE;
 }
+
+// --- Ask failures and answer states (User Story 5) ---
+
+/** The engine's not-found sentence (prompts.NOT_FOUND). */
+export const NOT_FOUND_SENTENCE = "I couldn't find that in the selected papers.";
+
+/** The researcher's local time as HH:MM (24-hour), from an ISO timestamp. */
+export function localTime(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+}
+
+function numberList(numbers: number[]): string {
+  if (numbers.length <= 1) return String(numbers[0] ?? "");
+  return `${numbers.slice(0, -1).join(", ")} and ${numbers[numbers.length - 1]}`;
+}
+
+/** Why an answer was held back, from the checked citations (never the server's wording). */
+export function heldBackReason(invalid: number[], provided: number): string {
+  if (invalid.length === 0) {
+    return "The model's answer cited none of the provided passages, so it wasn't shown as verified.";
+  }
+  const cited = `passage${invalid.length === 1 ? "" : "s"} ${numberList(invalid)}`;
+  return `The model cited ${cited}, but only ${provided} ${provided === 1 ? "was" : "were"} provided, so its answer wasn't shown as verified.`;
+}
+
+/** What to change when the configured model can't be used, by reason (no key is ever shown). */
+export const MODEL_UNAVAILABLE_HINTS: Record<string, string> = {
+  not_listed: "The provider doesn't list this model. Choose another LLM_MODEL in .env and restart the API.",
+  unknown_model: "The provider doesn't know this model. Choose another LLM_MODEL in .env and restart the API.",
+  bad_key: "The provider didn't accept the API key. Check LLM_API_KEY in .env and restart the API.",
+  out_of_credits: "The provider account has no credits for this model. Choose a :free model in .env, or add credits.",
+  cut_off: "The model's answer was cut off. Set LLM_REASONING_EFFORT=low in .env, or choose another LLM_MODEL.",
+  empty: "The model returned an empty answer. Try again, or choose another LLM_MODEL in .env.",
+  bad_request: "The provider refused the request. Choose another LLM_MODEL in .env and restart the API.",
+};
+export const MODEL_UNAVAILABLE_DEFAULT = "Check LLM_MODEL and LLM_API_KEY in .env, then restart the API.";
+
+/** Copy for failures without a dedicated state. */
+export const GENERIC_FAILURES: Record<string, FailureCopy> = {
+  unreachable: {
+    message: "PaperPilot can't be reached right now.",
+    next: "Start the API with python -m api. Your question is kept; try again once it's running.",
+  },
+  not_ready: { message: "PaperPilot is still getting ready.", next: "Try again in a few seconds." },
+  busy_question: { message: "Another question is still being answered.", next: "Try again when it finishes." },
+  unknown_paper: {
+    message: "One of the selected papers is no longer in your library.",
+    next: "Check the selection, then try again.",
+  },
+};
+export const GENERIC_FAILURE: FailureCopy = {
+  message: "PaperPilot couldn't finish this answer.",
+  next: "Please try again in a moment. If it keeps failing, the server log has the details.",
+};

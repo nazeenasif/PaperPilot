@@ -3,6 +3,9 @@
 import { ArrowRight } from "lucide-react";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 
+/** The composer's element id, so states can move focus to it ("Rephrase more specifically"). */
+export const COMPOSER_ID = "ask-composer";
+
 /** The question box: Enter sends, Shift+Enter adds a line; disabled while answering (FR-010). */
 export function Composer({ busy, onAsk }: { busy: boolean; onAsk: (question: string) => void }) {
   const [text, setText] = useState("");
@@ -32,6 +35,7 @@ export function Composer({ busy, onAsk }: { busy: boolean; onAsk: (question: str
     <form onSubmit={submit} className="w-full">
       <div className="flex items-end gap-2 rounded-2xl border border-teal/30 bg-panel p-2 focus-within:border-teal/70">
         <textarea
+          id={COMPOSER_ID}
           aria-label="Ask about your papers"
           aria-describedby={hint ? "composer-hint" : undefined}
           placeholder="Ask about the selected papers…"

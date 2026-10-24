@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { HighlightOverlay } from "@/components/source/HighlightOverlay";
+import { PassageGone } from "@/components/states/PassageGone";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ApiError, apiGet, apiPost, apiUrl } from "@/lib/api";
 import type { NumberedPassage, PassageView } from "@/lib/types";
@@ -86,11 +87,10 @@ export function SourceViewer({
 
         {load.state === "loading" && <p className="text-sm text-muted-foreground">Loading the source…</p>}
 
-        {load.state === "failed" && (
+        {load.state === "failed" && load.kind === "unknown_passage" && <PassageGone />}
+        {load.state === "failed" && load.kind !== "unknown_passage" && (
           <p role="alert" className="rounded-xl border border-amber/40 bg-panel px-4 py-3 text-text">
-            {load.kind === "unknown_passage"
-              ? "This passage is no longer in your library. Ask the question again to get current sources."
-              : "The source couldn't be loaded. Please try again."}
+            The source couldn&apos;t be loaded. Please try again.
           </p>
         )}
 

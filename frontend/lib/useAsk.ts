@@ -15,6 +15,8 @@ export interface AskTurn {
   state: TurnState;
   progress: ProgressEvent | null;
   retry: RetryWaitEvent | null;
+  /** When the current retry wait began (Date.now()), so the countdown survives re-renders. */
+  retrySince: number | null;
   answer: Answer | null;
   error: { kind: string; fields: Record<string, unknown> } | null;
 }
@@ -34,13 +36,13 @@ export function useAsk() {
       const id = nextId.current++;
       setTurns((all) => [
         ...all,
-        { id, question, state: "asking", progress: null, retry: null, answer: null, error: null },
+        { id, question, state: "asking", progress: null, retry: null, retrySince: null, answer: null, error: null },
       ]);
       try {
         const events = await postEventStream("/api/ask", { question });
         for await (const { event, data } of events) {
           if (event === "progress") update(id, { progress: data as ProgressEvent, retry: null });
-          else if (event === "retry_wait") update(id, { retry: data as RetryWaitEvent });
+          else if (event === "retry_wait") update(id, { retry: data as RetryWaitEvent, retrySince: Date.now() });
           else if (event === "answer") {
             update(id, { state: "answered", answer: data as Answer, progress: null, retry: null });
             return;

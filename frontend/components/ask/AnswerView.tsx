@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 
 import { CitationChip } from "@/components/ask/CitationChip";
 import { VerifiedBadge } from "@/components/ask/VerifiedBadge";
+import { UncitedFlag } from "@/components/states/UncitedFlag";
 import { revealPlan } from "@/lib/reveal";
 import { splitSegments, splitSentences } from "@/lib/sentences";
 import type { Answer, NumberedPassage } from "@/lib/types";
@@ -14,6 +15,7 @@ export function AnswerView({ answer, onOpenCitation }: { answer: Answer; onOpenC
   const sentences = splitSentences(answer.text);
   const plan = revealPlan(sentences.length, reduced);
   const byNumber = new Map(answer.passages.map((p) => [p.number, p]));
+  const uncited = new Set(answer.citations.uncited_sentences.map((s) => s.trim()));
   const seconds = answer.timings.rewrite + answer.timings.retrieve + answer.timings.generate;
   const fade = (delayMs: number) =>
     reduced ? { initial: false as const } : {
@@ -30,7 +32,15 @@ export function AnswerView({ answer, onOpenCitation }: { answer: Answer; onOpenC
       </p>
       <p className="text-lg leading-relaxed text-text">
         {sentences.map((sentence, index) => (
-          <motion.span key={index} {...fade(plan.sentenceDelays[index] ?? 0)}>
+          <motion.span
+            key={index}
+            {...fade(plan.sentenceDelays[index] ?? 0)}
+            {...(uncited.has(sentence.trim()) && {
+              "data-uncited": "",
+              title: "This sentence has no citation",
+              className: "underline decoration-amber/70 decoration-dotted underline-offset-4",
+            })}
+          >
             {splitSegments(sentence).map((segment, i) =>
               segment.kind === "text" ? (
                 <span key={i}>{segment.text}</span>
@@ -45,6 +55,7 @@ export function AnswerView({ answer, onOpenCitation }: { answer: Answer; onOpenC
           </motion.span>
         ))}
       </p>
+      <UncitedFlag count={uncited.size} />
       {answer.verified && (
         <motion.div {...fade(plan.badgeDelay)}>
           <VerifiedBadge />

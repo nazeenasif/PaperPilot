@@ -65,7 +65,7 @@ unplanned requests, FAIL if all requests exceed 2 × the plan.
   - Run `npm install` to create `frontend/package-lock.json`.
   - **Root `.gitignore`**: add `frontend/node_modules/`, `frontend/.next/`, `frontend/test-results/`, `frontend/playwright-report/`, `frontend/public/pdf.worker.min.mjs` and `frontend/.env.local`.
   - Commit these files.
-- [ ] T003 Create the design theme.
+- [X] T003 Create the design theme.
   - In `frontend/app/globals.css`, define the Tailwind v4 `@theme` tokens from research R12: `ink #07090D`, `panel #10141B`, `panel-2 #161B24`, `line #222A36`, `text #E6EAF0`, `muted #8B95A5`, `teal #5EEAD4`, `amber #F5B454`, `page #F4F1EA`, `highlight #F6D9A8`, `passage-text #1F2328`. Also define the `--font-heading`, `--font-body` and `--font-mono` variables, visible focus-ring utilities, and a `prefers-reduced-motion` base rule.
   - In `frontend/app/layout.tsx`, load Sora, Inter and JetBrains Mono with `next/font/google` and set `<html lang="en">` with `bg-ink text-text`.
   - Add a placeholder `frontend/app/page.tsx`. `npm run build` must succeed.

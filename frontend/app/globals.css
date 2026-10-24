@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/* Design tokens from docs/design/ (research R12). Contrast is checked by tests/contrast.test.ts:
+   never use a text colour darker than --color-muted on dark surfaces. */
+@theme {
+  --color-ink: #07090d;
+  --color-panel: #10141b;
+  --color-panel-2: #161b24;
+  --color-line: #222a36;
+  --color-text: #e6eaf0;
+  --color-muted: #8b95a5;
+  --color-teal: #5eead4;
+  --color-amber: #f5b454;
+  --color-page: #f4f1ea;
+  --color-highlight: #f6d9a8;
+  --color-passage-text: #1f2328;
+}
+
+/* Fonts come from next/font (self-hosted at build time) through CSS variables set in layout.tsx. */
+@theme inline {
+  --font-heading: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-ink);
+    color: var(--color-text);
+    font-family: var(--font-body);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-heading);
+  }
+
+  /* A visible focus ring on every interactive element (FR-030). */
+  :focus-visible {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

@@ -15,6 +15,7 @@ LLM_ERROR_REASONS = frozenset(
         "empty",
         "timeout",
         "unreachable",
+        "bad_request",
         "daily_limit",
         "rate_limited",
     }

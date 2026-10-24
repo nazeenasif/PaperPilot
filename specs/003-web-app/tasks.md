@@ -279,7 +279,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - **Daily classification:** `daily=True` when `X-RateLimit-Limit` equals the daily limit, or when the refreshed stub shows `remaining 0`; `False` for a per-minute limit of 20.
   - **Logging:** the WARNING retry log includes the raw `X-RateLimit-Reset` value.
   - **Reasons:** every terminal `LLMError` carries a `reason`.
-- [ ] T032 [US5] Implement the usage database, `usage()`, `refresh_usage()` (OpenRouter `GET /api/v1/key` through `httpx` with a 10 s timeout and the key only in the `Authorization` header), the daily pre-check, the long-wait rule, the 48-hour reset check, the raw header in logs, and the `LLMError.reason` values, all in `paperpilot/llm.py`. T030, T031 and the full `pytest` must pass, which shows Features 1–2 are unaffected.
+- [X] T032 [US5] Implement the usage database, `usage()`, `refresh_usage()` (OpenRouter `GET /api/v1/key` through `httpx` with a 10 s timeout and the key only in the `Authorization` header), the daily pre-check, the long-wait rule, the 48-hour reset check, the raw header in logs, and the `LLMError.reason` values, all in `paperpilot/llm.py`. T030, T031 and the full `pytest` must pass, which shows Features 1–2 are unaffected.
 - [ ] T033 [US5] Create `scripts/usage.py` (0 model requests). It calls `llm.refresh_usage()` and prints `used / limit`, `remaining`, `resets_at` in UTC and local time, and the source, never the key.
   - **Runnable check**: run `python scripts/usage.py`, then `python scripts/checkpoint_4_answer.py us5 secrets` (0 requests), then the full `pytest`.
 

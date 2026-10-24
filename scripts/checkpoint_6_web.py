@@ -4,8 +4,9 @@ Talks to the running API (http://127.0.0.1:8000) and frontend (http://127.0.0.1:
 states its planned model requests; the run fails on unplanned requests or when all requests,
 retries included, exceed twice the plan (scripts/request_budget.py, Feature 2 budget rule).
 
-Usage: python scripts/checkpoint_6_web.py [part ...]   (default: every part)
-Parts: boundary, ask, viewer (viewer opens the citations of part ask)
+Usage: python scripts/checkpoint_6_web.py [part ...] [--new-pdf PATH]   (default: every part)
+Parts: boundary, ask, viewer (viewer opens the citations of part ask), library (--new-pdf PATH
+also adds a paper that is not in the library yet, then deletes it)
 
 Start the servers first (quickstart): `python -m api` and `npm --prefix frontend run dev`.
 """
@@ -14,6 +15,7 @@ import json
 import re
 import socket
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -315,16 +317,148 @@ def part_viewer(run: Run, client: httpx.Client) -> None:
         run.check(average >= 0.9, f"highlighted words belong to their passage ({average:.0%} on average)")
 
 
+ATTACH_LIMIT = 10.0  # SC-004: attaching a PDF to a known paper
+DUPLICATE_LIMIT = 3.0  # a renamed duplicate is recognised at once
+NEW_PAPER_LIMIT = 60.0
+JOB_POLL = 0.1
+new_pdf: Path | None = None  # set by --new-pdf
+
+
+class JobWatcher:
+    """Reads GET /api/jobs/events on a thread and records each job's phases as they stream."""
+
+    def __init__(self) -> None:
+        self.phases: dict[str, list[str]] = {}
+        self.connected = threading.Event()
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._read, daemon=True)
+
+    def _read(self) -> None:
+        try:
+            with httpx.Client(base_url=API, timeout=None) as client:
+                with client.stream("GET", "/api/jobs/events") as response:
+                    self.connected.set()
+                    name = ""
+                    for line in response.iter_lines():
+                        if self.stop.is_set():
+                            return
+                        if line.startswith("event:"):
+                            name = line[6:].strip()
+                        elif line.startswith("data:") and name == "job":
+                            job = json.loads(line[5:])
+                            seen = self.phases.setdefault(job["job_id"], [])
+                            if not seen or seen[-1] != job["phase"]:
+                                seen.append(job["phase"])
+        except httpx.HTTPError:
+            pass
+
+    def __enter__(self) -> "JobWatcher":
+        self.thread.start()
+        self.connected.wait(10.0)
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.stop.set()  # the daemon thread ends at the next ping or with the script
+
+
+def upload_and_wait(client: httpx.Client, name: str, data: bytes, timeout: float) -> tuple[dict | None, float]:
+    """Upload one file and poll its job until ready or failed; return (job, or None on timeout; seconds)."""
+    start = time.monotonic()
+    response = client.post("/api/papers", files=[("files", (name, data, "application/pdf"))], headers=WRITE_HEADERS)
+    if response.status_code != 202:
+        print(f"  POST /api/papers answered {response.status_code}: {response.text[:200]}")
+        return None, time.monotonic() - start
+    job_id = response.json()["jobs"][0]["job_id"]
+    while time.monotonic() - start < timeout:
+        for job in client.get("/api/jobs").json()["jobs"]:
+            if job["job_id"] == job_id and job["phase"] in ("ready", "failed"):
+                return job, time.monotonic() - start
+        time.sleep(JOB_POLL)
+    return None, time.monotonic() - start
+
+
+def describe(job: dict | None, watcher: JobWatcher) -> str:
+    """A job's result and the phases streamed for it, for the log."""
+    if job is None:
+        return "no result (timed out)"
+    phases = " → ".join(watcher.phases.get(job["job_id"], [])) or "no events seen"
+    result = job["error"] if job["phase"] == "failed" else f"{job['outcome']}, highlights {job['highlights']}"
+    return f"{result} [{phases}]"
+
+
+def part_library(run: Run, client: httpx.Client) -> None:
+    """US3: attach the PDFs of the existing papers, reject a non-PDF and spot a renamed
+    duplicate (SC-004). 0 model requests."""
+    pdfs = sorted((ROOT / "papers").glob("*.pdf"))
+    if not pdfs:
+        run.check(False, "there are PDFs in papers/ to upload")
+        return
+    with JobWatcher() as watcher:
+        run.check(watcher.connected.is_set(), "GET /api/jobs/events is streaming")
+        print(f"Uploading the {len(pdfs)} PDFs in papers/ one at a time:")
+        for path in pdfs:
+            job, seconds = upload_and_wait(client, path.name, path.read_bytes(), ATTACH_LIMIT + 20)
+            print(f"  {path.name}: {describe(job, watcher)} in {seconds:.1f} s")
+            ok = job is not None and (
+                (job["outcome"] == "pdf_attached" and job["highlights"] == "exact")
+                or job["outcome"] == "already_present"
+            )
+            run.check(ok and seconds <= ATTACH_LIMIT,
+                      f"{path.name} ends pdf_attached (exact) or already_present within {ATTACH_LIMIT:.0f} s")
+
+        print("Rejected and duplicate uploads:")
+        job, seconds = upload_and_wait(client, "notes.pdf", b"These are plain-text notes, not a PDF.", 10.0)
+        print(f"  notes.pdf (generated text): {describe(job, watcher)} in {seconds:.1f} s")
+        run.check(job is not None and job["error"] == {"kind": "upload_invalid", "reason": "not_pdf"},
+                  "a non-PDF file gives upload_invalid with reason not_pdf")
+        copy_name = f"renamed copy of {pdfs[0].name}"
+        job, seconds = upload_and_wait(client, copy_name, pdfs[0].read_bytes(), 10.0)
+        print(f"  {copy_name}: {describe(job, watcher)} in {seconds:.1f} s")
+        run.check(job is not None and job["outcome"] == "already_present" and seconds <= DUPLICATE_LIMIT,
+                  f"a renamed duplicate gives already_present within {DUPLICATE_LIMIT:.0f} s")
+
+        if new_pdf is not None:
+            print(f"New paper: {new_pdf.name}")
+            job, seconds = upload_and_wait(client, new_pdf.name, new_pdf.read_bytes(), NEW_PAPER_LIMIT + 30)
+            print(f"  {new_pdf.name}: {describe(job, watcher)} in {seconds:.1f} s")
+            phases = watcher.phases.get(job["job_id"], []) if job else []
+            run.check(job is not None and job["outcome"] == "added" and seconds <= NEW_PAPER_LIMIT,
+                      f"the new paper reaches Ready (added) within {NEW_PAPER_LIMIT:.0f} s")
+            run.check(len(phases) - 1 >= 3, f"at least 3 phase changes were streamed ({max(len(phases) - 1, 0)})")
+            if job is not None and job["outcome"] == "added":
+                deleted = client.delete(f"/api/papers/{job['paper_id']}", headers=WRITE_HEADERS)
+                run.check(deleted.status_code == 200,
+                          f"the new paper is deleted again ({deleted.json().get('removed_passages')} passages)")
+
+    papers = client.get("/api/papers").json()
+    print(f"Library: {len(papers['papers'])} papers, {papers['total_passages']} passages")
+    for card in papers["papers"]:
+        print(f"  {card['title'][:60]}: {card['passage_count']} passages ({card['table_passages']} tables), "
+              f"{card['section_count']} sections, arXiv {card['arxiv_id']}, highlights {card['highlights']}")
+    run.check(all(card["has_pdf"] and card["highlights"] == "exact" for card in papers["papers"]),
+              "every paper has its PDF with exact highlights")
+
+
 PARTS: dict[str, Part] = {
     "boundary": Part(plan=0, run=part_boundary),
     "ask": Part(plan=1, run=part_ask),
     "viewer": Part(plan=0, run=part_viewer),
+    "library": Part(plan=0, run=part_library),
 }
 
 
 def main() -> int:
     """Run the selected parts; return 0 if every check passes."""
-    names = [a.lower() for a in sys.argv[1:]] or list(PARTS)
+    global new_pdf
+    args = sys.argv[1:]
+    if "--new-pdf" in args:
+        index = args.index("--new-pdf")
+        if index + 1 >= len(args) or not Path(args[index + 1]).is_file():
+            print("--new-pdf needs the path of a PDF file")
+            return 2
+        new_pdf = Path(args[index + 1])
+        del args[index:index + 2]
+    names = [a.lower() for a in args] or list(PARTS)
     unknown = [n for n in names if n not in PARTS]
     if unknown:
         print(f"Unknown part(s) {unknown}; choose from {', '.join(PARTS)} (default: all)")

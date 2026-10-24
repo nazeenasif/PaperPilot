@@ -364,7 +364,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 
 ### US5: usage, search, error kinds
 
-- [ ] T046 [P] [US5] Create failing tests in `tests/api/test_usage_errors.py`:
+- [X] T046 [P] [US5] Create failing tests in `tests/api/test_usage_errors.py`:
   - **Usage:** `GET /api/usage` returns `used`, `limit`, `remaining`, `resets_at` and `source`. It refreshes from the provider at most once per 30 s (spy on `refresh_usage` with an injected clock).
   - **Search:** `POST /api/search` returns ranked passages and makes no `generate` call.
   - **Each engine exception maps to its kind and fields, as an `error` event mid-stream:**

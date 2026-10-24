@@ -127,8 +127,8 @@ RESET = datetime(2026, 10, 26, 0, 0, tzinfo=timezone.utc)
 @pytest.mark.parametrize(
     "error, expected",
     [
-        (LLMError("still limited", reason="busy"), {"kind": "model_busy"}),
-        (LLMError("timed out", reason="timeout"), {"kind": "model_busy"}),
+        (LLMError("still limited", reason="busy"), {"kind": "model_busy", "attempts": 4}),
+        (LLMError("timed out", reason="timeout"), {"kind": "model_busy", "attempts": 4}),
         (LLMError("no such model", reason="unknown_model"), {"kind": "model_unavailable", "reason": "unknown_model"}),
         (LLMError("cut off", reason="cut_off"), {"kind": "model_unavailable", "reason": "cut_off"}),
         (DailyLimitError(used=50, limit=50, resets_at=RESET),

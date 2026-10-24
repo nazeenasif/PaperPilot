@@ -7,6 +7,7 @@ failures become one readable LLMError line with the API key scrubbed out.
 
 import logging
 import sqlite3
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -120,15 +121,42 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+_prepared_usage_files: set[Path] = set()
+_prepare_lock = threading.Lock()
+
+
+def _prepare_usage_file(db: sqlite3.Connection, path: Path) -> None:
+    """Switch the file to WAL and create the table, once per process. Changing the journal
+    mode reports "locked" at once instead of waiting, so it is retried briefly."""
+    with _prepare_lock:
+        if path in _prepared_usage_files:
+            return
+        for attempt in range(50):
+            try:
+                if db.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
+                    db.execute("PRAGMA journal_mode=WAL")
+                break
+            except sqlite3.OperationalError:
+                if attempt == 49:
+                    raise
+                time.sleep(0.05)
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS daily_usage (day TEXT PRIMARY KEY, used INTEGER NOT NULL, "
+            "request_limit INTEGER NOT NULL, source TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        _prepared_usage_files.add(path)
+
+
 def _usage_connection(settings: Settings) -> sqlite3.Connection:
     """The usage database under LIBRARY_DIR; WAL and a busy timeout let the app and scripts share it."""
     settings.library_dir.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(Path(settings.library_dir) / USAGE_FILE, timeout=5.0, isolation_level=None)
-    db.execute("PRAGMA journal_mode=WAL")
-    db.execute(
-        "CREATE TABLE IF NOT EXISTS daily_usage (day TEXT PRIMARY KEY, used INTEGER NOT NULL, "
-        "request_limit INTEGER NOT NULL, source TEXT NOT NULL, updated_at TEXT NOT NULL)"
-    )
+    path = Path(settings.library_dir) / USAGE_FILE
+    db = sqlite3.connect(path, timeout=10.0, isolation_level=None)
+    try:
+        _prepare_usage_file(db, path)
+    except BaseException:
+        db.close()
+        raise
     return db
 
 

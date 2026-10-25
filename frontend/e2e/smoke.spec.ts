@@ -254,3 +254,141 @@ test("US4 scope", async ({ page }) => {
   await page.getByRole("button", { name: "New conversation" }).click();
   await expect(page.getByText(/BooksCorpus and English Wikipedia/)).toHaveCount(0);
 });
+
+// --- Phone width and keyboard (SC-008, FR-029, FR-030) ---
+
+/** The page must never scroll sideways (375 px in the phone project). */
+async function expectNoSideScroll(page: Page, screen: string) {
+  const { scroll, client } = await page.evaluate(() => ({
+    scroll: document.documentElement.scrollWidth,
+    client: document.documentElement.clientWidth,
+  }));
+  expect(scroll, `${screen}: the page is ${scroll}px wide in a ${client}px window`).toBeLessThanOrEqual(client);
+}
+
+/** Press Tab until `target` has focus (keyboard only); fail if it can't be reached. */
+async function tabTo(page: Page, target: Locator, limit = 80) {
+  await expect(target).toBeVisible();
+  for (let i = 0; i < limit; i++) {
+    if (await target.evaluate((el) => el === document.activeElement)) return;
+    await page.keyboard.press("Tab");
+  }
+  throw new Error(`could not reach ${target} with Tab`);
+}
+
+/** The focused element shows a focus ring (outline or box-shadow) as :focus-visible. */
+async function expectFocusRing(page: Page) {
+  const ring = await page.evaluate(() => {
+    const el = document.activeElement as HTMLElement;
+    const style = getComputedStyle(el);
+    return {
+      visible: el.matches(":focus-visible"),
+      outline: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0,
+      shadow: style.boxShadow !== "none",
+      what: `${el.tagName} ${el.getAttribute("aria-label") ?? el.textContent?.slice(0, 30)}`,
+    };
+  });
+  expect(ring.visible, `${ring.what} matches :focus-visible`).toBe(true);
+  expect(ring.outline || ring.shadow, `${ring.what} shows a focus ring`).toBe(true);
+}
+
+function libraryRoutes() {
+  const total = LIBRARY_PAPERS.reduce((sum, p) => sum + p.passage_count, 0);
+  return {
+    "/api/papers": async (route: import("@playwright/test").Route) =>
+      route.fulfill({ status: 200, headers: CORS, json: { papers: LIBRARY_PAPERS, total_passages: total } }),
+  };
+}
+
+test("layout: no sideways scrolling on the Ask, Library and state screens", async ({ page }) => {
+  await fakeBackend(page, { routes: libraryRoutes() });
+  await page.goto("/");
+  await askOnPage(page);
+  await expect(page.getByText("All citations verified")).toBeVisible();
+  await expectNoSideScroll(page, "Ask with an answer");
+  await page.getByRole("button", { name: /^Citation 1: LoRA/ }).click();
+  await expect(page.getByRole("dialog").locator(".react-pdf__Page canvas")).toBeVisible({ timeout: 15_000 });
+  await expectNoSideScroll(page, "source viewer");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("link", { name: "Library" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers");
+  await expectNoSideScroll(page, "Library");
+
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await fakeBackend(page, {
+    routes: libraryRoutes(),
+    usage: { ...USAGE, used: 50, remaining: 0 },
+    askEvents: [["error", { kind: "daily_limit", used: 50, limit: 50, resets_at: "2026-10-26T00:00:00Z" }]],
+  });
+  await page.goto("/");
+  await askOnPage(page);
+  await page.getByRole("button", { name: "Browse passages instead" }).click();
+  await expect(page.getByRole("list", { name: /matching passages/i })).toBeVisible();
+  await expectNoSideScroll(page, "daily limit with browsed passages");
+
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await fakeBackend(page, { routes: libraryRoutes(), askEvents: [["answer", HELD_BACK_ANSWER]] });
+  await page.goto("/");
+  await askOnPage(page);
+  await page.getByRole("button", { name: "View the unverified answer" }).click();
+  await expectNoSideScroll(page, "held back with the unverified answer");
+});
+
+test("keyboard only: scope, ask, open a citation, library", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "phone", "at 375 px the scope is a sheet; the US4 phone run covers it");
+  await fakeBackend(page, { routes: libraryRoutes() });
+  await page.goto("/");
+
+  // US4: clear a paper with Space.
+  const attention = page.getByRole("checkbox", { name: /Attention/ });
+  await tabTo(page, attention);
+  await expectFocusRing(page);
+  await page.keyboard.press("Space");
+  await expect(attention).not.toBeChecked();
+  await expect(page.getByRole("region", { name: "Search scope" })).toContainText("1 of 2 papers");
+
+  // US1: type and send with Enter.
+  await tabTo(page, page.getByRole("textbox", { name: /ask about your papers/i }));
+  await page.keyboard.type("What is LoRA?");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("All citations verified")).toBeVisible();
+
+  // US2: open a citation with Enter and with Space; Escape closes and returns focus.
+  const chip = page.getByRole("button", { name: /^Citation 1: LoRA/ });
+  await tabTo(page, chip);
+  await expectFocusRing(page);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(chip).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(chip).toBeFocused();
+
+  // US4: a new conversation.
+  await tabTo(page, page.getByRole("button", { name: "New conversation" }));
+  await expectFocusRing(page);
+  await page.keyboard.press("Enter");
+  await expect(chip).toHaveCount(0);
+
+  // US3: to the Library, open and cancel a delete.
+  const library = page.getByRole("link", { name: "Library" });
+  await tabTo(page, library);
+  await expectFocusRing(page);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers");
+  const remove = page.getByRole("button", { name: /^Delete BERT/ });
+  await tabTo(page, remove);
+  await expectFocusRing(page);
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await tabTo(page, dialog.getByRole("button", { name: "Cancel" }), 10);
+  await expectFocusRing(page);
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /^BERT/ })).toBeVisible();
+});

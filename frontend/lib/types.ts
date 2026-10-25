@@ -146,6 +146,8 @@ export type ErrorKind =
   | "pdf_missing"
   | "not_found"
   | "busy_question"
+  | "busy_task"
+  | "not_saved"
   | "busy_job"
   | "daily_limit"
   | "rate_limited"
@@ -154,3 +156,82 @@ export type ErrorKind =
   | "upload_invalid"
   | "internal"
   | "unreachable";
+
+// --- Feature 4: summaries and comparison (specs/004-summaries-comparison/data-model.md) ---
+
+export type PartState = "verified" | "not_reported" | "held_back" | "failed" | "not_started";
+
+export type SummaryFacet = "problem" | "method" | "data" | "results" | "limitations";
+export type ComparisonAspect = "problem" | "method" | "datasets" | "results" | "limitations";
+
+/** One summary section, the TL;DR, or one comparison cell. `text` is set only when verified. */
+export interface Part {
+  part: string;
+  state: PartState;
+  text: string | null;
+  citations: { valid: number[]; invalid: number[]; uncited_sentences: string[] };
+  warning: string | null;
+  rejected_text: string | null;
+  reason: string | null;
+  /** TL;DR only: the sections each sentence traced to. */
+  sources: string[][];
+  passages: number[];
+  requests: { planned: number; retries: number };
+  tokens: { input?: number; output?: number; reasoning?: number };
+}
+
+export interface RequestPlan {
+  max_requests: number;
+  parts?: string[];
+}
+
+export type ResultStatus = "current" | "stale";
+export type StaleReason = "model_changed" | "instructions_changed" | "passages_changed";
+
+export interface Summary {
+  paper_id: string;
+  title: string;
+  arxiv_id: string | null;
+  tldr: Part;
+  sections: Part[];
+  passages: NumberedPassage[];
+  plan: RequestPlan;
+  requests: { planned: number; retries: number };
+  model: string;
+  prompt_version: number;
+  created_at: string;
+  status: ResultStatus;
+  stale_reason: StaleReason | null;
+  verified_parts: number;
+}
+
+export interface ComparisonRow {
+  aspect: ComparisonAspect;
+  state: "ok" | "failed" | "not_started";
+  reason: string | null;
+  cells: Part[];
+}
+
+export interface Comparison {
+  paper_ids: string[];
+  papers: { paper_id: string; title: string; arxiv_id: string | null; label: string }[];
+  aspects: ComparisonAspect[];
+  rows: ComparisonRow[];
+  passages: NumberedPassage[];
+  plan: RequestPlan;
+  requests: { planned: number; retries: number };
+  model: string;
+  prompt_version: number;
+  created_at: string;
+  status: ResultStatus;
+  stale_reason: StaleReason | null;
+  verified_cells: number;
+  total_cells: number;
+}
+
+export interface SummaryListItem {
+  paper_id: string;
+  title: string;
+  arxiv_id: string | null;
+  summary: { status: ResultStatus | "none"; created_at: string | null; model: string | null };
+}

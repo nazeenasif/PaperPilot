@@ -51,7 +51,7 @@ generalised (T004).
   - `second_paper`: a different generated paper with no limitations section, for comparisons and not-reported cells.
   - `row_reply(cells: dict[str, str]) -> str` in `tests/fake_llm.py`: a JSON row reply (`{"cells": [{"paper": "P1", "text": …}]}`), plus `fenced(text)` wrapping it in a ```json fence.
   - No behaviour changes; the full `pytest` still passes.
-- [ ] T002 [P] Add the Feature 4 types to `frontend/lib/types.ts` (Part, PartState, Summary, Comparison, ComparisonRow, RequestPlan, SummaryListItem, the `busy_task` and `not_saved` kinds) exactly as `data-model.md` and `contracts/web-api.md` name the fields; `npm --prefix frontend run typecheck` passes.
+- [X] T002 [P] Add the Feature 4 types to `frontend/lib/types.ts` (Part, PartState, Summary, Comparison, ComparisonRow, RequestPlan, SummaryListItem, the `busy_task` and `not_saved` kinds) exactly as `data-model.md` and `contracts/web-api.md` name the fields; `npm --prefix frontend run typecheck` passes.
 
 ---
 

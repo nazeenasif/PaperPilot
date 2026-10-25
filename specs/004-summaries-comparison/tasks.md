@@ -163,7 +163,7 @@ generalised (T004).
 
 ### US1: summary stream
 
-- [ ] T021 [P] [US1] Create failing tests in `tests/api/test_summaries_api.py` (all writes send `X-PaperPilot: 1`):
+- [X] T021 [P] [US1] Create failing tests in `tests/api/test_summaries_api.py` (all writes send `X-PaperPilot: 1`):
   - `GET /api/summaries` lists papers with `summary.status` (`none` before any summary) and `plan.max_requests == 6`.
   - `POST /api/summaries/{id}` streams `plan`, per-part `progress` and `part`, then `summary` last; the final body matches `data-model.md`.
   - No event before a part's `part` event contains that part's reply text (scripted sentinel text).

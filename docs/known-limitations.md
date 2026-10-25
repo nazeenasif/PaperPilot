@@ -150,3 +150,16 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
   retries. Its raw value is logged with every retried 429, but no real 429 has been seen yet.
 - **The source viewer shows one page at a time.** Use the page buttons or "Open full PDF" to
   read around a passage; a passage that continues onto the next page says so.
+
+## Summaries and comparison (Feature 4, planned)
+
+- **The TL;DR check cannot catch a non-numeric claim attached to a valid citation.** The TL;DR
+  is checked in code: a sentence without a citation, a citation to a passage that no verified
+  section cites, or a number that does not appear in the sections a sentence cites holds the
+  TL;DR back. A sentence whose citations are all valid and which states no number passes even
+  if the cited sections do not say it — the F1 pattern in `eval/probe_notes.md`, where a correct
+  fact was cited to the wrong passage. Summary sections and comparison cells use the answer
+  validator, so they share the same blind spot (see "A valid citation does not prove the passage
+  supports the claim" under Question answering). Detecting it is assigned to the evaluation
+  feature's faithfulness judge; until then, checkpoint 7 lists every claim with its cited
+  passages for a hand check.

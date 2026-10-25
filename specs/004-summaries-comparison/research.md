@@ -96,6 +96,18 @@ asking the model to check its own TL;DR (rejected: model-graded checks are not c
 validation, Principle V); generating the TL;DR from passages (rejected: it could then state
 things no verified section says).
 
+**What the check catches, and what it cannot**: it catches (a) a TL;DR sentence with no
+citation, (b) a citation to a passage that no verified section cites, and (c) a number that
+does not appear in the sections the sentence cites. It **cannot** catch a non-numeric claim
+attached to a valid citation — a sentence whose citations all belong to verified sections and
+whose wording contains no number, but which says something those sections (or the cited
+passages) do not support. This is the **F1 pattern** recorded in `eval/probe_notes.md` (a correct
+fact cited to the wrong passage, "Wq and Wv" cited to [2] while only [1] says it), which passed
+answer validation in Feature 2; the same holds for the sections and comparison cells, which use
+the same validator. Detecting it requires checking what each cited passage says, which is
+assigned to the evaluation feature's **faithfulness judge**; until then the limitation is
+recorded in `docs/known-limitations.md` and claims are checked by hand in checkpoint 7.
+
 ## R4. Comparison rows as structured JSON
 
 **Decision**: one request per aspect (clarification). For aspect `a`, each paper `p` gets its

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from api.errors import iso_utc
 from paperpilot.llm import RequestCounts, Usage
+from paperpilot import service
 from paperpilot.service import Answer
 
 
@@ -73,3 +74,18 @@ def answer_body(answer: Answer, requests: RequestCounts, usage: dict | None = No
         "tokens": answer.tokens,
         "usage": usage,  # today's requests after this question (ADR-0007)
     }
+
+
+# --- Feature 4: summaries (contracts/web-api.md) ---
+
+
+class SummarizeIn(BaseModel):
+    """POST /api/summaries/{paper_id} body."""
+
+    regenerate: bool = False
+    retry_parts: list[str] | None = Field(default=None, max_length=6)
+
+
+def summary_body(summary: service.Summary) -> dict:
+    """A summary as sent to the browser: every field of data-model.md, plus verified_parts."""
+    return {**service.summary_to_dict(summary), "verified_parts": summary.verified_parts}

@@ -8,9 +8,9 @@ from fastapi.responses import FileResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from api.errors import ApiError, error_for
-from api.schemas import AskIn, SearchIn, StatusOut, answer_body, usage_body
+from api.schemas import AskIn, SearchIn, StatusOut, SummarizeIn, answer_body, summary_body, usage_body
 from api.streams import run_streaming
-from paperpilot import library, llm, service, store
+from paperpilot import library, llm, prompts, service, store
 from paperpilot.config import Settings
 from paperpilot.errors import PdfMissingError, UnknownPaperError, UnknownPassageError
 from paperpilot.service import Turn
@@ -167,3 +167,61 @@ def get_pdf(paper_id: str) -> FileResponse:
         raise ApiError("pdf_missing", paper_id=paper_id) from None
     return FileResponse(path, media_type="application/pdf", content_disposition_type="inline",
                         filename=f"{paper_id}.pdf")
+
+
+# --- Feature 4: summaries (contracts/web-api.md; spec US1, US2) ---
+
+SUMMARY_PARTS = {*prompts.FACETS, service.TLDR}
+
+
+@router.get("/summaries")
+def list_summaries() -> dict:
+    """Every paper with its saved summary's status, for the Summarize tab (FR-001). No model request."""
+    papers = []
+    for paper in library.list_papers():
+        saved = service.saved_summary(paper.paper_id)
+        papers.append({
+            "paper_id": paper.paper_id,
+            "title": paper.title,
+            "arxiv_id": paper.arxiv_id,
+            "summary": {
+                "status": saved.status if saved else "none",
+                "created_at": saved.created_at if saved else None,
+                "model": saved.model if saved else None,
+            },
+        })
+    return {"papers": papers, "plan": service.summary_plan("")}
+
+
+def start_summary(paper_id: str, body: SummarizeIn, request: Request) -> SummarizeIn:
+    """Validate before the stream starts (plain JSON errors) and take the one-task lock."""
+    if not store.has_paper(paper_id):
+        raise ApiError("unknown_paper", paper_id=paper_id)
+    if body.retry_parts is not None:
+        if not body.retry_parts or any(part not in SUMMARY_PARTS for part in body.retry_parts):
+            raise ApiError("invalid_request")
+        if service.saved_summary(paper_id) is None:
+            raise ApiError("invalid_request")
+    if not request.app.state.paperpilot.question_lock.acquire(blocking=False):
+        raise ApiError("busy_question")
+    return body
+
+
+@router.post("/summaries/{paper_id}", response_class=EventSourceResponse)
+async def summarize_paper(
+    paper_id: str, request: Request, body: SummarizeIn = Depends(start_summary)
+) -> AsyncIterable[ServerSentEvent]:
+    """Stream the plan, per-part progress and checked parts, then the saved summary (FR-012)."""
+    lock = request.app.state.paperpilot.question_lock
+
+    def work(emit):
+        return service.summarize(paper_id, regenerate=body.regenerate, retry_parts=body.retry_parts,
+                                 on_event=emit)
+
+    async for item in run_streaming(work, on_finished=lock.release):
+        if item[0] == "event":
+            yield ServerSentEvent(event=item[1], data=item[2])
+        elif item[0] == "result":
+            yield ServerSentEvent(event="summary", data=summary_body(item[1]))
+        else:
+            yield ServerSentEvent(event="error", data=error_for(item[1]).body())

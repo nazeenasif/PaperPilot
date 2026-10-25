@@ -169,7 +169,7 @@ generalised (T004).
   - No event before a part's `part` event contains that part's reply text (scripted sentinel text).
   - Pre-stream errors as plain JSON: `404 unknown_paper`, `422 invalid_request` (bad `retry_parts`).
   - No response contains the key, a traceback or provider text.
-- [ ] T022 [US1] Implement `GET /api/summaries` and `POST /api/summaries/{paper_id}` in `api/routes.py` with `SummarizeIn`, `summary_body` and `part_body` in `api/schemas.py`, streaming through `api/streams.run_streaming`, so T021 passes.
+- [X] T022 [US1] Implement `GET /api/summaries` and `POST /api/summaries/{paper_id}` in `api/routes.py` with `SummarizeIn`, `summary_body` and `part_body` in `api/schemas.py`, streaming through `api/streams.run_streaming`, so T021 passes.
 
 ### US2: saved summaries over HTTP
 

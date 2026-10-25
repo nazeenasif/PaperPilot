@@ -252,3 +252,112 @@ def answer_env(tmp_path, make_pdf, library_env, fake_embedder, llm_env, fake_ans
     monkeypatch.setenv("RELEVANCE_THRESHOLD", "0.0")
     paper = add_paper(make_pdf(tmp_path / "paper.pdf"))
     return paper
+
+
+# --- Feature 4: summaries and comparison ---
+
+SUMMARY_TITLE = "Low-Rank Updates for Efficient Model Adaptation"
+
+# One section per summary facet (problem, method, data, results, limitations), each long enough
+# to be its own passage with the default chunking, so a facet search has passages to rank.
+SUMMARY_SECTIONS = [
+    (
+        "Abstract",
+        "Fine-tuning every parameter of a very large language model is expensive, because each "
+        "downstream task needs its own full copy of the model. We address this problem with a "
+        "method that freezes the pretrained weights and trains only small low-rank update "
+        "matrices injected into each layer, so many tasks can share one base model.",
+    ),
+    (
+        "1 Introduction",
+        "Large pretrained models are adapted to many tasks, but storing and serving a separate "
+        "fine-tuned copy for every task is prohibitively costly in memory and storage. The "
+        "research question is whether a small number of trainable parameters per task can match "
+        "full fine-tuning quality while keeping inference as fast as the original model.",
+    ),
+    (
+        "2 Method",
+        "The proposed method keeps the pretrained weight matrix frozen and expresses its update "
+        "as the product of two small matrices B and A of low rank r. Matrix B starts at zero, so "
+        "training begins from the original model. After training the product can be merged into "
+        "the frozen weights, which adds no inference latency compared with the base model.",
+    ),
+    (
+        "3 Experiments",
+        "We evaluate on the GLUE benchmark with RoBERTa and DeBERTa, on the E2E NLG Challenge "
+        "dataset with GPT-2, and on WikiSQL, MNLI and SAMSum with GPT-3. Each dataset uses its "
+        "standard training split, and every method is tuned with the same validation protocol "
+        "so that the comparisons with baselines are fair across all experimental settings.",
+    ),
+    (
+        "4 Results",
+        "The method matches or exceeds full fine-tuning on GPT-3 175B while training a small "
+        "fraction of the parameters. It reduces the number of trainable parameters by about "
+        "10,000 times and the GPU memory requirement by about 3 times. Throughput during "
+        "training is higher, and no additional latency is introduced at inference time.",
+    ),
+    (
+        "5 Limitations",
+        "A limitation is that batching inputs for different tasks in one forward pass is not "
+        "straightforward when the low-rank matrices are merged into the weights to avoid extra "
+        "latency. Choosing which weight matrices to adapt is also guided by heuristics, and the "
+        "rank r must be selected per task, which we leave to future work on automatic selection.",
+    ),
+]
+
+SECOND_TITLE = "A Retrieval Benchmark for Open-Domain Questions"
+
+# A second paper with no limitations section, for comparisons and not-reported cells.
+SECOND_SECTIONS = [
+    (
+        "Abstract",
+        "Open-domain question answering systems must find evidence in a large corpus before "
+        "answering. We study the problem of retrieving relevant passages for factual questions "
+        "and introduce a benchmark that measures how often the evidence is found among the first "
+        "results returned by a retriever for questions written by annotators.",
+    ),
+    (
+        "1 Method",
+        "Our retriever encodes questions and passages with two separate transformer encoders "
+        "and ranks passages by the inner product of their embeddings. The passage index covers "
+        "a full Wikipedia dump split into one hundred word blocks, and the encoders are trained "
+        "with in-batch negatives taken from the other questions in the same training batch.",
+    ),
+    (
+        "2 Datasets",
+        "We train and evaluate on Natural Questions, TriviaQA and WebQuestions, using the "
+        "standard splits. Each question is paired with gold evidence passages from Wikipedia, and "
+        "a question counts as answered when one of the retrieved passages contains the answer "
+        "string exactly, following the evaluation protocol used by earlier retrieval work.",
+    ),
+    (
+        "3 Results",
+        "The dense retriever finds the answer passage among the top twenty results for 79 "
+        "percent of Natural Questions, compared with 59 percent for a keyword baseline. Gains "
+        "are largest for questions that paraphrase the evidence, where keyword overlap is low, "
+        "and smallest for questions that name rare entities appearing in a single passage.",
+    ),
+]
+
+
+@pytest.fixture
+def summary_paper(tmp_path, make_pdf):
+    """Path of a generated paper with one section per summary facet."""
+    return make_pdf(tmp_path / "summary-paper.pdf", sections=SUMMARY_SECTIONS, references=False,
+                    title=SUMMARY_TITLE)
+
+
+@pytest.fixture
+def second_paper(tmp_path, make_pdf):
+    """Path of a second generated paper (no limitations section)."""
+    return make_pdf(tmp_path / "second-paper.pdf", sections=SECOND_SECTIONS, references=False,
+                    title=SECOND_TITLE)
+
+
+@pytest.fixture
+def summary_env(summary_paper, library_env, fake_embedder, llm_env, fake_answers, monkeypatch):
+    """The summary paper in a temporary library, threshold 0 and a scripted LLM; returns its AddResult."""
+    from paperpilot.library import add_paper
+
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", "0.0")
+    return add_paper(summary_paper)

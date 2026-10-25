@@ -46,7 +46,7 @@ generalised (T004).
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Add summary fixtures to `tests/conftest.py`:
+- [X] T001 [P] Add summary fixtures to `tests/conftest.py`:
   - `summary_paper(make_pdf)`: a generated paper whose sections match the five facets (Abstract with the problem; Method; Experiments naming two datasets; Results with numbers such as "10,000 times" and "3 times"; Limitations), long enough for ≥ 4 passages per facet with the default chunking.
   - `second_paper`: a different generated paper with no limitations section, for comparisons and not-reported cells.
   - `row_reply(cells: dict[str, str]) -> str` in `tests/fake_llm.py`: a JSON row reply (`{"cells": [{"paper": "P1", "text": …}]}`), plus `fenced(text)` wrapping it in a ```json fence.

@@ -8,7 +8,8 @@ Usage: python scripts/checkpoint_6_web.py [part ...] [--new-pdf PATH]   (default
 Parts: boundary, ask, viewer (viewer opens the citations of part ask), library (--new-pdf PATH
 also adds a paper that is not in the library yet, then deletes it), states (in-process over a
 temporary library with a scripted model; needs no server), usage, scope (a BERT-only question
-and a follow-up; reuses part ask's LoRA answer as history when ask ran)
+and a follow-up; reuses part ask's LoRA answer as history when ask ran), secrets (builds the
+frontend and looks for the API key everywhere; run it last)
 
 Start the servers first (quickstart): `python -m api` and `npm --prefix frontend run dev`.
 """
@@ -16,6 +17,7 @@ Start the servers first (quickstart): `python -m api` and `npm --prefix frontend
 import json
 import re
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -59,6 +61,7 @@ class Run:
     results: list[tuple[bool, str]]
     used: RequestCounts
     answer: dict | None = None  # the last answer from part "ask", reused by part "viewer"
+    captured: list[bytes] | None = None  # every API response body of this run, for part "secrets"
 
     def check(self, passed: bool, description: str) -> None:
         """Print and record one PASS/FAIL line."""
@@ -680,6 +683,73 @@ def part_scope(run: Run, client: httpx.Client) -> None:
               f"the follow-up's citations are valid (valid {answer['citations']['valid']}, verified {answer['verified']})")
 
 
+ALLOWED_PUBLIC_VARS = {"NEXT_PUBLIC_API_URL"}  # nothing secret may be NEXT_PUBLIC_ (inlined in the bundle)
+IGNORED_PATHS = ["data/library/pdfs/x.pdf", "data/library/usage.sqlite3"]
+BUILD_TIMEOUT = 600
+
+
+def files_containing(folder: Path, needle: bytes, skip: Path | None = None) -> tuple[list[Path], list[Path]]:
+    """(files under folder whose bytes contain needle, files that could not be read)."""
+    found, unreadable = [], []
+    for path in folder.rglob("*"):
+        if not path.is_file() or (skip is not None and path.is_relative_to(skip)):
+            continue
+        try:
+            if needle in path.read_bytes():
+                found.append(path)
+        except OSError:
+            unreadable.append(path)
+    return found, unreadable
+
+
+def part_secrets(run: Run, client: httpx.Client) -> None:
+    """The API key never reaches the browser, a response or the logs (SC-010). 0 requests.
+    Prints PASS/FAIL lines only, never the key."""
+    settings = load_settings()
+    key = settings.llm_api_key.encode()
+    if not key:
+        run.check(False, "LLM_API_KEY is set (there is nothing to look for without it)")
+        return
+    npm = shutil.which("npm")
+    if npm is None:
+        run.check(False, "npm is on PATH to build the frontend")
+        return
+    print("Building the frontend (npm --prefix frontend run build)…")
+    start = time.monotonic()
+    build = subprocess.run([npm, "--prefix", str(ROOT / "frontend"), "run", "build"], capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", timeout=BUILD_TIMEOUT)
+    run.check(build.returncode == 0, f"the frontend builds ({time.monotonic() - start:.0f} s)")
+    if build.returncode != 0:
+        print(build.stdout[-2000:].replace(settings.llm_api_key, "***"))
+        return
+
+    # .next/dev is a running dev server's own workspace (locked files), not the built app.
+    built = ROOT / "frontend" / ".next"
+    leaked, unreadable = files_containing(built, key, skip=built / "dev")
+    run.check(not leaked and not unreadable,
+              f"the key is in no file of the build in frontend/.next/ ({len(leaked)} found, {len(unreadable)} unreadable)")
+    captured = run.captured or []
+    run.check(all(key not in body for body in captured),
+              f"the key is in none of the {len(captured)} API responses captured in this run")
+    log = settings.library_dir / "api.log"
+    run.check(log.exists() and key not in log.read_bytes(), f"the key is not in the API log ({log.name})")
+    env_local = ROOT / "frontend" / ".env.local"
+    run.check(not env_local.exists() or (key not in env_local.read_bytes() and b"LLM_API_KEY" not in env_local.read_bytes()),
+              "frontend/.env.local holds no key")
+
+    used: set[str] = set()
+    for folder in ("app", "components", "lib"):
+        for path in (ROOT / "frontend" / folder).rglob("*.ts*"):
+            used.update(re.findall(r"NEXT_PUBLIC_[A-Z0-9_]+", path.read_text(encoding="utf-8")))
+    for config in (ROOT / "frontend").glob("next.config.*"):
+        used.update(re.findall(r"NEXT_PUBLIC_[A-Z0-9_]+", config.read_text(encoding="utf-8")))
+    run.check(used <= ALLOWED_PUBLIC_VARS, f"the only NEXT_PUBLIC_ variable in use is NEXT_PUBLIC_API_URL ({sorted(used)})")
+
+    for path in IGNORED_PATHS:
+        ignored = subprocess.run(["git", "check-ignore", "-q", path], cwd=ROOT).returncode == 0
+        run.check(ignored, f"git ignores {path}")
+
+
 PARTS: dict[str, Part] = {
     "boundary": Part(plan=0, run=part_boundary),
     "ask": Part(plan=1, run=part_ask),
@@ -688,6 +758,7 @@ PARTS: dict[str, Part] = {
     "scope": Part(plan=3, run=part_scope),
     "states": Part(plan=0, run=part_states),
     "usage": Part(plan=0, run=part_usage),
+    "secrets": Part(plan=0, run=part_secrets),  # last: it checks every response captured before it
 }
 
 
@@ -710,7 +781,13 @@ def main() -> int:
 
     print("Checkpoint 6: web app")
     run = Run(results=[], used=RequestCounts(0, 0))
-    with httpx.Client(base_url=API, timeout=30.0) as client:
+    run.captured = []
+
+    def capture(response: httpx.Response) -> None:
+        response.read()  # streamed bodies stay readable: httpx keeps the content once read
+        run.captured.append(response.content)
+
+    with httpx.Client(base_url=API, timeout=30.0, event_hooks={"response": [capture]}) as client:
         status = wait_until_ready(client)
         if status is None:
             run.check(False, f"the API is reachable at {API} (start it with: python -m api)")

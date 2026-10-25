@@ -514,7 +514,7 @@ the usage meter shows today's count.
 
 - [X] T067 [P] Extend `frontend/e2e/smoke.spec.ts` to run every story test in the `phone` project (375 px). Assert `document.documentElement.scrollWidth <= clientWidth` on the Ask, Library and state screens. Add a keyboard-only pass that completes US1–US4 with Tab, Enter, Space and Escape, with the focus ring visible (SC-008, FR-029, FR-030).
 - [X] T068 [P] Add test "reduced motion" to `frontend/e2e/smoke.spec.ts`, using `page.emulateMedia({ reducedMotion: 'reduce' })`: the answer appears in one step. With motion, the text, chips and badge are all visible within 500 ms of the `answer` event, measured with `performance.now()` in the page (SC-011).
-- [ ] T069 [P] Add part `secrets` to `scripts/checkpoint_6_web.py` (0 requests). It runs `npm --prefix frontend run build`, then checks:
+- [X] T069 [P] Add part `secrets` to `scripts/checkpoint_6_web.py` (0 requests). It runs `npm --prefix frontend run build`, then checks:
   - The key value is absent from `frontend/.next/`, from every response captured in this run and from the API log file (`<LIBRARY_DIR>/api.log`, configured in T012).
   - The only `NEXT_PUBLIC_*` variable in use is `NEXT_PUBLIC_API_URL`.
   - `git check-ignore` passes for `data/library/pdfs/x.pdf` and `data/library/usage.sqlite3`.

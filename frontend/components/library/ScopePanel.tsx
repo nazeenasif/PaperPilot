@@ -15,15 +15,14 @@ export function ScopePanel({ scope }: { scope: Scope }) {
       {papers.length === 0 && <p className="text-sm text-muted-foreground">Your library is empty.</p>}
       <ul className="space-y-1">
         {papers.map((paper) => {
-          const id = `scope-${paper.paper_id}`;
+          // The label wraps its checkbox (no ids): the panel can be on the page twice, as the
+          // sidebar and as the phone sheet.
           return (
             <li key={paper.paper_id}>
               <label
-                htmlFor={id}
                 className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 hover:bg-panel-2 focus-within:bg-panel-2"
               >
                 <input
-                  id={id}
                   type="checkbox"
                   checked={selected.includes(paper.paper_id)}
                   onChange={() => toggle(paper.paper_id)}

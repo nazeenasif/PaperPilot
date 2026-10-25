@@ -224,7 +224,7 @@ generalised (T004).
 
 ### Shared shell
 
-- [ ] T034 [P] Create failing tests in `frontend/tests/app-shell.test.tsx` (extend): the header has four tabs Ask, Library, Summarize, Compare with `aria-current` on the active one; the `busy_task` copy ("PaperPilot is still working on another answer, summary or comparison") replaces `busy_question` in `frontend/tests/states.test.tsx` expectations.
+- [X] T034 [P] Create failing tests in `frontend/tests/app-shell.test.tsx` (extend): the header has four tabs Ask, Library, Summarize, Compare with `aria-current` on the active one; the `busy_task` copy ("PaperPilot is still working on another answer, summary or comparison") replaces `busy_question` in `frontend/tests/states.test.tsx` expectations.
 - [ ] T035 Implement the four tabs in `frontend/components/app/Header.tsx` and the `busy_task` copy in `frontend/lib/errorKinds.ts`, so T034 passes.
 
 ### US1 (P1): summarize a paper

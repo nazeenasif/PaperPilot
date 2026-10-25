@@ -181,7 +181,7 @@ generalised (T004).
 
 ### US4: part states over HTTP
 
-- [ ] T025 [US4] Add failing tests to `tests/api/test_summaries_api.py`: scripted held-back, not-reported, cut-off and TL;DR-rejected parts arrive as `part` events with `state`, `reason`, `citations`, and `rejected_text` only for `held_back`; the stream still ends with `summary`.
+- [X] T025 [US4] Add failing tests to `tests/api/test_summaries_api.py`: scripted held-back, not-reported, cut-off and TL;DR-rejected parts arrive as `part` events with `state`, `reason`, `citations`, and `rejected_text` only for `held_back`; the stream still ends with `summary`.
 - [ ] T026 [US4] Complete `part_body` serialization in `api/schemas.py` so T025 passes (if T025 already passes, record the mutation run in the commit, as T043 of Feature 3).
 
 ### US3: comparisons over HTTP

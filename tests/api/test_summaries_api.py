@@ -157,3 +157,31 @@ def test_retry_parts_without_a_saved_summary_is_not_saved(summary_client):
     response = summary_client.post(f"/api/summaries/{summary_client.paper.paper_id}",
                                    json={"retry_parts": ["method"]}, headers=HEADER)
     assert (response.status_code, response.json()["kind"]) == (404, "not_saved")
+
+
+# --- US4: part states over HTTP ---
+
+
+def test_part_states_arrive_as_part_events_and_the_stream_still_ends_with_the_summary(summary_client, monkeypatch):
+    from paperpilot.errors import LLMError
+
+    model = PromptReadingLLM({"method": "No citation here.", "data": "Experiments use GLUE [99].",
+                              "tldr": "Uncited summary sentence."})
+
+    def generate(system, prompt, on_retry=None):
+        if "Section: Results." in prompt:
+            raise LLMError("cut off", reason="cut_off")
+        return model(system, prompt, on_retry)
+
+    monkeypatch.setattr(llm, "generate", generate)
+    _, _, events = summarize_stream(summary_client, summary_client.paper.paper_id)
+    parts = {d["part"]: d for n, d in events if n == "part"}
+    assert (parts["method"]["state"], parts["method"]["reason"]) == ("not_reported", "no_citations")
+    assert (parts["data"]["state"], parts["data"]["citations"]["invalid"]) == ("held_back", [99])
+    assert parts["data"]["rejected_text"] == "Experiments use GLUE [99]."
+    assert (parts["results"]["state"], parts["results"]["reason"]) == ("failed", "cut_off")
+    assert (parts["tldr"]["state"], parts["tldr"]["warning"]) == ("held_back", "sentence 1 has no citation")
+    for name, part in parts.items():
+        assert (part["rejected_text"] is not None) == (part["state"] == "held_back"), name
+        assert (part["text"] is not None) == (part["state"] == "verified"), name
+    assert events[-1][0] == "summary" and events[-1][1]["verified_parts"] == 2

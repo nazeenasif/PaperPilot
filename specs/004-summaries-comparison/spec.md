@@ -217,8 +217,9 @@ completes when the retry succeeds.
 
 **Summaries (User Stories 1, 2, 4)**
 
-- **FR-001**: The researcher MUST be able to start a summary of any paper in the library from its
-  card in the Library.
+- **FR-001**: The researcher MUST be able to open or start a summary of any paper in the library
+  from its card in the Library and from the Summarize tab, which lists the papers with their saved
+  summaries.
 - **FR-002**: A summary MUST consist of a TL;DR and five sections in this order: Problem, Method,
   Data, Results, Limitations.
 - **FR-003**: Summaries MUST be query-focused: for each section, passages MUST be retrieved from
@@ -371,14 +372,24 @@ completes when the retry succeeds.
   query and instruction (FR-007).
 - Q: One model request per aspect, or one request for the whole comparison table?
   → A: One request per aspect, a row at a time; cost = number of aspects (FR-009).
+- Q: The summary design showed a sixth card (Future work); five sections or six?
+  → A: Five sections (FR-002); the sixth card was an example of the not-reported state and is
+  relabelled in the design. A summary costs at most 6 requests.
+- Q: The compare design said "uses 1 request"; does it override one request per aspect?
+  → A: No; one request per aspect stands, and the design now reads "uses 5 requests, 1 per
+  aspect".
+- Q: Navigation: four header tabs (Ask, Library, Summarize, Compare) as in the summary and
+  compare designs? → A: Yes; library.png is updated to match.
+- Q: The design shows "4 passages read" per section; use 4 instead of the question default (6)?
+  → A: Yes, 4 passages per summary section.
 
 ## Assumptions
 
-- **Placement**: Summarize appears on each paper card in the Library (the design shows it there);
-  summaries open in their own view reachable from the card; Compare is a third item in the header
-  navigation beside Ask and Library, as in the design.
-- **Retrieval sizes**: each summary facet uses the same number of passages as a question (the
-  `TOP_K` setting, default 6) from that paper; each comparison aspect uses a fixed, equal number of
+- **Placement**: the header has four tabs: Ask, Library, Summarize and Compare (`docs/design/`).
+  Summarize opens a paper picker with the saved summaries; the Summarize button on a paper's card
+  in the Library opens that paper's summary directly. Compare opens the comparison screen.
+- **Retrieval sizes**: each summary section uses 4 passages from that paper (as shown in the
+  design, fewer than a question's 6, to keep each prompt small); each comparison aspect uses a fixed, equal number of
   passages per paper (default 3), small enough that a row for four papers fits one prompt. Passages
   below the existing relevance threshold count as not retrieved.
 - **Facet queries**: each facet and aspect has a fixed, PaperPilot-written retrieval query and

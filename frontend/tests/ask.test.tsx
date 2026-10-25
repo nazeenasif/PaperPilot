@@ -52,6 +52,26 @@ function answer(overrides: Partial<Answer> = {}): Answer {
   };
 }
 
+const ONE_PAPER = {
+  papers: [{ paper_id: "p", title: "LoRA: Low-Rank Adaptation", page_count: 26, passage_count: 56, text_passages: 44,
+    table_passages: 12, section_count: 10, arxiv_id: null, has_pdf: true, highlights: "exact" }],
+  total_passages: 56,
+};
+
+/** fetch: the library for GET /api/papers (the Ask screen's scope panel), `ask` for POST /api/ask. */
+function askFetch(ask: Response) {
+  return vi.fn(async (input: unknown) =>
+    new URL(String(input)).pathname === "/api/papers"
+      ? new Response(JSON.stringify(ONE_PAPER), { headers: { "Content-Type": "application/json" } })
+      : ask,
+  );
+}
+
+/** The calls that went to POST /api/ask. */
+function askCalls(fetchMock: ReturnType<typeof askFetch>) {
+  return fetchMock.mock.calls.filter(([input]) => new URL(String(input)).pathname === "/api/ask");
+}
+
 async function ask(question: string) {
   const user = userEvent.setup();
   render(<AskScreen />);
@@ -61,27 +81,27 @@ async function ask(question: string) {
 
 describe("Composer", () => {
   it("asks for a question instead of sending an empty one", async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = askFetch(new Response(""));
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     render(<AskScreen />);
     await user.click(screen.getByRole("button", { name: /send question/i }));
     expect(screen.getByText(/type a question first/i)).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(askCalls(fetchMock)).toHaveLength(0);
   });
 
   it("sends on Enter, adds a line on Shift+Enter, and is disabled while answering", async () => {
     const stream = controlledStream();
-    const fetchMock = vi.fn().mockResolvedValue(stream.response);
+    const fetchMock = askFetch(stream.response);
     vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     render(<AskScreen />);
     const box = screen.getByRole("textbox", { name: /ask about your papers/i });
     await user.type(box, "What is{Shift>}{Enter}{/Shift}LoRA?");
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(askCalls(fetchMock)).toHaveLength(0);
     await user.type(box, "{Enter}");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(askCalls(fetchMock)).toHaveLength(1);
+    const [url, init] = askCalls(fetchMock)[0] as unknown as [string, RequestInit];
     expect(url).toBe("http://127.0.0.1:8000/api/ask");
     expect(JSON.parse(String(init.body))).toMatchObject({ question: "What is\nLoRA?" });
     await waitFor(() => expect(box).toBeDisabled());
@@ -95,7 +115,7 @@ describe("Composer", () => {
 describe("Progress and answer", () => {
   it("shows each step, and no answer text until the checked answer arrives", async () => {
     const stream = controlledStream();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(stream.response));
+    vi.stubGlobal("fetch", askFetch(stream.response));
     await ask("What is LoRA?");
     stream.send("progress", { step: "searching" });
     expect(await screen.findByText("Searching your papers…")).toBeInTheDocument();
@@ -115,7 +135,7 @@ describe("Progress and answer", () => {
 
   it("renders citation chips as labelled buttons and the verified badge", async () => {
     const stream = controlledStream();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(stream.response));
+    vi.stubGlobal("fetch", askFetch(stream.response));
     await ask("What is LoRA?");
     stream.send("answer", answer());
     stream.close();
@@ -130,7 +150,7 @@ describe("Progress and answer", () => {
 
   it("shows no verified badge for an unverified answer", async () => {
     const stream = controlledStream();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(stream.response));
+    vi.stubGlobal("fetch", askFetch(stream.response));
     await ask("What is LoRA?");
     stream.send("answer", answer({ verified: false }));
     stream.close();
@@ -140,7 +160,7 @@ describe("Progress and answer", () => {
 
   it("shows the not-found sentence exactly as received", async () => {
     const stream = controlledStream();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(stream.response));
+    vi.stubGlobal("fetch", askFetch(stream.response));
     await ask("What is the capital of France?");
     const notFound = "I couldn't find that in the selected papers.";
     stream.send("answer", answer({ text: notFound, not_found: true, verified: false, passages: [],
@@ -152,7 +172,7 @@ describe("Progress and answer", () => {
 
   it("never shows server text when the question fails", async () => {
     const stream = controlledStream();
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(stream.response));
+    vi.stubGlobal("fetch", askFetch(stream.response));
     await ask("What is LoRA?");
     stream.send("error", { kind: "internal", detail: "Traceback (most recent call last)" });
     stream.close();

@@ -464,7 +464,7 @@ attaches show "Mapping highlights" then "PDF attached". The cards show their cou
 **Independent test**: select one paper, ask, and see only that paper cited. A follow-up shows
 "Searched as …", and "New conversation" clears the history.
 
-- [ ] T060 [P] [US4] Create failing tests in `frontend/tests/scope.test.tsx`:
+- [X] T060 [P] [US4] Create failing tests in `frontend/tests/scope.test.tsx`:
   - **Scope panel** (`ScopePanel`):
     - Lists the ready papers with checkboxes and passage counts, and reads "Search scope · 2 of 5 papers".
     - The last selected paper can't be cleared; it explains why, and sending is disabled with none selected.

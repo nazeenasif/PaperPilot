@@ -106,7 +106,7 @@ generalised (T004).
   - `delete_paper` and `reprocess_paper` remove every saved result that includes the paper (`forget_results` returns the count); results for other papers stay.
   - `passage_fingerprint` is stable across calls and changes when a passage text changes.
   - Two processes saving at once lose nothing (spawned processes, as `test_llm_usage.py`).
-- [ ] T010 [US2] Implement the results cache in `paperpilot/library.py` (`ResultKey`, `save_result`, `load_result`, `forget_results`, `passage_fingerprint`; WAL, `BEGIN IMMEDIATE`, set up once per process) and call `forget_results` from `delete_paper` and `reprocess_paper`, so T009 passes.
+- [X] T010 [US2] Implement the results cache in `paperpilot/library.py` (`ResultKey`, `save_result`, `load_result`, `forget_results`, `passage_fingerprint`; WAL, `BEGIN IMMEDIATE`, set up once per process) and call `forget_results` from `delete_paper` and `reprocess_paper`, so T009 passes.
 - [ ] T011 [US2] Create failing tests in `tests/test_summarize_saved.py`:
   - After a summary, `summarize(paper_id)` again returns the saved summary with **0** new requests (`llm.request_counts()` unchanged, no `generate` call).
   - `saved_summary(paper_id)` returns it (`status: current`); after a model change it returns `stale` with the reason and `summarize(paper_id)` without `regenerate` does not regenerate it silently: it returns the stale result marked stale.

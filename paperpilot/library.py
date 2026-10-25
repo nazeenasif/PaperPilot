@@ -1,8 +1,11 @@
 """Public paper-library operations (contracts/library-api.md)."""
 
+import hashlib
 import json
 import logging
 import os
+import sqlite3
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -182,6 +185,7 @@ def delete_paper(paper_id: str) -> int:
         raise UnknownPaperError(f"Paper {paper_id} is not in the library")
     removed = store.delete_paper_passages(paper_id)
     _remove_files(paper_id)
+    forget_results(paper_id)
     logger.info("Deleted %s: %d passages", paper_id, removed)
     return removed
 
@@ -310,6 +314,7 @@ def reprocess_paper(paper_id: str, on_progress: Progress | None = None) -> AddRe
         store.delete_paper_passages(paper_id)
         store.upsert_passages(passages, embeddings, source_file, paper.page_count)
     _write_layout(paper, passages, settings)
+    forget_results(paper_id)  # saved summaries cite the old passages (research R6)
     stored = time.perf_counter()
     logger.info("Re-processed %s: %d passages in %.2fs", paper_id, len(passages), stored - start)
     report("ready", None)
@@ -398,3 +403,121 @@ def search(query: str, k: int | None = None, paper_ids: list[str] | None = None)
         )
         for rank, hit in enumerate(hits, start=1)
     ]
+
+
+# --- Saved summaries and comparisons (research R6, ADR-0009) ---
+
+RESULTS_FILE = "results.sqlite3"
+
+_prepared_results_files: set[Path] = set()
+_prepare_results_lock = threading.Lock()
+
+
+@dataclass(frozen=True)
+class ResultKey:
+    """What a saved result is about: its kind, papers and aspects, in a canonical order."""
+
+    kind: str  # "summary" or "comparison"
+    paper_ids: tuple[str, ...]
+    aspects: tuple[str, ...] = ()
+
+    @property
+    def digest(self) -> str:
+        return hashlib.sha256(json.dumps([self.kind, self.paper_ids, self.aspects]).encode()).hexdigest()
+
+
+def result_key(kind: str, paper_ids: list[str], aspects: list[str] | None = None) -> ResultKey:
+    """The key for a saved result; paper and aspect order do not matter."""
+    return ResultKey(kind, tuple(sorted(paper_ids)), tuple(sorted(aspects or ())))
+
+
+def passage_fingerprint(paper_id: str) -> str:
+    """SHA-256 of a paper's stored passage ids and texts, in order: changes when it is re-chunked."""
+    digest = hashlib.sha256()
+    for passage_id, text in store.paper_passages(paper_id):
+        digest.update(passage_id.encode() + b"\0" + text.encode() + b"\0")
+    return digest.hexdigest()
+
+
+def _results_connection(settings: Settings | None = None) -> sqlite3.Connection:
+    """The results database; WAL and a busy timeout let the API and scripts share it."""
+    settings = settings or load_settings()
+    settings.library_dir.mkdir(parents=True, exist_ok=True)
+    path = Path(settings.library_dir) / RESULTS_FILE
+    db = sqlite3.connect(path, timeout=10.0, isolation_level=None)
+    try:
+        with _prepare_results_lock:
+            if path not in _prepared_results_files:
+                for attempt in range(50):  # switching to WAL reports "locked" at once; retry briefly
+                    try:
+                        if db.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
+                            db.execute("PRAGMA journal_mode=WAL")
+                        break
+                    except sqlite3.OperationalError:
+                        if attempt == 49:
+                            raise
+                        time.sleep(0.05)
+                db.execute(
+                    "CREATE TABLE IF NOT EXISTS results (key TEXT PRIMARY KEY, kind TEXT NOT NULL, "
+                    "paper_ids TEXT NOT NULL, aspects TEXT NOT NULL, result TEXT NOT NULL, model TEXT NOT NULL, "
+                    "prompt_version INTEGER NOT NULL, fingerprints TEXT NOT NULL, created_at TEXT NOT NULL)"
+                )
+                _prepared_results_files.add(path)
+    except BaseException:
+        db.close()
+        raise
+    return db
+
+
+def save_result(key: ResultKey, result: dict, model: str, prompt_version: int) -> None:
+    """Save (or replace) a result with what it was made from: model, version, passage fingerprints."""
+    fingerprints = {paper_id: passage_fingerprint(paper_id) for paper_id in key.paper_ids}
+    db = _results_connection()
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute(
+            "INSERT OR REPLACE INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            (key.digest, key.kind, ",".join(key.paper_ids), ",".join(key.aspects), json.dumps(result), model,
+             prompt_version, json.dumps(fingerprints)),
+        )
+        db.execute("COMMIT")
+    finally:
+        db.close()
+
+
+def load_result(key: ResultKey, model: str, prompt_version: int) -> tuple[dict, str | None] | None:
+    """The saved result and why it is stale (None when current), or None if nothing is saved.
+
+    Stale reasons: "passages_changed", "instructions_changed", "model_changed" (FR-017).
+    """
+    db = _results_connection()
+    try:
+        row = db.execute("SELECT result, model, prompt_version, fingerprints FROM results WHERE key = ?",
+                         (key.digest,)).fetchone()
+    finally:
+        db.close()
+    if row is None:
+        return None
+    result, saved_model, saved_version, fingerprints = json.loads(row[0]), row[1], row[2], json.loads(row[3])
+    if any(passage_fingerprint(pid) != fingerprints.get(pid) for pid in key.paper_ids):
+        return result, "passages_changed"
+    if saved_version != prompt_version:
+        return result, "instructions_changed"
+    if saved_model != model:
+        return result, "model_changed"
+    return result, None
+
+
+def forget_results(paper_id: str) -> int:
+    """Delete every saved result that includes the paper; return how many (delete, re-process)."""
+    db = _results_connection()
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        keys = [k for k, ids in db.execute("SELECT key, paper_ids FROM results") if paper_id in ids.split(",")]
+        db.executemany("DELETE FROM results WHERE key = ?", [(k,) for k in keys])
+        db.execute("COMMIT")
+    finally:
+        db.close()
+    if keys:
+        logger.info("Forgot %d saved result(s) for %s", len(keys), paper_id)
+    return len(keys)

@@ -181,20 +181,14 @@ always ends with the (partial) result unless an unexpected error occurs (`intern
 |-----------|------------|-------------------------------------|
 | No eval-harness run although new prompts are introduced (Principle VII) | The spec puts the harness out of scope (as Feature 2 did); summary quality is measured instead by checkpoint 7's citation checks and ≥ 10 hand-verified claims with fault attribution | Building the harness here would double the feature; the hand check records the baseline it will use |
 
-## ADR candidates
+## ADRs
 
-Applying the three-part test (long-term impact, real alternatives, cross-cutting):
+- [ADR-0008: Per-Part Grounding and Structured Output](../../history/adr/0008-per-part-grounding-and-structured-output.md)
+  — one validator scoped by allowed passage numbers, part states, the TL;DR check in code, JSON
+  comparison rows with a tolerant parser, per-part output budget (research R1, R3–R5).
+- [ADR-0009: Saved Results and Multi-Request Runs](../../history/adr/0009-saved-results-and-multi-request-runs.md)
+  — SQLite results cache with fingerprinted keys and explicit invalidation, request plan and
+  pre-check, stop rules, one shared model lock (research R6, R8, R10).
 
-1. **Per-part grounding and the TL;DR check** (R1, R3) — extends ADR-0004 to sub-answer
-   granularity; defines what "verified" means for every future generated output. ✅ all three.
-2. **Structured JSON for multi-cell outputs with tolerant parsing** (R4) — sets the pattern for
-   any table-like generation; JSON vs markdown vs provider JSON mode. ✅ all three.
-3. **Saved-results cache: keys and invalidation** (R6) — a new persistent store whose key design
-   decides when users see stale results; interacts with re-processing and model changes.
-   ✅ all three.
-4. **Run control for multi-request tasks** (R8: plan before start, pre-check, stop rules, shared
-   model lock) — extends ADR-0007's accounting to multi-request runs; ✅ all three. Could be
-   grouped with 3 as "multi-request runs: budget and reuse".
-
-Not ADR-worthy: facet queries and sizes (R2, tunable constants), output budget sizing (R5,
-measured), module placement (R7, follows the constitution), map-reduce (R10, recorded in research).
+Not ADR-worthy: facet queries and sizes (R2, tunable constants), module placement (R7, follows
+the constitution).

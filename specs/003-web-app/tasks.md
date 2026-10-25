@@ -519,7 +519,7 @@ the usage meter shows today's count.
   - The only `NEXT_PUBLIC_*` variable in use is `NEXT_PUBLIC_API_URL`.
   - `git check-ignore` passes for `data/library/pdfs/x.pdf` and `data/library/usage.sqlite3`.
   - It prints PASS/FAIL only, never the key (SC-010).
-- [ ] T070 [P] Add a "Web app" section to `docs/known-limitations.md`:
+- [X] T070 [P] Add a "Web app" section to `docs/known-limitations.md`:
   - Localhost only, with no network access or sign-in yet.
   - Upload jobs are lost on restart, though the library is unaffected.
   - One upload at a time.

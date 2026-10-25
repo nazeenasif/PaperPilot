@@ -476,7 +476,7 @@ attaches show "Mapping highlights" then "PDF attached". The cards show their cou
     - "New conversation" clears the turns.
   - **Phone width:** the panel opens as an overlay sheet.
 - [X] T061 [US4] Implement `frontend/components/library/ScopePanel.tsx`, `frontend/components/ask/Conversation.tsx` and `frontend/components/ask/SearchedAs.tsx`, and extend `frontend/lib/useAsk.ts` with history and selection, so T060 passes.
-- [ ] T062 [US4] Add test "US4 scope" to `frontend/e2e/smoke.spec.ts`: a scoped question, then a follow-up showing "Searched as".
+- [X] T062 [US4] Add test "US4 scope" to `frontend/e2e/smoke.spec.ts`: a scoped question, then a follow-up showing "Searched as".
   - **Story check**: `npm --prefix frontend run test:e2e -- -g "US4"` and `python scripts/checkpoint_6_web.py scope`.
 
 ### US5 (P2): every failure is designed and friendly

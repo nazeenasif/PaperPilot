@@ -20,7 +20,7 @@ import { makePdf } from "./pdf";
 
 export const API = "http://127.0.0.1:8000";
 
-const CORS = {
+export const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "content-type,x-paperpilot",
   "access-control-allow-methods": "GET,POST,DELETE",

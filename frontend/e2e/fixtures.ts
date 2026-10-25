@@ -203,3 +203,34 @@ export const SEARCH_RESULTS = {
     },
   ],
 };
+
+// --- Scope and follow-ups (US4) ---
+
+const BERT_PASSAGE: Answer["passages"][number] = {
+  number: 1,
+  passage_id: "bert-20",
+  paper_id: "bert",
+  title: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+  section: "Pre-training data",
+  page: 5,
+  score: 0.71,
+  text: "For the pre-training corpus we use the BooksCorpus (800M words) and English Wikipedia (2,500M words).",
+};
+
+export const SCOPED_ANSWER: Answer = {
+  ...ANSWER,
+  question: "What data was BERT pre-trained on?",
+  standalone_question: "What data was BERT pre-trained on?",
+  text: "BERT was pre-trained on the BooksCorpus and English Wikipedia [1].",
+  passages: [BERT_PASSAGE],
+  citations: { valid: [1], invalid: [], uncited_sentences: [] },
+};
+
+export const FOLLOW_UP_ANSWER: Answer = {
+  ...SCOPED_ANSWER,
+  question: "How many words does it contain?",
+  standalone_question: "How many words does BERT's pre-training data contain?",
+  rewrite_applied: true,
+  text: "The BooksCorpus has 800M words and English Wikipedia 2,500M words [1].",
+  llm_calls: 2,
+};

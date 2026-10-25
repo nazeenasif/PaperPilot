@@ -3,8 +3,17 @@
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { fakeBackend, fakeLibrary, streamAskInPage } from "./fake-backend";
-import { ANSWER, HELD_BACK_ANSWER, NOT_FOUND_ANSWER, NOT_FOUND_TEXT, USAGE } from "./fixtures";
+import { CORS, eventStream, fakeBackend, fakeLibrary, streamAskInPage } from "./fake-backend";
+import {
+  ANSWER,
+  FOLLOW_UP_ANSWER,
+  HELD_BACK_ANSWER,
+  LIBRARY_PAPERS,
+  NOT_FOUND_ANSWER,
+  NOT_FOUND_TEXT,
+  SCOPED_ANSWER,
+  USAGE,
+} from "./fixtures";
 import { makePdf } from "./pdf";
 
 /** Drop files on an element the way a browser does (a drop event carrying a DataTransfer). */
@@ -191,4 +200,57 @@ test("US5 states: server unreachable, then recovered", async ({ page }) => {
   await expect(page.getByText(/reconnects by itself/i)).toBeVisible();
   down = false;
   await expect(page.getByRole("textbox", { name: /ask about your papers/i })).toBeVisible({ timeout: 10_000 });
+});
+
+test("US4 scope", async ({ page }) => {
+  const asks: unknown[] = [];
+  const answers = [SCOPED_ANSWER, FOLLOW_UP_ANSWER];
+  await fakeBackend(page, {
+    routes: {
+      "/api/papers": async (route) => {
+        const total = LIBRARY_PAPERS.reduce((sum, p) => sum + p.passage_count, 0);
+        await route.fulfill({ status: 200, headers: CORS, json: { papers: LIBRARY_PAPERS, total_passages: total } });
+      },
+      "/api/ask": async (route) => {
+        asks.push(route.request().postDataJSON());
+        const answer = answers[Math.min(asks.length - 1, answers.length - 1)];
+        await route.fulfill({
+          status: 200,
+          headers: { ...CORS, "content-type": "text/event-stream" },
+          body: eventStream([["progress", { step: "searching" }], ["answer", answer]]),
+        });
+      },
+    },
+  });
+  // "Ask this paper" on BERT's card links here.
+  await page.goto("/?paper=bert");
+
+  // The scope is a sidebar on wide screens and a sheet on phones.
+  const onPhone = (page.viewportSize()?.width ?? 1280) < 1024; // Tailwind's lg breakpoint
+  if (onPhone) await page.getByRole("button", { name: /choose papers/i }).click();
+  const scope = page.getByRole("region", { name: "Search scope" }).filter({ visible: true });
+  await expect(scope).toContainText("Search scope · 1 of 2 papers");
+  await expect(scope.getByRole("checkbox", { name: /^BERT/ })).toBeChecked();
+  await expect(scope.getByRole("checkbox", { name: /Attention/ })).not.toBeChecked();
+  await expect(scope.getByText("42 passages")).toBeVisible();
+  if (onPhone) await page.keyboard.press("Escape");
+
+  await askOnPage(page, "What data was BERT pre-trained on?");
+  await expect(page.getByText(/BooksCorpus and English Wikipedia/)).toBeVisible();
+  await askOnPage(page, "How many words does it contain?");
+  await expect(page.getByText(`Searched as "How many words does BERT's pre-training data contain?"`)).toBeVisible();
+  await expect(page.getByText(/800M words and English Wikipedia/)).toBeVisible();
+
+  expect(asks[0]).toEqual({ question: "What data was BERT pre-trained on?", paper_ids: ["bert"] });
+  expect(asks[1]).toEqual({
+    question: "How many words does it contain?",
+    paper_ids: ["bert"],
+    history: [
+      { role: "user", text: "What data was BERT pre-trained on?" },
+      { role: "assistant", text: SCOPED_ANSWER.text },
+    ],
+  });
+
+  await page.getByRole("button", { name: "New conversation" }).click();
+  await expect(page.getByText(/BooksCorpus and English Wikipedia/)).toHaveCount(0);
 });

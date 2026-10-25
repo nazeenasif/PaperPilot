@@ -59,7 +59,7 @@ generalised (T004).
 
 ### One grounding pipeline (research R1, ADR-0008)
 
-- [ ] T003 Create failing tests in `tests/test_grounding_parts.py`:
+- [X] T003 Create failing tests in `tests/test_grounding_parts.py`:
   - `check_citations(text, allowed={5, 6, 7})`: 5–7 valid, 1 and 8 invalid, uncited sentences listed; `check_citations(text, passage_count=4)` equals `allowed={1, 2, 3, 4}`.
   - `review_reply(text, allowed=…)`: invalid → `NOT_FOUND` with `rejected_answer` and the warning naming the numbers; none → `no_citations`; not-found sentence → `model_not_found`; `review_reply(text, passage_count=n)` unchanged.
   - `format_passages(passages)` returns exactly the passage block `build_answer_prompt` produces today (escaped, reference markers stripped).

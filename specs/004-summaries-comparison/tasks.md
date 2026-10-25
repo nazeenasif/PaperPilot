@@ -64,7 +64,7 @@ generalised (T004).
   - `review_reply(text, allowed=…)`: invalid → `NOT_FOUND` with `rejected_answer` and the warning naming the numbers; none → `no_citations`; not-found sentence → `model_not_found`; `review_reply(text, passage_count=n)` unchanged.
   - `format_passages(passages)` returns exactly the passage block `build_answer_prompt` produces today (escaped, reference markers stripped).
   - `number_passages(results, seen)`: numbers continue across calls; a passage id seen before keeps its first number.
-- [ ] T004 Generalise in place in `paperpilot/prompts.py` and `paperpilot/service.py`, so T003 passes and `ask()` is unchanged:
+- [X] T004 Generalise in place in `paperpilot/prompts.py` and `paperpilot/service.py`, so T003 passes and `ask()` is unchanged:
   - `paperpilot/prompts.py`: `check_citations(text, passage_count=None, allowed=None)`; factor `format_passages` out of `build_answer_prompt`.
   - `paperpilot/service.py`: `review_reply(text, passage_count=None, allowed=None)`; `_number` becomes `number_passages(results, seen=None)`.
   - Check: `git diff --stat tests/test_service.py tests/test_prompts.py tests/api/test_ask.py` is empty, and the full `pytest` passes.

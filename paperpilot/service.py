@@ -14,7 +14,7 @@ from paperpilot.config import load_settings
 from paperpilot.errors import EmptyQueryError, LLMError
 from paperpilot.prompts import CitationReport, NumberedPassage, Turn
 
-__all__ = ["Answer", "Turn", "ask", "review_reply"]
+__all__ = ["Answer", "Turn", "ask", "number_passages", "review_reply"]
 
 logger = logging.getLogger(__name__)
 
@@ -52,39 +52,58 @@ def _add_tokens(totals: dict[str, int], reply: llm.LLMReply) -> None:
             totals[key] = totals.get(key, 0) + value
 
 
-def _number(results: list[library.SearchResult]) -> list[NumberedPassage]:
-    return [
-        NumberedPassage(
-            number=i,
-            passage_id=r.passage_id,
-            paper_id=r.paper_id,
-            title=r.title,
-            section=r.section,
-            page=r.page,
-            score=r.score,
-            text=r.text,
-        )
-        for i, r in enumerate(results, start=1)
-    ]
+def number_passages(
+    results: list[library.SearchResult], seen: dict[str, NumberedPassage] | None = None
+) -> list[NumberedPassage]:
+    """Number search results for the model. `seen` (passage id -> numbered passage) carries the
+    numbers of earlier calls in the same run, so a passage keeps its first number (FR-004)."""
+    seen = {} if seen is None else seen
+    numbered: list[NumberedPassage] = []
+    for r in results:
+        if r.passage_id not in seen:
+            seen[r.passage_id] = NumberedPassage(
+                number=len(seen) + 1,
+                passage_id=r.passage_id,
+                paper_id=r.paper_id,
+                title=r.title,
+                section=r.section,
+                page=r.page,
+                score=r.score,
+                text=r.text,
+            )
+        numbered.append(seen[r.passage_id])
+    return numbered
+
+
+def _provided(allowed: set[int]) -> str:
+    """The provided passage numbers for a warning: "[1]-[6]" for a run, else "[5], [7]"."""
+    numbers = sorted(allowed)
+    if len(numbers) > 1 and numbers == list(range(numbers[0], numbers[-1] + 1)):
+        return f"[{numbers[0]}]-[{numbers[-1]}]"
+    return ", ".join(f"[{n}]" for n in numbers) or "none"
 
 
 def review_reply(
-    text: str, passage_count: int
+    text: str, passage_count: int | None = None, allowed: set[int] | None = None
 ) -> tuple[str, CitationReport, str | None, str | None, str | None]:
-    """Check a model reply's citations against passages 1..passage_count (FR-008a, FR-009).
+    """Check a model reply's citations against the passages it was given (FR-008a, FR-009).
 
+    `allowed` holds those passage numbers (a summary section or comparison cell, research R1);
+    `passage_count=n` is the answer's case, allowed = {1..n}.
     Returns (answer_text, citations, warning, rejected_answer, fallback_reason). Invalid or
     missing citations replace the answer with NOT_FOUND and keep the original as
     rejected_answer; uncited sentences in an otherwise valid answer only produce a warning.
     """
+    if allowed is None:
+        allowed = set(range(1, (passage_count or 0) + 1))
     text = text.strip()
     if prompts.is_not_found(text):
         return prompts.NOT_FOUND, NO_CITATIONS, None, None, "model_not_found"
-    citations = prompts.check_citations(text, passage_count)
+    citations = prompts.check_citations(text, allowed=allowed)
     if citations.invalid:
         numbers = ", ".join(f"[{n}]" for n in citations.invalid)
         warning = (f"The answer was rejected: it cited {numbers}, but only passages "
-                   f"[1]-[{passage_count}] were provided.")
+                   f"{_provided(allowed)} were provided.")
         return prompts.NOT_FOUND, citations, warning, text, "invalid_citations"
     if not citations.valid:
         warning = "The answer was rejected: it had no citations to the provided passages."
@@ -189,7 +208,7 @@ def ask(
     # when that passes, all k passages go to the model unfiltered (research R8).
     if max(r.score for r in results) < settings.relevance_threshold:
         return finish(prompts.NOT_FOUND, NO_CITATIONS, "below_threshold")
-    passages = _number(results)
+    passages = number_passages(results)
     emit("reading", {"passages": len(passages), "papers": len({p.paper_id for p in passages})})
 
     start = time.perf_counter()

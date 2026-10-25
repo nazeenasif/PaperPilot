@@ -79,8 +79,8 @@ def strip_reference_markers(text: str) -> str:
     return _REFERENCE_MARKER.sub("", text)
 
 
-def build_answer_prompt(question: str, passages: list[NumberedPassage]) -> str:
-    """Build the user message: escaped, numbered passage tags followed by the question."""
+def format_passages(passages: list[NumberedPassage]) -> str:
+    """The passage block shared by every prompt: escaped `<passage>` tags with their numbers."""
     lines = ["Passages:"]
     for p in passages:
         text = _escape(strip_reference_markers(p.text))
@@ -88,8 +88,12 @@ def build_answer_prompt(question: str, passages: list[NumberedPassage]) -> str:
             f'<passage id="{p.number}" title="{_escape(p.title)}" section="{_escape(p.section)}" '
             f'page="{p.page}">{text}</passage>'
         )
-    lines += ["", f"Question: {question}"]
     return "\n".join(lines)
+
+
+def build_answer_prompt(question: str, passages: list[NumberedPassage]) -> str:
+    """Build the user message: escaped, numbered passage tags followed by the question."""
+    return f"{format_passages(passages)}\n\nQuestion: {question}"
 
 
 _ROLE_LABELS = {"user": "User", "assistant": "Assistant"}
@@ -148,11 +152,17 @@ def _sentences(text: str) -> list[str]:
     return sentences
 
 
-def check_citations(text: str, passage_count: int) -> CitationReport:
-    """Split the answer's citations into valid (1..passage_count) and invalid, and list uncited sentences."""
+def check_citations(text: str, passage_count: int | None = None, allowed: set[int] | None = None) -> CitationReport:
+    """Split the citations into valid and invalid, and list uncited sentences.
+
+    Valid numbers are those in `allowed` (the passages given for this answer or part, research
+    R1); `passage_count=n` is the answer's case, allowed = {1..n}.
+    """
+    if allowed is None:
+        allowed = set(range(1, (passage_count or 0) + 1))
     numbers = extract_citations(text)
-    valid = sorted({n for n in numbers if 1 <= n <= passage_count})
-    invalid = sorted({n for n in numbers if not 1 <= n <= passage_count})
+    valid = sorted({n for n in numbers if n in allowed})
+    invalid = sorted({n for n in numbers if n not in allowed})
     uncited = [s for s in _sentences(text) if not _CITATION.search(s)]
     return CitationReport(valid=valid, invalid=invalid, uncited_sentences=uncited)
 

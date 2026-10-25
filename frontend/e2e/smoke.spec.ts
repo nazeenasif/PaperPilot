@@ -497,3 +497,29 @@ test("F4 US1 summary", async ({ page }) => {
   await expect(viewer.locator(".react-pdf__Page canvas")).toBeVisible({ timeout: 15_000 });
   await expect(viewer.getByRole("img", { name: /highlighted passage/i })).toBeVisible();
 });
+
+test("F4 US2 reopen", async ({ page }) => {
+  const regenerated = { ...LORA_SUMMARY, tldr: { ...LORA_SUMMARY.tldr, text: "A regenerated TL;DR about LoRA [1]." } };
+  await streamPostInPage(page, "/api/summaries/lora", [{ afterMs: 50, event: "summary", data: regenerated }]);
+  await fakeBackend(page, { routes: summaryRoutes(true) });
+  const posts = () => page.evaluate(() => (window as unknown as { __posts?: Record<string, number> }).__posts?.["/api/summaries/lora"] ?? 0);
+
+  // From the Summarize tab to the saved summary: shown at once, nothing posted.
+  await page.goto("/summarize");
+  await page.getByRole("link", { name: /LoRA/ }).click();
+  await expect(page).toHaveURL(/\/summarize\/lora$/, { timeout: 30_000 });
+  await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible();
+  await expect(page.getByText(/reopening cost 0 requests/)).toBeVisible();
+  expect(await posts()).toBe(0);
+
+  // Regenerate asks first, then replaces the view.
+  await page.getByRole("button", { name: "Regenerate summary" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("It uses 6 requests");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  expect(await posts()).toBe(0);
+  await page.getByRole("button", { name: "Regenerate summary" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Regenerate" }).click();
+  await expect(page.getByText(/A regenerated TL;DR about LoRA/)).toBeVisible();
+  expect(await posts()).toBe(1);
+});

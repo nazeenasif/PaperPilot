@@ -174,6 +174,9 @@ export async function streamPostInPage(
     window.fetch = async (input, init) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (!url.endsWith(suffix) || (init?.method ?? "GET") !== "POST") return original(input, init);
+      // Count the POSTs, so tests can check that reopening a saved result sends none.
+      const counts = ((window as unknown as { __posts?: Record<string, number> }).__posts ??= {});
+      counts[suffix] = (counts[suffix] ?? 0) + 1;
       const encoder = new TextEncoder();
       const body = new ReadableStream<Uint8Array>({
         async start(controller) {

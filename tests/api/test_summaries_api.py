@@ -92,3 +92,68 @@ def test_no_response_leaks_the_key_or_a_traceback(summary_client, api_env):
     listing = summary_client.get("/api/summaries").text
     for body in (text, listing):
         assert api_env["api_key"] not in body and "Traceback" not in body
+
+
+# --- US2: saved summaries over HTTP ---
+
+
+def test_get_before_any_summary_is_not_saved_with_the_plan(summary_client):
+    response = summary_client.get(f"/api/summaries/{summary_client.paper.paper_id}")
+    assert (response.status_code, response.json()) == (404, {"kind": "not_saved", "plan": {"max_requests": 6}})
+
+
+def test_get_after_a_summary_returns_it_current(summary_client):
+    _, _, events = summarize_stream(summary_client, summary_client.paper.paper_id)
+    response = summary_client.get(f"/api/summaries/{summary_client.paper.paper_id}")
+    body = response.json()
+    assert response.status_code == 200
+    assert (body["status"], body["stale_reason"], body["model"]) == ("current", None, "test/model:free")
+    assert body["created_at"] == events[-1][1]["created_at"]
+    assert body["plan"] == {"max_requests": 6}
+    listed = summary_client.get("/api/summaries").json()["papers"][0]["summary"]
+    assert listed == {"status": "current", "created_at": body["created_at"], "model": "test/model:free"}
+
+
+def test_a_second_post_reuses_the_saved_summary_with_zero_requests(summary_client):
+    summarize_stream(summary_client, summary_client.paper.paper_id)
+    calls = len(summary_client.model.calls)
+    _, _, events = summarize_stream(summary_client, summary_client.paper.paper_id)
+    assert [name for name, _ in events] == ["summary"]
+    assert len(summary_client.model.calls) == calls
+
+
+def test_a_model_change_makes_the_saved_summary_stale(summary_client, monkeypatch):
+    summarize_stream(summary_client, summary_client.paper.paper_id)
+    monkeypatch.setenv("LLM_MODEL", "other/model:free")
+    body = summary_client.get(f"/api/summaries/{summary_client.paper.paper_id}").json()
+    assert (body["status"], body["stale_reason"]) == ("stale", "model_changed")
+
+
+def test_after_deleting_the_paper_its_summary_is_gone(summary_client):
+    summarize_stream(summary_client, summary_client.paper.paper_id)
+    summary_client.delete(f"/api/papers/{summary_client.paper.paper_id}", headers=HEADER)
+    response = summary_client.get(f"/api/summaries/{summary_client.paper.paper_id}")
+    assert (response.status_code, response.json()["kind"]) == (404, "unknown_paper")
+
+
+def test_regenerate_through_the_stream(summary_client):
+    summarize_stream(summary_client, summary_client.paper.paper_id)
+    calls = len(summary_client.model.calls)
+    _, _, events = summarize_stream(summary_client, summary_client.paper.paper_id, {"regenerate": True})
+    assert events[0][0] == "plan" and events[-1][0] == "summary"
+    assert len(summary_client.model.calls) == calls + 6
+
+
+def test_retry_parts_through_the_stream(summary_client):
+    summarize_stream(summary_client, summary_client.paper.paper_id)
+    calls = len(summary_client.model.calls)
+    _, _, events = summarize_stream(summary_client, summary_client.paper.paper_id, {"retry_parts": ["method"]})
+    assert events[0] == ("plan", {"max_requests": 2, "parts": ["method", "tldr"]})
+    assert [d["part"] for n, d in events if n == "part"] == ["method", "tldr"]
+    assert len(summary_client.model.calls) == calls + 2
+
+
+def test_retry_parts_without_a_saved_summary_is_not_saved(summary_client):
+    response = summary_client.post(f"/api/summaries/{summary_client.paper.paper_id}",
+                                   json={"retry_parts": ["method"]}, headers=HEADER)
+    assert (response.status_code, response.json()["kind"]) == (404, "not_saved")

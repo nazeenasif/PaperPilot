@@ -173,7 +173,7 @@ generalised (T004).
 
 ### US2: saved summaries over HTTP
 
-- [ ] T023 [US2] Add failing tests to `tests/api/test_summaries_api.py`:
+- [X] T023 [US2] Add failing tests to `tests/api/test_summaries_api.py`:
   - `GET /api/summaries/{id}` → `404 not_saved` (with `plan`) before generation; after it, `200` with `status: current`, `created_at`, `model`; a second `POST` without `regenerate` streams only `summary` with 0 requests.
   - After a model change, `GET` returns `status: stale`, `stale_reason: model_changed`; after `DELETE /api/papers/{id}` it returns `404 unknown_paper`.
   - `regenerate: true` and `retry_parts: ["method"]` behave as in T011 through the stream.

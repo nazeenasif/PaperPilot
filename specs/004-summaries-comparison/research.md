@@ -49,7 +49,22 @@ scores below `RELEVANCE_THRESHOLD`, the section is **not reported** and **no req
 A section is at most 80 words.
 
 **Rationale**: query-focused retrieval keeps each prompt small (4 × ~220 words) and each claim
-next to its passages; the threshold rule is already calibrated (Feature 2 research R8).
+next to its passages. The threshold was calibrated on questions (Feature 2 research R8), not on
+these fixed facet queries, so it was measured for them (analysis finding C1, 2026-10-25, 0 model
+requests): top score per facet within each paper, k = 4.
+
+| Paper | problem | method | data | results | limitations |
+|---|---|---|---|---|---|
+| Attention Is All You Need | 0.699 | 0.703 | 0.752 | 0.713 | 0.584 |
+| BERT | 0.644 | 0.724 | 0.745 | 0.697 | 0.601 |
+| LoRA | 0.642 | 0.715 | 0.736 | 0.707 | 0.608 |
+| Lost in the Middle | 0.695 | 0.722 | 0.734 | 0.731 | 0.639 |
+| RAG | 0.698 | 0.707 | 0.747 | 0.709 | 0.634 |
+
+Every facet clears 0.58 on the five test papers, so the gate does not suppress sections here.
+Limitations is the weakest facet (0.584–0.639; Attention is 0.004 above the gate): a paper whose
+limitations are phrased differently may be reported as not found without a request. Re-measure
+when the facet queries, papers or threshold change.
 
 **Alternatives considered**: using `TOP_K` (6) per facet (rejected per clarification: larger
 prompts for little gain); one retrieval for the whole paper (rejected: the "data" and

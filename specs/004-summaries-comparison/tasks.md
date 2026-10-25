@@ -117,7 +117,7 @@ generalised (T004).
 
 ### US4 (P1): "Not reported" and held-back parts, the rest stays visible
 
-- [ ] T013 [US4] Create failing tests in `tests/test_summarize_states.py` (scripted replies per facet):
+- [X] T013 [US4] Create failing tests in `tests/test_summarize_states.py` (scripted replies per facet):
   - A section reply with no citations → `not_reported` (`no_citations`); the not-found or `NOT_REPORTED` sentence → `not_reported` (`model_not_found`).
   - A facet whose best passage is below `RELEVANCE_THRESHOLD` → `not_reported` (`below_threshold`) with **no** `generate` call (the plan's maximum is 6; actual planned requests 5).
   - A section citing a passage outside its facet → `held_back` with `rejected_text`, `citations.invalid`, warning; other sections `verified`.

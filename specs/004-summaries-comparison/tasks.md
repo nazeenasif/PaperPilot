@@ -240,7 +240,7 @@ generalised (T004).
 
 ### US2 (P1): saved summaries
 
-- [ ] T039 [P] [US2] Create failing tests in `frontend/tests/summarize-picker.test.tsx`:
+- [X] T039 [P] [US2] Create failing tests in `frontend/tests/summarize-picker.test.tsx`:
   - `/summarize` lists papers with their summary status (none, saved with time, "earlier model" for stale).
   - A saved summary opens with "Saved 2 hours ago · reopening cost 0 requests" and posts nothing.
   - A stale summary is labelled with its reason and is not marked "All citations verified" as current.

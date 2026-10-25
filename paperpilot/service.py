@@ -1,20 +1,22 @@
-"""Question answering over the paper library (contracts/answer-api.md, ADR-0004).
+"""Question answering, summaries and comparisons over the paper library (ADR-0004, ADR-0008).
 
 `ask()` orchestrates: retrieve passages with Feature 1 search, number them, ask the model via
-`llm.generate` (the only LLM boundary) and check the reply's citations in code.
+`llm.generate` (the only LLM boundary) and check the reply's citations in code. `summarize()`
+does the same per summary section, then writes a TL;DR from the verified sections only.
 """
 
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 
 from paperpilot import library, llm, prompts
 from paperpilot.config import load_settings
-from paperpilot.errors import EmptyQueryError, LLMError
-from paperpilot.prompts import CitationReport, NumberedPassage, Turn
+from paperpilot.errors import EmptyQueryError, LLMError, UnknownPaperError
+from paperpilot.prompts import CitationReport, NumberedPassage, Turn, VerifiedSection
 
-__all__ = ["Answer", "Turn", "ask", "number_passages", "review_reply"]
+__all__ = ["Answer", "Part", "Summary", "Turn", "ask", "number_passages", "review_reply", "summarize"]
 
 logger = logging.getLogger(__name__)
 
@@ -225,3 +227,175 @@ def ask(
     if rejected_answer is not None:
         logger.warning("%s", warning)
     return finish(text, citations, fallback_reason, warning, rejected_answer)
+
+
+# --- Feature 4: summaries (spec US1, research R1-R3, ADR-0008) ---
+
+SUMMARY_PASSAGES = 4  # passages per summary section (clarification, research R2)
+TLDR = "tldr"
+
+
+@dataclass(frozen=True)
+class Part:
+    """One summary section, the TL;DR or one comparison cell, after its check (data-model.md).
+
+    `text` is set only when the part is verified; `rejected_text` only when it is held back.
+    """
+
+    part: str
+    state: str  # verified, not_reported, held_back, failed, not_started
+    text: str | None = None
+    citations: CitationReport = NO_CITATIONS
+    warning: str | None = None
+    rejected_text: str | None = None
+    reason: str | None = None
+    sources: list[list[str]] = field(default_factory=list)
+    passages: list[int] = field(default_factory=list)
+    requests: dict[str, int] = field(default_factory=lambda: {"planned": 0, "retries": 0})
+    tokens: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Summary:
+    """A paper's TL;DR and five sections with their numbered passages (data-model.md)."""
+
+    paper_id: str
+    title: str
+    arxiv_id: str | None
+    tldr: Part
+    sections: list[Part]
+    passages: list[NumberedPassage]
+    plan: dict[str, int]
+    requests: dict[str, int]
+    model: str
+    prompt_version: int
+    created_at: str
+    status: str = "current"  # or "stale" (research R6)
+    stale_reason: str | None = None
+
+    @property
+    def verified_parts(self) -> int:
+        """How many of the six parts are verified (the "All citations verified" badge needs 6)."""
+        return sum(1 for p in [self.tldr, *self.sections] if p.state == "verified")
+
+
+def part_body(part: Part) -> dict:
+    """A part as plain data, for events and saving."""
+    return asdict(part)
+
+
+def _paper(paper_id: str) -> library.PaperSummary:
+    for paper in library.list_papers():
+        if paper.paper_id == paper_id:
+            return paper
+    raise UnknownPaperError(f"Paper {paper_id} is not in the library")
+
+
+def _section_part(facet: str, reply_text: str, allowed: set[int], **extra) -> Part:
+    """Judge one section reply with the answer validator, scoped to its own passages (FR-011)."""
+    if prompts.is_not_reported(reply_text):
+        return Part(facet, "not_reported", reason="model_not_found", **extra)
+    text, citations, warning, rejected, reason = review_reply(reply_text, allowed=allowed)
+    if reason == "invalid_citations":
+        return Part(facet, "held_back", citations=citations, warning=warning, rejected_text=rejected,
+                    reason=reason, **extra)
+    if reason is not None:  # no citations, or the not-found sentence
+        return Part(facet, "not_reported", citations=citations, reason=reason, **extra)
+    return Part(facet, "verified", text=text, citations=citations, warning=warning, **extra)
+
+
+def _tldr_part(reply_text: str, sections: list[VerifiedSection], **extra) -> Part:
+    """Judge the TL;DR with check_tldr (research R3): only this part is held back on failure."""
+    check = prompts.check_tldr(reply_text, sections)
+    if check.not_found:
+        return Part(TLDR, "not_reported", reason="model_not_found", **extra)
+    if not check.ok:
+        return Part(TLDR, "held_back", citations=check.citations, warning="; ".join(check.problems),
+                    rejected_text=reply_text.strip(), reason="tldr_check", sources=check.sources, **extra)
+    return Part(TLDR, "verified", text=reply_text.strip(), citations=check.citations, sources=check.sources,
+                **extra)
+
+
+def summarize(
+    paper_id: str,
+    regenerate: bool = False,
+    retry_parts: list[str] | None = None,
+    on_event: Callable[[str, dict], None] | None = None,
+) -> Summary:
+    """Summarize one paper: per facet, retrieve 4 passages from it, generate, check; then the
+    TL;DR from the verified sections (FR-002-FR-005).
+
+    `on_event(kind, detail)` receives "plan", "progress" ({part, step, passages?}), "retry_wait"
+    ({part, ...}) and "part" (a checked part). No event carries text before its part's check.
+    Raises UnknownPaperError, SettingsError.
+    """
+
+    def emit(kind: str, detail: dict) -> None:
+        if on_event is not None:
+            on_event(kind, detail)
+
+    paper = _paper(paper_id)
+    settings = load_settings()
+    parts_order = [*prompts.FACETS, TLDR]
+    plan = {"max_requests": len(parts_order)}
+    emit("plan", {**plan, "parts": parts_order})
+
+    seen: dict[str, NumberedPassage] = {}
+    sections: list[Part] = []
+    verified: list[VerifiedSection] = []
+
+    def generate(part: str, system: str, prompt: str) -> tuple[llm.LLMReply, dict[str, int], dict[str, int]]:
+        before = llm.request_counts().retries
+        reply = llm.generate(system, prompt,
+                             on_retry=lambda notice: emit("retry_wait", {"part": part, **asdict(notice)}))
+        tokens: dict[str, int] = {}
+        _add_tokens(tokens, reply)
+        return reply, {"planned": 1, "retries": llm.request_counts().retries - before}, tokens
+
+    for key, facet in prompts.FACETS.items():
+        emit("progress", {"part": key, "step": "searching"})
+        results = library.search(facet.query, k=SUMMARY_PASSAGES, paper_ids=[paper_id])
+        if not results or max(r.score for r in results) < settings.relevance_threshold:
+            part = Part(key, "not_reported", reason="no_passages" if not results else "below_threshold")
+        else:
+            numbered = number_passages(results, seen)
+            numbers = [p.number for p in numbered]
+            emit("progress", {"part": key, "step": "reading", "passages": len(numbered)})
+            emit("progress", {"part": key, "step": "generating"})
+            reply, requests, tokens = generate(key, prompts.SECTION_INSTRUCTION,
+                                               prompts.build_section_prompt(key, numbered))
+            emit("progress", {"part": key, "step": "checking"})
+            part = _section_part(key, reply.text, set(numbers), passages=numbers, requests=requests,
+                                 tokens=tokens)
+            if part.state == "verified":
+                verified.append(VerifiedSection(facet.label, part.text or "", part.citations.valid))
+        sections.append(part)
+        emit("part", part_body(part))
+
+    if not verified:
+        tldr = Part(TLDR, "not_reported", reason="no_verified_sections")
+    else:
+        emit("progress", {"part": TLDR, "step": "generating"})
+        reply, requests, tokens = generate(TLDR, prompts.TLDR_INSTRUCTION, prompts.build_tldr_prompt(verified))
+        emit("progress", {"part": TLDR, "step": "checking"})
+        cited = sorted({n for v in verified for n in v.citations})
+        tldr = _tldr_part(reply.text, verified, passages=cited, requests=requests, tokens=tokens)
+    emit("part", part_body(tldr))
+
+    all_parts = [*sections, tldr]
+    summary = Summary(
+        paper_id=paper_id,
+        title=paper.title,
+        arxiv_id=paper.arxiv_id,
+        tldr=tldr,
+        sections=sections,
+        passages=sorted(seen.values(), key=lambda p: p.number),
+        plan=plan,
+        requests={k: sum(p.requests[k] for p in all_parts) for k in ("planned", "retries")},
+        model=settings.llm_model,
+        prompt_version=prompts.SUMMARY_PROMPT_VERSION,
+        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
+    logger.info("Summarized %s: %d of 6 parts verified, %d requests", paper_id, summary.verified_parts,
+                summary.requests["planned"])
+    return summary

@@ -113,7 +113,9 @@ def test_the_tldr_is_built_from_verified_sections_only(summary_env, monkeypatch)
     assert fake.calls[-1][0] == prompts.TLDR_INSTRUCTION
     assert '<section name="Data">' not in tldr_prompt and '<section name="Method">' in tldr_prompt
     assert summary.sections[2].state == "held_back"
-    assert summary.tldr.state == "verified" and summary.tldr.sources == [["Problem"]]
+    # The TL;DR cites Problem's first passage; other sections citing the same passage are sources too.
+    assert summary.tldr.state == "verified" and "Problem" in summary.tldr.sources[0]
+    assert "Data" not in summary.tldr.sources[0]
 
 
 def test_the_result_records_requests_tokens_model_and_time(summary_env, model):

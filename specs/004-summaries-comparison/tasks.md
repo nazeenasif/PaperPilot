@@ -96,7 +96,7 @@ generalised (T004).
   - The result has `tldr` and five sections in order, `passages`, `requests` (`planned == 6`, `retries == 0`), tokens per part, `model`, `prompt_version`, `created_at`.
   - Events: `plan` first; per part `progress` (searching → reading → generating → checking) then `part`; no event before a part's `part` event contains its text.
   - `UnknownPaperError` for an unknown paper, with 0 requests.
-- [ ] T008 [US1] Implement `summarize()` in `paperpilot/service.py` (no saving yet): per facet retrieve, gate on the relevance threshold, one `llm.generate` call, `review_reply(allowed=…)`; then the TL;DR from verified sections and `check_tldr`; part events through `on_event`; `Summary` and `Part` dataclasses as `data-model.md`. T007 passes.
+- [X] T008 [US1] Implement `summarize()` in `paperpilot/service.py` (no saving yet): per facet retrieve, gate on the relevance threshold, one `llm.generate` call, `review_reply(allowed=…)`; then the TL;DR from verified sections and `check_tldr`; part events through `on_event`; `Summary` and `Part` dataclasses as `data-model.md`. T007 passes.
 
 ### US2 (P1): saved results, reopen at no cost, regenerate
 

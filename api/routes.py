@@ -193,6 +193,18 @@ def list_summaries() -> dict:
     return {"papers": papers, "plan": service.summary_plan("")}
 
 
+@router.get("/summaries/{paper_id}")
+def get_summary(paper_id: str) -> dict:
+    """The saved summary, current or stale (with its reason) and the plan for regenerating it.
+    404 not_saved (with the plan) when there is none. Never sends a model request (FR-016)."""
+    if not store.has_paper(paper_id):
+        raise ApiError("unknown_paper", paper_id=paper_id)
+    saved = service.saved_summary(paper_id)
+    if saved is None:
+        raise ApiError("not_saved", plan=service.summary_plan(paper_id))
+    return {**summary_body(saved), "plan": service.summary_plan(paper_id)}
+
+
 def start_summary(paper_id: str, body: SummarizeIn, request: Request) -> SummarizeIn:
     """Validate before the stream starts (plain JSON errors) and take the one-task lock."""
     if not store.has_paper(paper_id):
@@ -201,7 +213,7 @@ def start_summary(paper_id: str, body: SummarizeIn, request: Request) -> Summari
         if not body.retry_parts or any(part not in SUMMARY_PARTS for part in body.retry_parts):
             raise ApiError("invalid_request")
         if service.saved_summary(paper_id) is None:
-            raise ApiError("invalid_request")
+            raise ApiError("not_saved", plan=service.summary_plan(paper_id))
     if not request.app.state.paperpilot.question_lock.acquire(blocking=False):
         raise ApiError("busy_question")
     return body

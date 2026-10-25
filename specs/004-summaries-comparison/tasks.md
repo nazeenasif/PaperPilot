@@ -177,7 +177,7 @@ generalised (T004).
   - `GET /api/summaries/{id}` → `404 not_saved` (with `plan`) before generation; after it, `200` with `status: current`, `created_at`, `model`; a second `POST` without `regenerate` streams only `summary` with 0 requests.
   - After a model change, `GET` returns `status: stale`, `stale_reason: model_changed`; after `DELETE /api/papers/{id}` it returns `404 unknown_paper`.
   - `regenerate: true` and `retry_parts: ["method"]` behave as in T011 through the stream.
-- [ ] T024 [US2] Implement `GET /api/summaries/{paper_id}`, the `not_saved` kind and the `regenerate`/`retry_parts` body fields in `api/routes.py`, `api/schemas.py` and `api/errors.py`, so T023 passes.
+- [X] T024 [US2] Implement `GET /api/summaries/{paper_id}`, the `not_saved` kind and the `regenerate`/`retry_parts` body fields in `api/routes.py`, `api/schemas.py` and `api/errors.py`, so T023 passes.
 
 ### US4: part states over HTTP
 

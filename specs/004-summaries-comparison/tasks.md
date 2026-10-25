@@ -100,7 +100,7 @@ generalised (T004).
 
 ### US2 (P1): saved results, reopen at no cost, regenerate
 
-- [ ] T009 [P] [US2] Create failing tests in `tests/test_results_cache.py`:
+- [X] T009 [P] [US2] Create failing tests in `tests/test_results_cache.py`:
   - `save_result`/`load_result` round-trip a summary under `<LIBRARY_DIR>/results.sqlite3`; the key is order-insensitive for paper IDs and aspects.
   - Staleness: changing `LLM_MODEL` → `model_changed`; bumping `SUMMARY_PROMPT_VERSION` (monkeypatch) → `instructions_changed`; re-chunking a paper (different `CHUNK_WORDS`, re-process) → `passages_changed`.
   - `delete_paper` and `reprocess_paper` remove every saved result that includes the paper (`forget_results` returns the count); results for other papers stay.

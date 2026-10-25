@@ -77,7 +77,7 @@ generalised (T004).
 
 ### US1 (P1): a summary with cited sections
 
-- [ ] T005 [P] [US1] Create failing tests in `tests/test_prompts_summary.py`:
+- [X] T005 [P] [US1] Create failing tests in `tests/test_prompts_summary.py`:
   - **Constants:** `FACETS` has problem, method, data, results, limitations in that order, each with a retrieval query and label; `NOT_REPORTED == "Not reported in the retrieved passages."`; `SUMMARY_PROMPT_VERSION` is an int.
   - **Builders:** `build_section_prompt(facet, passages)` contains the facet instruction (≤ 80 words, cite every sentence, copy numbers exactly, reply `NOT_REPORTED` when unsupported) and `format_passages(passages)` with their run-wide numbers; `build_tldr_prompt(sections)` lists only the given verified sections with their citation numbers and asks for ≤ 60 words, ≤ 3 sentences.
   - **`check_tldr`** (research R3), with verified sections Problem `[1]` and Results `[4]` ("about 10,000 times", "3 times"):

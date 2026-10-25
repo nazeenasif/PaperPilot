@@ -352,7 +352,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
 
 ### US4: scope and follow-ups
 
-- [ ] T043 [P] [US4] Create failing tests in `tests/api/test_ask_scope.py`:
+- [X] T043 [P] [US4] Create failing tests in `tests/api/test_ask_scope.py`:
   - **Scope:** `paper_ids` limits every passage to those papers. An empty list gives `422 no_papers_selected`.
   - **History:** the history is passed to `ask()`; the answer's `standalone_question`, `rewrite_applied` and `rewrite_fallback_reason` come through.
   - **Invalid history:** a bad role or a turn longer than 20,000 characters gives `422 {"kind": "invalid_request"}`. Add `invalid_request` to the error table in `specs/003-web-app/contracts/web-api.md`.

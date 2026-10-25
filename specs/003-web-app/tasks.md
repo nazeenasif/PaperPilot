@@ -527,7 +527,7 @@ the usage meter shows today's count.
   - Usage covers only this key's free-model requests on OpenRouter; with other providers it is the local count only.
   - The units of `X-RateLimit-Reset` remain unconfirmed until a real 429.
   - The viewer renders one page at a time.
-- [ ] T071 Run the full quickstart (`specs/003-web-app/quickstart.md`) and fix any drift in it:
+- [X] T071 Run the full quickstart (`specs/003-web-app/quickstart.md`) and fix any drift in it:
   - The test commands: `pytest`, `npm --prefix frontend run typecheck`, `npm --prefix frontend test` and `npm --prefix frontend run test:e2e`.
   - Both servers, then `python scripts/checkpoint_6_web.py` with all parts (plan: 4 model requests, cap 8; check `scripts/usage.py` first).
   - `python scripts/checkpoint_6_geometry.py`.

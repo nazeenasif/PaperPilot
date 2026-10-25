@@ -102,3 +102,46 @@ export const GENERIC_FAILURE: FailureCopy = {
   message: "PaperPilot couldn't finish this answer.",
   next: "Please try again in a moment. If it keeps failing, the server log has the details.",
 };
+
+// --- Summary sections, TL;DR and comparison cells (Feature 4, FR-011, FR-014) ---
+
+export const PART_NOT_REPORTED = "Not reported in the retrieved passages.";
+
+/** "9–12" for a run of numbers, else "3, 7 and 8". */
+function passageList(numbers: number[]): string {
+  const sorted = [...numbers].sort((a, b) => a - b);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  if (sorted.length > 2 && first !== undefined && last !== undefined && last - first === sorted.length - 1) {
+    return `${first}–${last}`;
+  }
+  return numberList(sorted);
+}
+
+/** Why a part was held back, from its own numbers (never the engine's warning). */
+export function heldBackPart(noun: string, invalid: number[], provided: number[]): string {
+  if (noun === "TL;DR") return "Held back: the TL;DR said something its verified sections don't support.";
+  if (invalid.length === 0) return `Held back: this ${noun} didn't cite its passages correctly.`;
+  const cited = `passage${invalid.length === 1 ? "" : "s"} ${numberList(invalid)}`;
+  const given = provided.length === 1 ? `only passage ${provided[0]} was` : `only passages ${passageList(provided)} were`;
+  return `Held back: this ${noun} cited ${cited}, but ${given} provided.`;
+}
+
+const PART_FAILED: Record<string, string> = {
+  cut_off: "The model's answer was cut off before it finished.",
+  empty: "The model returned an empty answer.",
+  malformed: "The model's reply couldn't be read.",
+};
+
+const PART_NOT_STARTED: Record<string, string> = {
+  daily_limit: "Not started: today's free requests ran out.",
+  rate_limited: "Not started: the free model asked PaperPilot to wait.",
+  model_busy: "Not started: the free model was busy.",
+  model_unavailable: "Not started: the configured model couldn't be used.",
+};
+
+/** The line shown for a failed or not-started part. */
+export function partProblem(state: "failed" | "not_started", reason: string | null): string {
+  if (state === "failed") return (reason && PART_FAILED[reason]) || "This part couldn't be written.";
+  return (reason && PART_NOT_STARTED[reason]) || "Not started.";
+}

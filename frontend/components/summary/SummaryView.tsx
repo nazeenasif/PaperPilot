@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useUsage } from "@/components/app/UsageMeter";
 import { SourceViewer } from "@/components/source/SourceViewer";
 import { CostButton } from "@/components/summary/CostButton";
+import { PartState } from "@/components/summary/PartState";
 import { SectionCard } from "@/components/summary/SectionCard";
 import { TldrCard } from "@/components/summary/TldrCard";
 import { TurnFailure } from "@/components/states/TurnFailure";
@@ -28,19 +29,6 @@ const STALE: Record<StaleReason, string> = {
   instructions_changed: "Generated with earlier summary instructions — regenerate for a current summary.",
   passages_changed: "Generated before this paper was re-processed — regenerate for a current summary.",
 };
-
-/** Placeholder for a part that is not verified; the designed states come with US4. A failed
- *  part can be retried on its own (FR-020). */
-function UnverifiedPart({ part, onRetry }: { part: Part; onRetry?: () => void }) {
-  return (
-    <div className="space-y-3">
-      <p className="text-muted-foreground">{part.state.replace("_", " ")}</p>
-      {onRetry && (part.state === "failed" || part.state === "not_started") && (
-        <CostButton label="Retry this section" cost={2} onClick={onRetry} primary={false} />
-      )}
-    </div>
-  );
-}
 
 /** One paper's summary: saved (0 requests) or generated with its cost shown first, per-part
  *  progress, then the TL;DR and five checked sections whose citations open the source viewer
@@ -120,14 +108,18 @@ export function SummaryView({ paperId }: { paperId: string }) {
       {showResult && (
         <>
           <TldrCard part={partOf("tldr")} progress={summary.progress.tldr} passages={passages} onOpen={setOpen}>
-            <UnverifiedPart part={partOf("tldr") as Part} />
+            {partOf("tldr") && (
+              // Retrying only the TL;DR costs 1 request (FR-020).
+              <PartState part={partOf("tldr") as Part} noun="TL;DR" onRetry={running ? undefined : retry("tldr")} retryCost={1} />
+            )}
           </TldrCard>
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {SECTIONS.map(({ key, label }) => {
               const part = partOf(key);
               return (
                 <SectionCard key={key} label={label} part={part} progress={summary.progress[key]} passages={passages} onOpen={setOpen}>
-                  {part && <UnverifiedPart part={part} onRetry={running ? undefined : retry(key)} />}
+                  {/* A section retry also rewrites the TL;DR: 2 requests (FR-020). */}
+                  {part && <PartState part={part} noun="section" onRetry={running ? undefined : retry(key)} retryCost={2} />}
                 </SectionCard>
               );
             })}

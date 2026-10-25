@@ -256,7 +256,7 @@ generalised (T004).
   - `held_back` shows the app's own warning (e.g. "Held back: this section cited passage 14, but only passages 9–12 were provided.") and "View the unverified text" reveals `rejected_text` labelled "Not verified" with the invalid numbers marked; never the engine's warning string.
   - `failed` with `cut_off` shows "The model's answer was cut off" and a retry; `not_started` shows why (daily limit, long wait, busy).
   - A held-back TL;DR shows its problem in plain words while the sections stay visible.
-- [ ] T043 [US4] Implement `frontend/components/summary/PartState.tsx` (shared by sections, TL;DR and cells) with copy in `frontend/lib/errorKinds.ts`, reusing the Feature 3 `HeldBack` marking, so T042 passes.
+- [X] T043 [US4] Implement `frontend/components/summary/PartState.tsx` (shared by sections, TL;DR and cells) with copy in `frontend/lib/errorKinds.ts`, reusing the Feature 3 `HeldBack` marking, so T042 passes.
 - [ ] T044 [US4] Add test "F4 US4 part states" to `frontend/e2e/smoke.spec.ts`: a summary with one not-reported and one held-back section, the rest verified.
 
 ### US3 (P2): compare papers

@@ -229,7 +229,7 @@ generalised (T004).
 
 ### US1 (P1): summarize a paper
 
-- [ ] T036 [P] [US1] Create failing tests in `frontend/tests/summary.test.tsx` (mocked `fetch`, streamed events):
+- [X] T036 [P] [US1] Create failing tests in `frontend/tests/summary.test.tsx` (mocked `fetch`, streamed events):
   - The cost line reads "uses 6 requests · N left today" before starting; nothing is posted until the researcher confirms.
   - Progress per part ("Reading method passages", "Writing method", "Checking method"); a part's text appears only when its `part` event arrives.
   - The result shows the TL;DR card ("Built only from the verified sections below…") and five section cards in order with "4 passages read"; citation chips open `SourceViewer` at the cited passage (Feature 3 component).

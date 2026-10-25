@@ -263,7 +263,7 @@ describe("Header and what is not shown", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("1 paper, 1 searchable passage");
   });
 
-  it("has no Summarize button and no Compare tab", async () => {
+  it("offers Summarize on each card (Feature 4) and no Compare inside the Library", async () => {
     const stream = controlledStream();
     routes({
       "GET /api/papers": () => json(PAPERS),
@@ -272,7 +272,7 @@ describe("Header and what is not shown", () => {
     });
     render(<LibraryScreen />);
     await screen.findByText("Attention Is All You Need");
-    expect(screen.queryByText(/summarize/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Summarize" })).toHaveAttribute("href", "/summarize/att");
     expect(screen.queryByText(/compare/i)).not.toBeInTheDocument();
   });
 });

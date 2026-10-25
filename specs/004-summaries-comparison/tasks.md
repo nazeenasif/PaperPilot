@@ -251,7 +251,7 @@ generalised (T004).
 
 ### US4 (P1): per-part states
 
-- [ ] T042 [P] [US4] Create failing tests in `frontend/tests/part-states.test.tsx`:
+- [X] T042 [P] [US4] Create failing tests in `frontend/tests/part-states.test.tsx`:
   - `not_reported` reads "Not reported in the retrieved passages." with a search icon; the other sections render normally.
   - `held_back` shows the app's own warning (e.g. "Held back: this section cited passage 14, but only passages 9–12 were provided.") and "View the unverified text" reveals `rejected_text` labelled "Not verified" with the invalid numbers marked; never the engine's warning string.
   - `failed` with `cut_off` shows "The model's answer was cut off" and a retry; `not_started` shows why (daily limit, long wait, busy).

@@ -125,7 +125,7 @@ generalised (T004).
   - TL;DR failing `check_tldr` → `held_back` with the problems as warning; all five sections still in the result.
   - All five sections not verified → TL;DR `not_reported` (`no_verified_sections`) and no TL;DR request (total `generate` calls == 5).
   - No part ever carries text with `state != verified`; `rejected_text` only on `held_back`.
-- [ ] T014 [US4] Implement the per-part state rules in `paperpilot/service.py` (`_part_from_reply`, cut-off/empty as part failures, the no-verified-sections TL;DR rule), so T013 passes.
+- [X] T014 [US4] Implement the per-part state rules in `paperpilot/service.py` (`_part_from_reply`, cut-off/empty as part failures, the no-verified-sections TL;DR rule), so T013 passes.
 
 ### US3 (P2): comparison table, one request per aspect, JSON cells
 

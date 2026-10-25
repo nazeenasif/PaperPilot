@@ -87,7 +87,7 @@ generalised (T004).
     - "10,000" written as "10k" or "10 000" is accepted; "20,000" is rejected ("states 20,000, which its sources do not contain");
     - the not-found sentence → `not_found`; an empty sections list → not reported without building a prompt.
   - **Known gap (documented, not fixed):** a non-numeric sentence with a valid citation whose sources do not say it passes; the test asserts `ok` and carries a comment pointing to `docs/known-limitations.md` (the F1 pattern).
-- [ ] T006 [US1] Implement in `paperpilot/prompts.py`: `Facet`, `FACETS`, `NOT_REPORTED`, `SUMMARY_PROMPT_VERSION = 1`, `SECTION_INSTRUCTION`, `TLDR_INSTRUCTION`, `build_section_prompt`, `build_tldr_prompt`, `VerifiedSection`, `TldrCheck` and `check_tldr` (four rules, number normalisation for `,`, thin spaces, `.`, `%`, `×`/`x`, `k`), so T005 passes.
+- [X] T006 [US1] Implement in `paperpilot/prompts.py`: `Facet`, `FACETS`, `NOT_REPORTED`, `SUMMARY_PROMPT_VERSION = 1`, `SECTION_INSTRUCTION`, `TLDR_INSTRUCTION`, `build_section_prompt`, `build_tldr_prompt`, `VerifiedSection`, `TldrCheck` and `check_tldr` (four rules, number normalisation for `,`, thin spaces, `.`, `%`, `×`/`x`, `k`), so T005 passes.
 - [ ] T007 [US1] Create failing tests in `tests/test_summarize.py` (fake embedder, `summary_paper`, `fake_answers`):
   - Five facets are retrieved with `library.search(query, k=4, paper_ids=[paper_id])` (spy), in order; every passage belongs to the paper.
   - Passages are numbered once per summary; a passage shared by two facets keeps one number.

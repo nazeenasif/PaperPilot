@@ -7,7 +7,8 @@ retries included, exceed twice the plan (scripts/request_budget.py, Feature 2 bu
 Usage: python scripts/checkpoint_6_web.py [part ...] [--new-pdf PATH]   (default: every part)
 Parts: boundary, ask, viewer (viewer opens the citations of part ask), library (--new-pdf PATH
 also adds a paper that is not in the library yet, then deletes it), states (in-process over a
-temporary library with a scripted model; needs no server), usage
+temporary library with a scripted model; needs no server), usage, scope (a BERT-only question
+and a follow-up; reuses part ask's LoRA answer as history when ask ran)
 
 Start the servers first (quickstart): `python -m api` and `npm --prefix frontend run dev`.
 """
@@ -611,11 +612,80 @@ def part_usage(run: Run, client: httpx.Client) -> None:
               f"reset time and source agree ({resets}, {api['source']})")
 
 
+SCOPE_QUESTION = "What data was BERT pre-trained on?"
+FOLLOW_UP = "What are its limitations?"
+# The earlier turn when part ask did not run: the follow-up only needs a conversation to refer to.
+LORA_TURN_FALLBACK = (
+    "LoRA freezes the pretrained model weights and injects trainable low-rank decomposition matrices "
+    "into each layer, which greatly reduces the number of trainable parameters."
+)
+
+
+def stream_answer(run: Run, client: httpx.Client, body: dict) -> dict | None:
+    """POST /api/ask, print its progress, add its requests to the run; the answer or None."""
+    start = time.monotonic()
+    with client.stream("POST", "/api/ask", json=body, headers=WRITE_HEADERS, timeout=ASK_TIMEOUT) as response:
+        text = "".join(response.iter_text())
+    if response.status_code != 200:
+        run.check(False, f"POST /api/ask answered {response.status_code}: {text[:200]}")
+        return None
+    events = parse_events(text)
+    steps = [data["step"] for name, data in events if name == "progress"]
+    waits = [data for name, data in events if name == "retry_wait"]
+    print(f"  progress: {', '.join(steps)}" + (f"; {len(waits)} retry wait(s)" if waits else ""))
+    name, data = events[-1] if events else ("", {})
+    if name != "answer":
+        run.check(False, f"the question ended with {name or 'nothing'}: {data}")
+        return None
+    run.add_requests(data["requests"])
+    print(f"  {data['word_count']} words in {time.monotonic() - start:.1f} s; requests "
+          f"{data['requests']['planned']} planned, {data['requests']['retries']} retries")
+    return data
+
+
+def part_scope(run: Run, client: httpx.Client) -> None:
+    """US4: a question scoped to BERT cites only BERT; a follow-up is rewritten to a standalone
+    question naming LoRA (FR-007–FR-009). 3 requests: 1 answer, then 1 rewrite + 1 answer."""
+    papers = client.get("/api/papers").json()["papers"]
+    bert = next((p for p in papers if p["title"].lower().startswith("bert")), None)
+    if bert is None:
+        run.check(False, "the BERT paper is in the library")
+        return
+    print(f"Scoped question (BERT only, {bert['paper_id']}): {SCOPE_QUESTION}")
+    answer = stream_answer(run, client, {"question": SCOPE_QUESTION, "paper_ids": [bert["paper_id"]]})
+    if answer is not None:
+        print(f"  Answer: {answer['text']}")
+        sources = {p["paper_id"] for p in answer["passages"]}
+        run.check(bool(answer["passages"]) and sources == {bert["paper_id"]},
+                  f"every passage comes from BERT ({len(answer['passages'])} passages from {len(sources)} paper)")
+        run.check(not answer["citations"]["invalid"] and not answer["not_found"],
+                  f"the scoped answer is found and its citations are valid (verified {answer['verified']})")
+
+    if run.answer is not None:
+        previous = run.answer["text"]
+        run.info("the follow-up's history is part ask's LoRA answer")
+    else:
+        previous = LORA_TURN_FALLBACK
+        run.info("part ask did not run: the follow-up's history uses a fixed LoRA summary (no request)")
+    history = [{"role": "user", "text": ASK_QUESTION}, {"role": "assistant", "text": previous}]
+    print(f"Follow-up after \"{ASK_QUESTION}\": {FOLLOW_UP}")
+    answer = stream_answer(run, client, {"question": FOLLOW_UP, "history": history})
+    if answer is None:
+        return
+    print(f"  Searched as: {answer['standalone_question']}")
+    print(f"  Answer: {answer['text']}")
+    run.check(answer["rewrite_applied"] and "lora" in answer["standalone_question"].lower(),
+              "the follow-up was rewritten to a standalone question that names LoRA")
+    run.check(not answer["citations"]["invalid"],
+              f"the follow-up's citations are valid (valid {answer['citations']['valid']}, verified {answer['verified']})")
+
+
 PARTS: dict[str, Part] = {
     "boundary": Part(plan=0, run=part_boundary),
     "ask": Part(plan=1, run=part_ask),
     "viewer": Part(plan=0, run=part_viewer),
     "library": Part(plan=0, run=part_library),
+    "scope": Part(plan=3, run=part_scope),
     "states": Part(plan=0, run=part_states),
     "usage": Part(plan=0, run=part_usage),
 }

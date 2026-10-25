@@ -357,7 +357,7 @@ re-process) sends `X-PaperPilot: 1`. Tests must expect `403 forbidden` without i
   - **History:** the history is passed to `ask()`; the answer's `standalone_question`, `rewrite_applied` and `rewrite_fallback_reason` come through.
   - **Invalid history:** a bad role or a turn longer than 20,000 characters gives `422 {"kind": "invalid_request"}`. Add `invalid_request` to the error table in `specs/003-web-app/contracts/web-api.md`.
 - [X] T044 [US4] Implement the scope and history validation and the `invalid_request` mapping in `api/schemas.py` and `api/errors.py`, so T043 passes.
-- [ ] T045 [US4] Add part `scope` to `scripts/checkpoint_6_web.py` (plan: 3 requests).
+- [X] T045 [US4] Add part `scope` to `scripts/checkpoint_6_web.py` (plan: 3 requests).
   - **Scoped question:** BERT only, "What data was BERT pre-trained on?". Every passage must come from BERT.
   - **Follow-up:** "What is LoRA?", then "What are its limitations?" with history. The standalone question must name LoRA, and the citations must be valid.
   - **Runnable check**: `python scripts/checkpoint_6_web.py scope`.

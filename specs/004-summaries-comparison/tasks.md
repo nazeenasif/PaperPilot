@@ -246,7 +246,7 @@ generalised (T004).
   - A stale summary is labelled with its reason and is not marked "All citations verified" as current.
   - **Regenerate summary** shows the cost and asks for confirmation; on success the view is replaced; on failure the old summary stays.
   - A failed part offers "Retry this section" with its cost (e.g. "uses 2 requests").
-- [ ] T040 [US2] Implement `frontend/app/summarize/page.tsx` (picker), saved and stale states, regenerate and part retry in `frontend/components/summary/` and `frontend/lib/useSummary.ts`, so T039 passes.
+- [X] T040 [US2] Implement `frontend/app/summarize/page.tsx` (picker), saved and stale states, regenerate and part retry in `frontend/components/summary/` and `frontend/lib/useSummary.ts`, so T039 passes.
 - [ ] T041 [US2] Add test "F4 US2 reopen" to `frontend/e2e/smoke.spec.ts`: open a saved summary from the Summarize tab with no POST sent; regenerate with confirmation.
 
 ### US4 (P1): per-part states

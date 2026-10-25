@@ -8,7 +8,7 @@ import { SummarizePicker } from "@/components/summary/SummarizePicker";
 import { SummaryView } from "@/components/summary/SummaryView";
 import type { Summary, SummaryListItem } from "@/lib/types";
 
-import { part, summary } from "./summary.test";
+import { part, summary } from "./summary-fixtures";
 
 vi.mock("react-pdf", () => ({ Document: () => null, Page: () => null, pdfjs: { GlobalWorkerOptions: {} } }));
 

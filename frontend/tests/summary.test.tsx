@@ -125,7 +125,7 @@ describe("Starting a summary", () => {
     expect(posts).toHaveLength(0);
     await user.click(screen.getByRole("button", { name: "Summarize this paper" }));
     await waitFor(() => expect(posts).toHaveLength(1));
-    expect((posts[0].headers as Record<string, string>)["X-PaperPilot"]).toBe("1");
+    expect((posts[0]?.headers as Record<string, string>)["X-PaperPilot"]).toBe("1");
   });
 });
 

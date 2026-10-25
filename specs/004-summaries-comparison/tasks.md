@@ -235,7 +235,7 @@ generalised (T004).
   - The result shows the TL;DR card ("Built only from the verified sections below…") and five section cards in order with "4 passages read"; citation chips open `SourceViewer` at the cited passage (Feature 3 component).
   - "All citations verified" only when every part is `verified`.
   - The Library card's **Summarize** button links to `/summarize/<paper_id>`.
-- [ ] T037 [US1] Implement `frontend/app/summarize/[paperId]/page.tsx`, `frontend/components/summary/SummaryView.tsx`, `TldrCard.tsx`, `SectionCard.tsx`, `CostButton.tsx`, `frontend/lib/useSummary.ts` (POST stream over `postEventStream`), and the Summarize button in `frontend/components/library/PaperCard.tsx`, so T036 passes.
+- [X] T037 [US1] Implement `frontend/app/summarize/[paperId]/page.tsx`, `frontend/components/summary/SummaryView.tsx`, `TldrCard.tsx`, `SectionCard.tsx`, `CostButton.tsx`, `frontend/lib/useSummary.ts` (POST stream over `postEventStream`), and the Summarize button in `frontend/components/library/PaperCard.tsx`, so T036 passes.
 - [ ] T038 [US1] Add test "F4 US1 summary" to `frontend/e2e/smoke.spec.ts` (fake backend replaying summary events from `frontend/e2e/fixtures.ts`): start from the Library card, see progress, then the TL;DR and five sections; open a citation in the viewer.
 
 ### US2 (P1): saved summaries

@@ -8,7 +8,7 @@ does the same per summary section, then writes a TL;DR from the verified section
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 
 from paperpilot import library, llm, prompts
@@ -16,7 +16,10 @@ from paperpilot.config import load_settings
 from paperpilot.errors import EmptyQueryError, LLMError, UnknownPaperError
 from paperpilot.prompts import CitationReport, NumberedPassage, Turn, VerifiedSection
 
-__all__ = ["Answer", "Part", "Summary", "Turn", "ask", "number_passages", "review_reply", "summarize"]
+__all__ = [
+    "Answer", "Part", "Summary", "Turn", "ask", "number_passages", "review_reply", "saved_summary",
+    "summarize", "summary_from_dict", "summary_plan", "summary_to_dict",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -316,6 +319,61 @@ def _tldr_part(reply_text: str, sections: list[VerifiedSection], **extra) -> Par
                 **extra)
 
 
+PART_FAILURES = {"cut_off", "empty"}  # a failed part; the run goes on (research R5, R8)
+
+
+def summary_to_dict(summary: Summary) -> dict:
+    """A summary as plain data, for saving and the API."""
+    return asdict(summary)
+
+
+def _part_from_dict(data: dict) -> Part:
+    return Part(**{**data, "citations": CitationReport(**data["citations"])})
+
+
+def summary_from_dict(data: dict) -> Summary:
+    """Rebuild a summary saved with summary_to_dict."""
+    return Summary(**{
+        **data,
+        "tldr": _part_from_dict(data["tldr"]),
+        "sections": [_part_from_dict(d) for d in data["sections"]],
+        "passages": [NumberedPassage(**d) for d in data["passages"]],
+    })
+
+
+def _summary_key(paper_id: str) -> library.ResultKey:
+    return library.result_key("summary", [paper_id])
+
+
+def saved_summary(paper_id: str) -> Summary | None:
+    """The saved summary, current or stale (with its reason); never generates (FR-016, FR-017)."""
+    settings = load_settings()
+    found = library.load_result(_summary_key(paper_id), settings.llm_model, prompts.SUMMARY_PROMPT_VERSION)
+    if found is None:
+        return None
+    data, stale_reason = found
+    summary = summary_from_dict(data)
+    return replace(summary, status="stale" if stale_reason else "current", stale_reason=stale_reason)
+
+
+def _retry_facets(retry_parts: list[str]) -> list[str]:
+    unknown = [p for p in retry_parts if p not in prompts.FACETS and p != TLDR]
+    if unknown or not retry_parts:
+        raise ValueError(f"Unknown summary parts to retry: {unknown or retry_parts}")
+    return [p for p in prompts.FACETS if p in retry_parts]
+
+
+def summary_plan(paper_id: str, retry_parts: list[str] | None = None) -> dict[str, int]:
+    """The most model requests a summary (or a retry of some parts) can make (FR-021)."""
+    if retry_parts is None:
+        return {"max_requests": len(prompts.FACETS) + 1}
+    return {"max_requests": len(_retry_facets(retry_parts)) + 1}  # the TL;DR is always rewritten
+
+
+def _complete(summary: Summary) -> bool:
+    return all(p.state not in ("failed", "not_started") for p in [summary.tldr, *summary.sections])
+
+
 def summarize(
     paper_id: str,
     regenerate: bool = False,
@@ -323,66 +381,118 @@ def summarize(
     on_event: Callable[[str, dict], None] | None = None,
 ) -> Summary:
     """Summarize one paper: per facet, retrieve 4 passages from it, generate, check; then the
-    TL;DR from the verified sections (FR-002-FR-005).
+    TL;DR from the verified sections (FR-002-FR-005). Saved summaries are reused (FR-016).
+
+    - Default: return the saved summary (current or marked stale) with 0 requests, else generate.
+    - `regenerate`: generate anew; the saved summary is replaced only when the new one finished,
+      and a complete saved summary is kept over a new one with failed parts (FR-019).
+    - `retry_parts`: rerun those sections of the saved summary, then the TL;DR (FR-020).
 
     `on_event(kind, detail)` receives "plan", "progress" ({part, step, passages?}), "retry_wait"
     ({part, ...}) and "part" (a checked part). No event carries text before its part's check.
-    Raises UnknownPaperError, SettingsError.
+    Raises UnknownPaperError, SettingsError, ValueError (bad retry_parts or nothing to retry).
     """
+    paper = _paper(paper_id)
+    base: Summary | None = None
+    if retry_parts is not None:
+        facets = _retry_facets(retry_parts)
+        base = saved_summary(paper_id)
+        if base is None:
+            raise ValueError(f"No saved summary of {paper_id} to retry parts of")
+    else:
+        facets = list(prompts.FACETS)
+        saved = saved_summary(paper_id)
+        if saved is not None and not regenerate:
+            return saved
+
+    summary = _run_summary(paper, facets, base, on_event)
+    if retry_parts is None and regenerate:
+        current = saved_summary(paper_id)
+        if current is not None and current.status == "current" and _complete(current) and not _complete(summary):
+            logger.warning("Regeneration of %s ended with failed parts; kept the saved summary", paper_id)
+            return current
+    library.save_result(_summary_key(paper_id), summary_to_dict(summary), summary.model, summary.prompt_version)
+    return summary
+
+
+def _run_summary(
+    paper: library.PaperSummary,
+    facets: list[str],
+    base: Summary | None,
+    on_event: Callable[[str, dict], None] | None,
+) -> Summary:
+    """Generate the given sections (the others come from `base`), then the TL;DR."""
 
     def emit(kind: str, detail: dict) -> None:
         if on_event is not None:
             on_event(kind, detail)
 
-    paper = _paper(paper_id)
     settings = load_settings()
-    parts_order = [*prompts.FACETS, TLDR]
-    plan = {"max_requests": len(parts_order)}
-    emit("plan", {**plan, "parts": parts_order})
+    paper_id = paper.paper_id
+    plan = {"max_requests": len(facets) + 1}
+    emit("plan", {**plan, "parts": [*facets, TLDR]})
 
-    seen: dict[str, NumberedPassage] = {}
+    seen: dict[str, NumberedPassage] = {p.passage_id: p for p in base.passages} if base else {}
+    kept = {p.part: p for p in base.sections} if base else {}
     sections: list[Part] = []
     verified: list[VerifiedSection] = []
 
-    def generate(part: str, system: str, prompt: str) -> tuple[llm.LLMReply, dict[str, int], dict[str, int]]:
+    def generate(part: str, system: str, prompt: str):
+        """One model request for a part: (reply or None, requests, tokens, failure reason)."""
         before = llm.request_counts().retries
-        reply = llm.generate(system, prompt,
-                             on_retry=lambda notice: emit("retry_wait", {"part": part, **asdict(notice)}))
+        try:
+            reply = llm.generate(system, prompt,
+                                 on_retry=lambda notice: emit("retry_wait", {"part": part, **asdict(notice)}))
+        except LLMError as error:
+            if error.reason not in PART_FAILURES:
+                raise
+            requests = {"planned": 1, "retries": llm.request_counts().retries - before}
+            return None, requests, {}, error.reason
         tokens: dict[str, int] = {}
         _add_tokens(tokens, reply)
-        return reply, {"planned": 1, "retries": llm.request_counts().retries - before}, tokens
+        return reply, {"planned": 1, "retries": llm.request_counts().retries - before}, tokens, None
 
     for key, facet in prompts.FACETS.items():
-        emit("progress", {"part": key, "step": "searching"})
-        results = library.search(facet.query, k=SUMMARY_PASSAGES, paper_ids=[paper_id])
-        if not results or max(r.score for r in results) < settings.relevance_threshold:
-            part = Part(key, "not_reported", reason="no_passages" if not results else "below_threshold")
+        if key not in facets:
+            part = kept[key]
         else:
-            numbered = number_passages(results, seen)
-            numbers = [p.number for p in numbered]
-            emit("progress", {"part": key, "step": "reading", "passages": len(numbered)})
-            emit("progress", {"part": key, "step": "generating"})
-            reply, requests, tokens = generate(key, prompts.SECTION_INSTRUCTION,
-                                               prompts.build_section_prompt(key, numbered))
-            emit("progress", {"part": key, "step": "checking"})
-            part = _section_part(key, reply.text, set(numbers), passages=numbers, requests=requests,
-                                 tokens=tokens)
-            if part.state == "verified":
-                verified.append(VerifiedSection(facet.label, part.text or "", part.citations.valid))
+            emit("progress", {"part": key, "step": "searching"})
+            results = library.search(facet.query, k=SUMMARY_PASSAGES, paper_ids=[paper_id])
+            if not results or max(r.score for r in results) < settings.relevance_threshold:
+                part = Part(key, "not_reported", reason="no_passages" if not results else "below_threshold")
+            else:
+                numbered = number_passages(results, seen)
+                numbers = [p.number for p in numbered]
+                emit("progress", {"part": key, "step": "reading", "passages": len(numbered)})
+                emit("progress", {"part": key, "step": "generating"})
+                reply, requests, tokens, failure = generate(key, prompts.SECTION_INSTRUCTION,
+                                                            prompts.build_section_prompt(key, numbered))
+                if failure:
+                    part = Part(key, "failed", reason=failure, passages=numbers, requests=requests)
+                else:
+                    emit("progress", {"part": key, "step": "checking"})
+                    part = _section_part(key, reply.text, set(numbers), passages=numbers, requests=requests,
+                                         tokens=tokens)
+            emit("part", part_body(part))
         sections.append(part)
-        emit("part", part_body(part))
+        if part.state == "verified":
+            verified.append(VerifiedSection(prompts.FACETS[key].label, part.text or "", part.citations.valid))
 
     if not verified:
         tldr = Part(TLDR, "not_reported", reason="no_verified_sections")
     else:
         emit("progress", {"part": TLDR, "step": "generating"})
-        reply, requests, tokens = generate(TLDR, prompts.TLDR_INSTRUCTION, prompts.build_tldr_prompt(verified))
-        emit("progress", {"part": TLDR, "step": "checking"})
         cited = sorted({n for v in verified for n in v.citations})
-        tldr = _tldr_part(reply.text, verified, passages=cited, requests=requests, tokens=tokens)
+        reply, requests, tokens, failure = generate(TLDR, prompts.TLDR_INSTRUCTION,
+                                                    prompts.build_tldr_prompt(verified))
+        if failure:
+            tldr = Part(TLDR, "failed", reason=failure, passages=cited, requests=requests)
+        else:
+            emit("progress", {"part": TLDR, "step": "checking"})
+            tldr = _tldr_part(reply.text, verified, passages=cited, requests=requests, tokens=tokens)
     emit("part", part_body(tldr))
 
-    all_parts = [*sections, tldr]
+    run_parts = [p for p in sections if p.part in facets] + [tldr]
     summary = Summary(
         paper_id=paper_id,
         title=paper.title,
@@ -391,7 +501,7 @@ def summarize(
         sections=sections,
         passages=sorted(seen.values(), key=lambda p: p.number),
         plan=plan,
-        requests={k: sum(p.requests[k] for p in all_parts) for k in ("planned", "retries")},
+        requests={k: sum(p.requests[k] for p in run_parts) for k in ("planned", "retries")},
         model=settings.llm_model,
         prompt_version=prompts.SUMMARY_PROMPT_VERSION,
         created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),

@@ -113,7 +113,7 @@ generalised (T004).
   - `regenerate=True` writes a new summary; if the regeneration raises midway (scripted `RuntimeError` in the third facet), the old saved summary is still returned unchanged.
   - `retry_parts=["method"]` with a saved summary whose Method failed (`cut_off`) calls `generate` exactly twice (Method + TL;DR) and keeps the other parts from the saved summary.
   - `summary_plan(paper_id)` is `{max_requests: 6}`; `summary_plan(paper_id, retry_parts=["method"])` is `{max_requests: 2}`.
-- [ ] T012 [US2] Implement saving, reuse, `regenerate`, `retry_parts`, `saved_summary` and `summary_plan` in `paperpilot/service.py`, so T011 passes.
+- [X] T012 [US2] Implement saving, reuse, `regenerate`, `retry_parts`, `saved_summary` and `summary_plan` in `paperpilot/service.py`, so T011 passes.
 
 ### US4 (P1): "Not reported" and held-back parts, the rest stays visible
 

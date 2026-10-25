@@ -167,8 +167,9 @@ describe("ModelBusy", () => {
     expect(await screen.findByText("The free model is still busy")).toBeInTheDocument();
     expect(screen.getByText(/tried 4 times/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Try again" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    const body = JSON.parse(String((fetchMock.mock.calls[1] as [string, RequestInit])[1].body));
+    const asks = () => fetchMock.mock.calls.filter(([input]) => new URL(String(input)).pathname === "/api/ask");
+    await waitFor(() => expect(asks()).toHaveLength(2));
+    const body = JSON.parse(String((asks()[1] as [string, RequestInit])[1].body));
     expect(body.question).toBe("What is LoRA?");
   });
 });

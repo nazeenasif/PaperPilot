@@ -6,14 +6,23 @@ import { useState, type FormEvent, type KeyboardEvent } from "react";
 /** The composer's element id, so states can move focus to it ("Rephrase more specifically"). */
 export const COMPOSER_ID = "ask-composer";
 
-/** The question box: Enter sends, Shift+Enter adds a line; disabled while answering (FR-010). */
-export function Composer({ busy, onAsk }: { busy: boolean; onAsk: (question: string) => void }) {
+/** The question box: Enter sends, Shift+Enter adds a line; disabled while answering (FR-010).
+ *  `blocked` disables sending and says why (e.g. no paper to search). */
+export function Composer({
+  busy,
+  blocked,
+  onAsk,
+}: {
+  busy: boolean;
+  blocked?: string;
+  onAsk: (question: string) => void;
+}) {
   const [text, setText] = useState("");
   const [hint, setHint] = useState<string | null>(null);
 
   function submit(event?: FormEvent) {
     event?.preventDefault();
-    if (busy) return;
+    if (busy || blocked) return;
     const question = text.trim();
     if (!question) {
       setHint("Type a question first.");
@@ -37,7 +46,7 @@ export function Composer({ busy, onAsk }: { busy: boolean; onAsk: (question: str
         <textarea
           id={COMPOSER_ID}
           aria-label="Ask about your papers"
-          aria-describedby={hint ? "composer-hint" : undefined}
+          aria-describedby={hint || blocked ? "composer-hint" : undefined}
           placeholder="Ask about the selected papers…"
           rows={1}
           value={text}
@@ -52,15 +61,15 @@ export function Composer({ busy, onAsk }: { busy: boolean; onAsk: (question: str
         <button
           type="submit"
           aria-label="Send question"
-          disabled={busy}
+          disabled={busy || Boolean(blocked)}
           className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal text-ink transition-colors hover:bg-teal/85 disabled:opacity-50"
         >
           <ArrowRight aria-hidden className="size-5" />
         </button>
       </div>
-      {hint && (
+      {(hint || blocked) && (
         <p id="composer-hint" role="status" className="mt-2 text-sm text-amber">
-          {hint}
+          {hint ?? blocked}
         </p>
       )}
     </form>

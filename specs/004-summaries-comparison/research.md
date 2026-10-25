@@ -1,0 +1,283 @@
+# Research: Paper Summaries and Cross-Paper Comparison (Feature 4)
+
+Decisions behind `plan.md`. Each entry: **Decision**, **Rationale**, **Alternatives considered**.
+Facts about the existing engine were checked in the code on 2026-10-25 (`paperpilot/service.py`,
+`prompts.py`, `llm.py`, `library.py`).
+
+## R1. One grounding pipeline, extended rather than copied
+
+**Decision**: summaries and comparisons are built from the same pieces `ask()` uses, and those
+pieces are generalised in place:
+
+| Piece (existing) | Reused for | Change |
+|---|---|---|
+| `library.search(query, k, paper_ids)` | every facet and every (paper, aspect) retrieval | none |
+| `service._number` | numbering passages | generalised to `number_passages(results, start, seen)`: keeps one number per passage id across a run (FR-004) |
+| `prompts.strip_reference_markers`, `_escape`, the `<passage>` tag format | every prompt | the passage block of `build_answer_prompt` is factored out as `format_passages(passages)` and shared |
+| `prompts.extract_citations`, `_sentences`, `is_not_found` | every part | none |
+| `prompts.check_citations(text, passage_count)` | every part | gains `allowed: set[int]`; `passage_count` becomes the special case `allowed = {1..n}` |
+| `service.review_reply(text, passage_count)` | every summary section and comparison cell | gains `allowed`; returns the same `(text, citations, warning, rejected, fallback_reason)` tuple |
+| `llm.generate` (retries, `RetryNotice`, daily pre-check, long-wait rule, `cut_off`/`empty` reasons, shared counter) | every model call | none |
+| `on_event` progress callback and `api/streams.run_streaming` | progress per part | events gain a `part` field |
+
+`ask()` keeps its behaviour exactly; its tests stay green unchanged, which proves the
+refactor is behaviour-preserving.
+
+**Rationale**: Principle V lives in one place. A section that cites a number outside its own
+passages is judged by the same function that judges answers, with the same not-found, held-back
+and uncited-sentence rules.
+
+**Alternatives considered**: a separate `summaries` validator (rejected: a second copy of the
+rules would drift); validating against `1..n` for the whole summary (rejected: a section could
+then cite another section's passages and still pass).
+
+## R2. Summary facets, queries and sizes
+
+**Decision**: five fixed facets, each with a retrieval query and an instruction in `prompts.py`:
+
+| Facet | Retrieval query (embedded) | What the section must state |
+|---|---|---|
+| problem | "the problem, motivation and research question addressed by this paper" | the problem and why it matters |
+| method | "the proposed method, model architecture and how it works" | the approach |
+| data | "datasets, corpora, benchmarks and experimental setup used" | data and benchmarks |
+| results | "main results, performance compared with baselines, key numbers" | main findings with numbers copied exactly |
+| limitations | "limitations, weaknesses, failure cases and future work" | stated limitations only |
+
+Each facet retrieves **4 passages** from the one paper (`paper_ids=[paper_id]`, spec
+Assumptions). The relevance threshold gates a facet as it gates a question: if the best passage
+scores below `RELEVANCE_THRESHOLD`, the section is **not reported** and **no request is made**.
+A section is at most 80 words.
+
+**Rationale**: query-focused retrieval keeps each prompt small (4 × ~220 words) and each claim
+next to its passages; the threshold rule is already calibrated (Feature 2 research R8).
+
+**Alternatives considered**: using `TOP_K` (6) per facet (rejected per clarification: larger
+prompts for little gain); one retrieval for the whole paper (rejected: the "data" and
+"limitations" passages rarely rank for a generic query).
+
+## R3. The TL;DR and how it is checked
+
+**Decision**: the TL;DR is generated **after** the five sections, from the **text of the
+verified sections only** (with their citation numbers), not from passages. It is checked by a
+pure function `prompts.check_tldr(text, sections)` in four steps; any failure holds the TL;DR
+back, while the sections stay visible:
+
+1. **Not found**: if the reply is the not-found sentence, the TL;DR is *not reported*.
+2. **Every sentence cites**: the reply is split with the same sentence splitter as answers
+   (`_sentences`); a sentence without a citation fails the check (stricter than answers, where
+   an uncited sentence is only a warning — the TL;DR must not add uncited claims).
+3. **Citations are a subset**: let `U` be the union of the valid citations of the verified
+   sections. Every number cited in the TL;DR must be in `U`; a number outside `U` (including a
+   valid passage number that only a held-back section cited) fails the check.
+4. **Each sentence is traceable**: for each sentence `s` with citations `C(s)`, its *sources*
+   are the verified sections whose citations intersect `C(s)` (non-empty after step 3). Every
+   number written in `s` (digits, with `,`/`.`/`%`/`×` normalised) must appear in the text of
+   one of its sources. A sentence whose number does not appear in its sources fails the check.
+
+The result records each sentence's sources (e.g. "Problem, Results"), so tests and the
+checkpoint can show where every TL;DR sentence came from.
+
+**On failure**: the TL;DR part becomes *held back*, with a warning naming the failing check
+("sentence 2 cites passage 9, which no verified section cites"; "sentence 1 states 10,000,
+which its sources do not contain"), the rejected text viewable as unverified, and **all
+sections still shown**. If **no** section is verified, the TL;DR is *not reported* and **no
+request is made** (spec US4 scenario 5).
+
+**Rationale**: steps 2–3 make the spec's "citations are a subset of the sections' citations"
+mechanical; step 4 makes "traceable to a section" checkable in code without a second model
+call. Numbers are where summaries invent most often (a wrong "10,000×" reads as authoritative),
+and a number check is deterministic and cheap. The TL;DR is short (≤ 60 words, ≤ 3 sentences),
+so the rule is strict without rejecting normal output.
+
+**Alternatives considered**: requiring each sentence's citations to come from a single section
+(rejected: a natural TL;DR sentence joins two sections, e.g. method and result); word-overlap
+similarity between sentence and section (rejected: needs a threshold and is unexplainable);
+asking the model to check its own TL;DR (rejected: model-graded checks are not code
+validation, Principle V); generating the TL;DR from passages (rejected: it could then state
+things no verified section says).
+
+## R4. Comparison rows as structured JSON
+
+**Decision**: one request per aspect (clarification). For aspect `a`, each paper `p` gets its
+own retrieval of **3 passages** (`paper_ids=[p]`, query from the aspect's fixed query). Passages
+are de-duplicated by passage id and numbered once per comparison (a passage seen in an earlier
+row keeps its number). The prompt groups passages by paper under labels `P1…P4` and asks for
+**JSON only**:
+
+```json
+{"cells": [{"paper": "P1", "text": "... [3]."}, {"paper": "P2", "text": "Not reported in the retrieved passages."}]}
+```
+
+`prompts.parse_row(reply, labels)` is tolerant and never raises past its caller: it strips code
+fences, takes the outermost `{…}` if text surrounds it, and `json.loads` it. Outcomes:
+
+- **Malformed** (no JSON object, invalid JSON, `cells` not a list): the **row fails** with
+  reason `malformed`; it can be retried on its own (1 request). Never a crash.
+- **Per cell**: a missing cell or an unknown label → that cell *not reported*; extra cells and
+  extra keys are ignored and never shown; a non-string `text` → *not reported*.
+- **Validation**: each cell's text goes through `review_reply(text, allowed=numbers of that
+  paper's passages in this row)`; a citation to another paper's passage is invalid for that cell
+  (FR-010). The exact sentence `NOT_REPORTED` (or the not-found sentence) → *not reported*.
+
+A paper whose best passage for the aspect is below the threshold is still sent with no passages
+listed and the instruction that its cell must read `NOT_REPORTED`; if **every** paper is below
+the threshold the row is *not reported* without a request.
+
+**Rationale**: JSON gives one object per cell, so each cell is located and validated without
+parsing a markdown table (whose pipes, line breaks and alignment free models get wrong).
+Per-paper retrieval with equal `k` stops a long paper from crowding out a short one (FR-008).
+
+**Alternatives considered**: a markdown table (rejected: brittle parsing, cells with `|` break
+it); provider JSON mode (`response_format`) (rejected for now: not supported by every free model
+on OpenRouter; the tolerant parser works with any model and can be combined with JSON mode later
+without contract changes); one retrieval across all selected papers (rejected: FR-008).
+
+## R5. Output budget and cut-off
+
+**Decision**: keep `llm.MAX_OUTPUT_TOKENS = 2048` (reasoning tokens count against it on the
+configured model, Feature 2 research R3/R12) and size every request well inside it:
+
+| Call | Requested length | Expected visible output | Observed reasoning (Feature 2/3) | Headroom |
+|---|---|---|---|---|
+| section | ≤ 80 words | ~130 tokens | 220–510 tokens | > 1,300 |
+| TL;DR | ≤ 60 words, ≤ 3 sentences | ~100 tokens | same | > 1,400 |
+| comparison row (4 papers) | ≤ 50 words per cell | ~350 tokens incl. JSON | same | > 1,100 |
+
+A `finish_reason == "length"` already raises `LLMError(reason="cut_off")` in `llm.generate`; the
+orchestrator catches it **per part**, marks that part *failed (cut_off)* and continues. Truncated
+text is never stored or shown. The checkpoint prints input, output and reasoning tokens per part
+so the headroom is measured, not assumed.
+
+**Rationale**: the existing boundary already distinguishes cut-off from other failures; only the
+handling changes from "fail the answer" to "fail this part".
+
+**Alternatives considered**: raising `max_tokens` per call (rejected: no need at these sizes;
+it also raises the provider-side cost of runaway reasoning); summarising in one long call
+(rejected: the most likely way to be cut off).
+
+## R6. Saved results: SQLite cache, keys and invalidation
+
+**Decision**: a SQLite file `<LIBRARY_DIR>/results.sqlite3` (WAL, `BEGIN IMMEDIATE` writes, as
+`usage.sqlite3`) with one table:
+
+| column | meaning |
+|---|---|
+| `kind` | `summary` or `comparison` |
+| `key` | SHA-256 of the canonical key (below) |
+| `paper_ids` | comma-separated, sorted (for invalidation by paper) |
+| `result` | the run's JSON (parts, passages, requests, tokens) |
+| `model`, `prompt_version`, `created_at` | shown to the researcher (FR-018) |
+
+Canonical key: `kind`, the sorted paper content IDs, each paper's **passage fingerprint**
+(SHA-256 of its stored passage ids and texts, in order), the sorted aspects (comparisons), the
+**prompt version** (`prompts.SUMMARY_PROMPT_VERSION`, raised whenever facet queries,
+instructions or the TL;DR rule change) and `LLM_MODEL`.
+
+Invalidation is double:
+
+1. **Explicitly**: `library.delete_paper` and `library.reprocess_paper` call
+   `library.forget_results(paper_id)`, deleting every row that includes the paper. (The paper ID
+   is the hash of the PDF bytes, so re-processing the same PDF keeps the same ID — the key alone
+   would not change when only the chunk settings did.)
+2. **By key**: a lookup recomputes the fingerprint, version and model; a row saved under another
+   model or version is returned as **stale** with its reason (`model_changed`,
+   `instructions_changed`, `passages_changed`), readable but never shown as current (FR-017).
+
+Parts are saved as they finish (FR-020): a run's row is written when the run ends, including
+failed parts; a part retry rewrites the row. A regeneration writes to a **new** row and replaces
+the old one only on completion (FR-019).
+
+**Rationale**: SQLite is in the standard library, already used for usage counts, safe for the
+API and scripts at once, and survives restarts. Explicit invalidation is exact; key comparison
+catches what explicit hooks cannot (a model change in `.env`).
+
+**Alternatives considered**: JSON files per result (rejected: no atomic replace across
+processes without extra locking); storing summaries in ChromaDB metadata (rejected: wrong tool,
+re-embedding coupling); keying by passage ids only (rejected: misses model and instruction
+changes).
+
+## R7. Module placement under Principle II
+
+**Decision**: no new module.
+
+- `prompts.py`: facet and aspect queries and instructions, `SUMMARY_PROMPT_VERSION`,
+  `NOT_REPORTED`, `format_passages`, `build_section_prompt`, `build_tldr_prompt`,
+  `build_row_prompt`, `parse_row`, `check_tldr` (all pure).
+- `service.py`: `summarize()`, `compare()`, the request plan and per-part orchestration, next to
+  `ask()`.
+- `library.py`: the results cache (`save_result`, `load_result`, `forget_results`) — saved
+  results are per-paper library data, deleted with the paper.
+- `llm.py`: unchanged.
+
+**Rationale**: the constitution fixes the module list; each addition matches an existing
+module's responsibility. `service.py` grows from ~210 to ~550 lines, which stays readable.
+
+**Alternatives considered**: a new `summaries.py` module (rejected: needs a constitution
+amendment for a split that is not yet needed — revisit if `service.py` passes ~700 lines);
+caching in the API layer (rejected: scripts and the checkpoint must reuse saved results too,
+and the API must stay a thin adapter).
+
+## R8. Run control: plan, limits, failures, one task at a time
+
+**Decision**:
+
+- **Plan**: a summary's maximum is `5 + 1 = 6` requests; a comparison's is the number of
+  aspects; a retry's is the number of failed parts (+1 TL;DR when a section is retried). The
+  plan is known before any request and returned with every saved result and every run.
+- **Pre-check**: `service` refuses a run when `llm.usage().remaining < plan` by raising
+  `DailyLimitError` before any request (FR-023); the API maps it to the existing `daily_limit`
+  kind before the stream starts.
+- **Per-part failures**: `cut_off`, `empty`, `malformed` → that part *failed*, the run continues.
+  `DailyLimitError`, `RateLimitedError`, `model_busy` (all retries spent) and `model_unavailable`
+  → the run **stops**: finished parts are kept and saved, the remaining parts are *not started*
+  with the same reason, and no further request is sent (FR-024). Stopping on `model_busy` avoids
+  spending up to 4 attempts on each remaining part while the provider is overloaded.
+- **Accounting**: first attempts never exceed the plan (each part makes at most one
+  `llm.generate` call); retries are reported separately from `llm.request_counts()`.
+- **One task at a time**: the API's `question_lock` becomes a `model_lock` shared by `/api/ask`,
+  summaries and comparisons; a refused start returns the new kind `busy_task` (which replaces
+  `busy_question`; frontend copy: "PaperPilot is still working on another answer, summary or
+  comparison").
+
+**Rationale**: the free tier's ~50 requests a day make the plan the user's main decision input;
+stopping on systemic failures protects it.
+
+## R9. Progress and part events
+
+**Decision**: the engine's `on_event(kind, detail)` gains part-level events:
+`plan` ({max_requests, parts}), `progress` ({part, step: searching|reading|generating|checking,
+passages?}), `retry_wait` ({part, …}), and `part` (the checked part, sent **after** its
+validation). The API forwards them as SSE through `run_streaming`, ending with `summary` or
+`comparison` (the saved result) or `error`. No event carries unchecked model text (FR-012).
+
+## R10. Rejected alternative: map-reduce summaries (FR-006)
+
+Summarising every passage ("map") then combining the partial summaries ("reduce") costs one
+request per passage plus reduce steps: LoRA (56 passages) would need ~60 requests, more than a
+day's free allowance for one paper. It also detaches statements from passages: after the reduce
+step, a sentence summarises summaries, and its citations can no longer be checked against the
+text that supports it. Query-focused retrieval per facet costs 6 requests per paper, keeps every
+statement next to ≤ 4 citable passages and reuses the answer validator unchanged.
+
+## R11. Checkpoint 7 plan
+
+`scripts/checkpoint_7_summaries.py` runs against the running API (like checkpoint 6), checks
+`scripts/usage.py` first, and prints its plan before sending anything:
+
+| Part | Requests (max) |
+|---|---|
+| `summary`: LoRA summary (regenerate, so it is real) | 6 |
+| `reopen`: GET the LoRA summary, usage unchanged | 0 |
+| `compare`: BERT vs RAG on Method, Datasets, Results | 3 |
+| `not-reported`: BERT vs RAG on Limitations (BERT states none) | 1 |
+| `states`: scripted per-part failures in-process (held back, not reported, cut off, malformed, TL;DR rejected) | 0 |
+| **Total** | **10** (cap 20 with retries) |
+
+It prints every claim — each sentence of each part — with its citation numbers and, for each
+number, the paper, section, page and the first 200 characters of the passage, and writes the
+same list to `docs/verification/checkpoint-7-<date>.md` with empty **Verdict** and **Fault
+(retrieval / model)** columns for the hand check (FR-027, SC-002).
+
+The `not-reported` part asserts at least one *not reported* cell; if the model does report a
+BERT limitation from its passages, the part prints the cell and its citations and records INFO
+instead of failing, and the offline `states` part still demonstrates the state (SC-004).

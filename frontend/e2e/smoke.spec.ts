@@ -392,3 +392,63 @@ test("keyboard only: scope, ask, open a citation, library", async ({ page }, tes
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /^BERT/ })).toBeVisible();
 });
+
+// --- Answer reveal timing and reduced motion (SC-011, FR-011) ---
+
+/** In the page: ms since the answer event, the lowest opacity inside the answer, and whether
+ *  the chips and the badge are there. */
+function revealState() {
+  const article = document.querySelector("article");
+  if (!article) return null;
+  const parts = [article, ...article.querySelectorAll<HTMLElement>("*")];
+  let minOpacity = 1;
+  for (const el of parts) {
+    // Opacity multiplies down the tree; any ancestor below 1 hides part of the answer.
+    minOpacity = Math.min(minOpacity, parseFloat(getComputedStyle(el).opacity));
+  }
+  return {
+    elapsed: performance.now() - (window as unknown as { __answerAt: number }).__answerAt,
+    minOpacity,
+    chips: article.querySelectorAll("button[aria-label^='Citation']").length,
+    badge: article.textContent?.includes("All citations verified") ?? false,
+  };
+}
+
+const REVEAL_STEPS = [{ afterMs: 300, event: "answer", data: ANSWER }];
+
+test("reveal: text, chips and badge are fully shown within 500 ms of the answer", async ({ page }) => {
+  await streamAskInPage(page, REVEAL_STEPS);
+  await fakeBackend(page);
+  await page.goto("/");
+  await askOnPage(page);
+  const done = await page.waitForFunction(
+    (fn) => {
+      const state = (new Function(`return (${fn})()`))() as ReturnType<typeof revealState>;
+      return state && state.minOpacity === 1 && state.chips > 0 && state.badge ? state : null;
+    },
+    revealState.toString(),
+    { polling: "raf", timeout: 5_000 },
+  );
+  const state = (await done.jsonValue()) as NonNullable<ReturnType<typeof revealState>>;
+  expect(state.chips).toBe(2); // the fixture answer cites [1] and [2]
+  console.log(`answer fully revealed ${state.elapsed.toFixed(0)} ms after the answer event`);
+  expect(state.elapsed, `fully revealed after ${state.elapsed.toFixed(0)} ms`).toBeLessThan(500);
+});
+
+test("reduced motion: the answer appears in one step", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await streamAskInPage(page, REVEAL_STEPS);
+  await fakeBackend(page);
+  await page.goto("/");
+  await askOnPage(page);
+  // The first frame that shows the answer at all must show all of it.
+  const first = await page.waitForFunction(
+    (fn) => (new Function(`return (${fn})()`))() as ReturnType<typeof revealState>,
+    revealState.toString(),
+    { polling: "raf", timeout: 5_000 },
+  );
+  const state = (await first.jsonValue()) as NonNullable<ReturnType<typeof revealState>>;
+  expect(state.minOpacity).toBe(1);
+  expect(state.chips).toBe(2); // the fixture answer cites [1] and [2]
+  expect(state.badge).toBe(true);
+});

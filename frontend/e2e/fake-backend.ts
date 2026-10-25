@@ -170,6 +170,8 @@ export async function streamAskInPage(page: Page, steps: { afterMs: number; even
         async start(controller) {
           for (const step of plan) {
             await new Promise((resolve) => setTimeout(resolve, step.afterMs));
+            // When the answer was handed to the page, for reveal timing (SC-011).
+            if (step.event === "answer") (window as unknown as { __answerAt: number }).__answerAt = performance.now();
             controller.enqueue(encoder.encode(`event: ${step.event}\ndata: ${JSON.stringify(step.data)}\n\n`));
           }
           controller.close();

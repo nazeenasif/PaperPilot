@@ -207,7 +207,7 @@ generalised (T004).
   - Reuses `scripts/request_budget.py`; prints the plan table first (`summary` 6, `reopen` 0, `compare` 3, `not-reported` 1, `states` 0 = 10, cap 20) and `scripts/usage.py`'s figure, and refuses to start real parts when fewer than 10 requests remain.
   - Part `states` runs the engine in-process over a temporary library with a scripted model (real clients and the key endpoint blocked, as checkpoint 6 `states`): a held-back section, a not-reported section, a cut-off section, a malformed comparison row and a rejected TL;DR, each with its designed state and the rest of the summary or table intact.
   - Prints planned requests, retries and totals per part and in all, and FAILs on unplanned requests or totals above 2 × plan.
-- [ ] T032 [US1] Add parts `summary` and `reopen` to `scripts/checkpoint_7_summaries.py`:
+- [X] T032 [US1] Add parts `summary` and `reopen` to `scripts/checkpoint_7_summaries.py`:
   - `summary`: regenerates the LoRA summary through the API (plan 6); checks every shown citation is valid and opens (`GET /api/passages/{id}` and the PDF at the cited page); prints tokens per part against `MAX_OUTPUT_TOKENS`.
   - `reopen` (US2): `GET /api/summaries/{lora}` returns it in < 1 s and `GET /api/usage` is unchanged (0 requests).
   - Prints every claim (each sentence of each part) with its citations and, per citation, the paper, section, page and the first 200 characters of the passage; writes the same list to `docs/verification/checkpoint-7-<date>.md` with empty **Verdict** and **Fault (retrieval / model)** columns.

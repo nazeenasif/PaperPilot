@@ -7,7 +7,7 @@ twice the plan (scripts/request_budget.py). Real parts do not start when today's
 requests are fewer than their plan.
 
 Usage: python scripts/checkpoint_7_summaries.py [part ...]   (default: every part)
-Parts: states (0)
+Parts: states (0), summary (6, LoRA), reopen (0, needs summary or a saved LoRA summary)
 
 Every claim of the summary is printed with its cited passages (paper, section, page, excerpt)
 and written to docs/verification/checkpoint-7-<date>.md for the hand check (FR-027, SC-002).
@@ -132,8 +132,134 @@ def part_states(run: Run, client: httpx.Client | None, claims: Claims) -> None:
         run.check(used.total == 0, f"states: {used.total} model requests")
 
 
+# --- part summary (6 requests) and reopen (0) ---
+
+
+def find_paper(client: httpx.Client, prefix: str) -> dict | None:
+    for paper in client.get("/api/papers").json()["papers"]:
+        if paper["title"].lower().startswith(prefix.lower()):
+            return paper
+    return None
+
+
+def remaining(client: httpx.Client) -> int:
+    return int(client.get("/api/usage").json()["remaining"])
+
+
+def claim_rows(source: str, summary: dict) -> list[tuple[str, str, str, list[dict]]]:
+    """Every sentence of every verified part, with the passages it cites."""
+    passages = {p["number"]: p for p in summary["passages"]}
+    rows = []
+    for part in [summary["tldr"], *summary["sections"]]:
+        if part["state"] != "verified" or not part["text"]:
+            continue
+        for sentence in prompts._sentences(part["text"]):  # the validator's own sentence rule
+            cited = [passages[n] for n in prompts.extract_citations(sentence) if n in passages]
+            rows.append((source, part["part"], sentence, cited))
+    return rows
+
+
+def print_summary(summary: dict) -> None:
+    passages = {p["number"]: p for p in summary["passages"]}
+    print(f"\nSummary of {summary['title']} ({summary['model']}, {summary['created_at']})")
+    for part in [summary["tldr"], *summary["sections"]]:
+        label = "TL;DR" if part["part"] == "tldr" else prompts.FACETS[part["part"]].label
+        tokens = part["tokens"]
+        spent = (tokens.get("output") or 0) + (tokens.get("reasoning") or 0)
+        print(f"\n  [{label}] {part['state']}" + (f" ({part['reason']})" if part["reason"] else "")
+              + (f" · tokens out+reasoning {spent} of {MAX_OUTPUT_TOKENS}" if tokens else ""))
+        if part["text"]:
+            print(f"    {part['text']}")
+        if part["rejected_text"]:
+            print(f"    NOT VERIFIED: {part['rejected_text']}")
+            print(f"    warning: {part['warning']}")
+        if part["sources"] and any(part["sources"]):
+            print(f"    sources per sentence: {part['sources']}")
+    print("\n  Passages:")
+    for n in sorted(passages):
+        p = passages[n]
+        print(f"    [{n}] {p['section']}, p. {p['page']} ({p['score']:.3f})")
+
+
+def part_summary(run: Run, client: httpx.Client, claims: Claims) -> None:
+    """US1: regenerate the LoRA summary through the API (plan 6); every citation valid and opening."""
+    lora = find_paper(client, "LoRA")
+    if lora is None:
+        run.check(False, "the LoRA paper is in the library")
+        return
+    start = time.monotonic()
+    with client.stream("POST", f"/api/summaries/{lora['paper_id']}", json={"regenerate": True},
+                       headers=WRITE_HEADERS, timeout=SUMMARY_TIMEOUT) as response:
+        text = "".join(response.iter_text())
+    seconds = time.monotonic() - start
+    if response.status_code != 200:
+        run.check(False, f"POST /api/summaries answered {response.status_code}: {text[:200]}")
+        return
+    events = parse_events(text)
+    for name, data in events:
+        if name == "progress" and data["step"] in ("reading", "generating"):
+            extra = f" ({data['passages']} passages)" if "passages" in data else ""
+            print(f"  progress: {data['part']} {data['step']}{extra}")
+        elif name == "retry_wait":
+            print(f"  retry_wait: {data['part']} attempt {data['attempt']} of {data['max_attempts']}, "
+                  f"{data['wait_seconds']:.0f} s ({data['reason']})")
+        elif name == "part":
+            print(f"  part: {data['part']} {data['state']}")
+    final_name, summary = events[-1] if events else ("", {})
+    if final_name != "summary":
+        run.check(False, f"the stream ended with {final_name or 'nothing'}: {summary}")
+        return
+    run.add_requests(summary["requests"])
+    print_summary(summary)
+    print(f"\n  Requests for this summary: {summary['requests']['planned']} planned, "
+          f"{summary['requests']['retries']} retries; {seconds:.1f} s")
+
+    run.check(summary["requests"]["planned"] <= 6, f"the summary stayed within its plan ({summary['requests']['planned']} of 6)")
+    shown = [p for p in [summary["tldr"], *summary["sections"]] if p["state"] == "verified"]
+    run.check(all(not p["citations"]["invalid"] and set(p["citations"]["valid"]) <= set(p["passages"]) for p in shown),
+              f"every shown citation is valid for its part ({len(shown)} of 6 parts verified)")
+    tokens_ok = all((p["tokens"].get("output") or 0) + (p["tokens"].get("reasoning") or 0) < MAX_OUTPUT_TOKENS
+                    for p in [summary["tldr"], *summary["sections"]] if p["tokens"])
+    run.check(tokens_ok, f"every part fit the output budget of {MAX_OUTPUT_TOKENS} tokens (reasoning included)")
+
+    passages = {p["number"]: p for p in summary["passages"]}
+    cited = sorted({n for p in shown for n in p["citations"]["valid"]})
+    opened = 0
+    for n in cited:
+        view = client.get(f"/api/passages/{passages[n]['passage_id']}")
+        pdf = client.get(f"/api/papers/{passages[n]['paper_id']}/pdf")
+        if view.status_code == 200 and pdf.status_code == 200 and 1 <= view.json()["page"] <= view.json()["page_count"]:
+            opened += 1
+    run.check(opened == len(cited), f"every cited passage opens its PDF at the cited page ({opened}/{len(cited)})")
+    claims.rows += claim_rows("LoRA summary", summary)
+
+
+def part_reopen(run: Run, client: httpx.Client, claims: Claims) -> None:
+    """US2: the saved LoRA summary reopens in < 1 s with 0 requests (SC-003)."""
+    lora = find_paper(client, "LoRA")
+    if lora is None:
+        run.check(False, "the LoRA paper is in the library")
+        return
+    used_before = client.get("/api/usage").json()["used"]
+    start = time.monotonic()
+    response = client.get(f"/api/summaries/{lora['paper_id']}")
+    seconds = time.monotonic() - start
+    used_after = client.get("/api/usage").json()["used"]
+    if response.status_code != 200:
+        run.check(False, f"GET /api/summaries answered {response.status_code}: {response.text[:200]}")
+        return
+    body = response.json()
+    print(f"  reopened: {body['status']}, saved {body['created_at']} with {body['model']}, "
+          f"{body['verified_parts']} of 6 parts verified, {seconds * 1000:.0f} ms")
+    run.check(body["status"] == "current", "the saved summary is current")
+    run.check(seconds < REOPEN_LIMIT, f"it reopens within {REOPEN_LIMIT:.0f} s ({seconds * 1000:.0f} ms)")
+    run.check(used_after == used_before, f"today's request count is unchanged ({used_before} → {used_after})")
+
+
 PARTS: dict[str, Part] = {
     "states": Part(plan=0, needs_api=False, run=part_states),
+    "summary": Part(plan=6, needs_api=True, run=part_summary),
+    "reopen": Part(plan=0, needs_api=True, run=part_reopen),
 }
 
 
@@ -199,7 +325,7 @@ def main() -> int:
                 run.check(False, f"the API is ready at {API} (start it with: python -m api)")
                 return 1
             run.check(True, f"the API is ready (model {status['model']})")
-            left = int(client.get("/api/usage").json()["remaining"])
+            left = remaining(client)
             print(f"INFO: {left} model requests left today")
             if left < plan:
                 run.check(False, f"at least {plan} requests are left today ({left}); nothing was sent")

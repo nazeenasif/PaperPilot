@@ -1,7 +1,7 @@
 // Recorded-shape API responses for the smoke tests (contracts/web-api.md). No PDFs are
 // committed (constitution VI): the viewer fixture PDF is built in code (see pdf.ts).
 
-import type { Answer, PaperCard, PassageView, Status, UploadJob, Usage } from "../lib/types";
+import type { Answer, PaperCard, Part, PassageView, Status, Summary, UploadJob, Usage } from "../lib/types";
 
 export const STATUS: Status = {
   state: "ready",
@@ -234,3 +234,74 @@ export const FOLLOW_UP_ANSWER: Answer = {
   text: "The BooksCorpus has 800M words and English Wikipedia 2,500M words [1].",
   llm_calls: 2,
 };
+
+// --- Feature 4: summaries ---
+
+const FACETS = ["problem", "method", "data", "results", "limitations"] as const;
+
+export const LORA_CARD: PaperCard = {
+  paper_id: "lora",
+  title: "LoRA: Low-Rank Adaptation of Large Language Models",
+  page_count: 26,
+  passage_count: 56,
+  text_passages: 44,
+  table_passages: 12,
+  section_count: 10,
+  arxiv_id: "2106.09685",
+  has_pdf: true,
+  highlights: "exact",
+};
+
+export function summaryPart(name: string, overrides: Partial<Part> = {}): Part {
+  return {
+    part: name,
+    state: "verified",
+    text: `LoRA's ${name} is described in the paper [1].`,
+    citations: { valid: [1], invalid: [], uncited_sentences: [] },
+    warning: null,
+    rejected_text: null,
+    reason: null,
+    sources: name === "tldr" ? [["Problem"]] : [],
+    passages: [1, 2, 3, 4],
+    requests: { planned: 1, retries: 0 },
+    tokens: { input: 900, output: 120, reasoning: 300 },
+    ...overrides,
+  };
+}
+
+/** A LoRA summary whose passage 1 is the highlighted fixture passage (opens the fixture PDF). */
+export const LORA_SUMMARY: Summary = {
+  paper_id: "lora",
+  title: LORA_CARD.title,
+  arxiv_id: "2106.09685",
+  tldr: summaryPart("tldr", { text: "LoRA freezes the pretrained model and trains small low-rank matrices [1]." }),
+  sections: FACETS.map((f) => summaryPart(f)),
+  passages: [
+    { ...PASSAGES[0]!, number: 1, passage_id: VIEW_HIGHLIGHTED.passage_id },
+    { ...PASSAGES[1]!, number: 2 },
+    { ...PASSAGES[0]!, number: 3, passage_id: "lora-13" },
+    { ...PASSAGES[1]!, number: 4, passage_id: "lora-31" },
+  ],
+  plan: { max_requests: 6 },
+  requests: { planned: 6, retries: 0 },
+  model: STATUS.model,
+  prompt_version: 1,
+  created_at: "2026-10-25T10:00:00+00:00",
+  status: "current",
+  stale_reason: null,
+  verified_parts: 6,
+};
+
+/** The events of a summary run, spaced so progress can be seen. */
+export const SUMMARY_STEPS: { afterMs: number; event: string; data: unknown }[] = [
+  { afterMs: 50, event: "plan", data: { max_requests: 6, parts: [...FACETS, "tldr"] } },
+  ...FACETS.flatMap((f) => [
+    { afterMs: 20, event: "progress", data: { part: f, step: "reading", passages: 4 } },
+    { afterMs: 20, event: "progress", data: { part: f, step: "generating" } },
+    // afterMs is the wait before an event: hold "Writing method" on screen for a moment.
+    { afterMs: f === "method" ? 1500 : 20, event: "part", data: summaryPart(f) },
+  ]),
+  { afterMs: 20, event: "progress", data: { part: "tldr", step: "generating" } },
+  { afterMs: 20, event: "part", data: LORA_SUMMARY.tldr },
+  { afterMs: 20, event: "summary", data: LORA_SUMMARY },
+];

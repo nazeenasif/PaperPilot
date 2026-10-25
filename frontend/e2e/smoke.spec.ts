@@ -3,15 +3,18 @@
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { CORS, eventStream, fakeBackend, fakeLibrary, streamAskInPage } from "./fake-backend";
+import { CORS, eventStream, fakeBackend, fakeLibrary, streamAskInPage, streamPostInPage } from "./fake-backend";
 import {
   ANSWER,
   FOLLOW_UP_ANSWER,
   HELD_BACK_ANSWER,
   LIBRARY_PAPERS,
+  LORA_CARD,
+  LORA_SUMMARY,
   NOT_FOUND_ANSWER,
   NOT_FOUND_TEXT,
   SCOPED_ANSWER,
+  SUMMARY_STEPS,
   USAGE,
 } from "./fixtures";
 import { makePdf } from "./pdf";
@@ -451,4 +454,46 @@ test("reduced motion: the answer appears in one step", async ({ page }) => {
   expect(state.minOpacity).toBe(1);
   expect(state.chips).toBe(2); // the fixture answer cites [1] and [2]
   expect(state.badge).toBe(true);
+});
+
+// --- Feature 4: summaries ---
+
+function summaryRoutes(saved: boolean) {
+  return {
+    "/api/papers": async (route: import("@playwright/test").Route) =>
+      route.fulfill({ status: 200, headers: CORS, json: { papers: [LORA_CARD], total_passages: 56 } }),
+    "/api/summaries": async (route: import("@playwright/test").Route) =>
+      route.fulfill({ status: 200, headers: CORS, json: { plan: { max_requests: 6 }, papers: [
+        { paper_id: "lora", title: LORA_CARD.title, arxiv_id: LORA_CARD.arxiv_id,
+          summary: saved ? { status: "current", created_at: LORA_SUMMARY.created_at, model: LORA_SUMMARY.model }
+            : { status: "none", created_at: null, model: null } },
+      ] } }),
+    "/api/summaries/lora": async (route: import("@playwright/test").Route) =>
+      saved
+        ? route.fulfill({ status: 200, headers: CORS, json: LORA_SUMMARY })
+        : route.fulfill({ status: 404, headers: CORS, json: { kind: "not_saved", plan: { max_requests: 6 } } }),
+  };
+}
+
+test("F4 US1 summary", async ({ page }) => {
+  await streamPostInPage(page, "/api/summaries/lora", SUMMARY_STEPS);
+  await fakeBackend(page, { routes: summaryRoutes(false) });
+  await page.goto("/library");
+  await page.getByRole("article").getByRole("link", { name: "Summarize" }).click(); // the card, not the tab
+  await expect(page).toHaveURL(/\/summarize\/lora$/, { timeout: 30_000 }); // a first visit compiles the route
+  await expect(page.getByText("uses 6 requests · 16 left today")).toBeVisible();
+  await page.getByRole("button", { name: "Summarize this paper" }).click();
+
+  // Progress per part, then the checked parts.
+  await expect(page.getByText("Writing method")).toBeVisible();
+  await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible();
+  const headings = page.getByRole("heading", { level: 2 });
+  await expect(headings).toHaveText(["Problem", "Method", "Data", "Results", "Limitations"]);
+  await expect(page.getByText("All citations verified")).toBeVisible();
+
+  // A citation opens the PDF at the passage with its highlight.
+  await page.getByRole("region", { name: "Method" }).getByRole("button", { name: /^Citation 1:/ }).click();
+  const viewer = page.getByRole("dialog");
+  await expect(viewer.locator(".react-pdf__Page canvas")).toBeVisible({ timeout: 15_000 });
+  await expect(viewer.getByRole("img", { name: /highlighted passage/i })).toBeVisible();
 });

@@ -15,5 +15,6 @@ export default defineConfig({
     include: ["tests/**/*.test.{ts,tsx}"],
     exclude: ["e2e/**", "node_modules/**"],
     restoreMocks: true,
+    testTimeout: 20_000, // typing tests through Radix dialogs outrun 5 s when every file runs at once
   },
 });

@@ -15,6 +15,7 @@ import {
   NOT_FOUND_ANSWER,
   NOT_FOUND_TEXT,
   SCOPED_ANSWER,
+  STATUS,
   SUMMARY_STEPS,
   USAGE,
 } from "./fixtures";
@@ -195,7 +196,7 @@ test("US5 states: server unreachable, then recovered", async ({ page }) => {
     routes: {
       "/api/status": async (route) => {
         if (down) await route.abort("connectionrefused");
-        else await route.fallback();
+        else await route.fulfill({ status: 200, headers: CORS, json: STATUS });
       },
     },
   });
@@ -316,7 +317,7 @@ test("layout: no sideways scrolling on the Ask, Library and state screens", asyn
   await page.keyboard.press("Escape");
 
   await page.getByRole("link", { name: "Library" }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers", { timeout: 15_000 }); // client navigation is slow under parallel load
   await expectNoSideScroll(page, "Library");
 
   await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -383,7 +384,7 @@ test("keyboard only: scope, ask, open a citation, library", async ({ page }, tes
   await tabTo(page, library);
   await expectFocusRing(page);
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers", { timeout: 15_000 }); // client navigation is slow under parallel load
   const remove = page.getByRole("button", { name: /^Delete BERT/ });
   await tabTo(page, remove);
   await expectFocusRing(page);

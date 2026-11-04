@@ -98,11 +98,27 @@ evaluation feature's faithfulness test cases (claim-level support, not citation 
 
 **Further occurrences of F2.** All three came from combining sources, and each passed validation.
 
-- **Second (checkpoint 6, part `ask`, 2026-10-25)**: "What is LoRA?" again, a later run with the same
-  shape: "LoRA matches or exceeds full fine-tuning performance on various benchmarks including GLUE,
-  E2E NLG Challenge, and GPT-3 175B tasks, while using far fewer trainable parameters [2, 4, 6]."
-  Citations valid [2, 3, 4, 6], verified. This run's passages were not saved; the sentence comes from
-  the run's output, and the case was identified on 2026-11-04.
+- **Second (checkpoint 6, part `ask`, 2026-10-24 and 2026-10-25)**: "What is LoRA?", two runs with the
+  same shape. Both passed validation.
+  - 2026-10-24, the run saved as `checkpoint6_ask_viewer.txt`: "LoRA matches or exceeds full fine-tuning
+    performance on benchmarks like GLUE, E2E NLG Challenge, and GPT-3 175B tasks, often with fewer
+    trainable parameters [2, 4, 6]." Citations valid [1, 2, 3, 4, 6].
+  - 2026-10-25: "LoRA matches or exceeds full fine-tuning performance on various benchmarks including
+    GLUE, E2E NLG Challenge, and GPT-3 175B tasks, while using far fewer trainable parameters [2, 4, 6]."
+    Citations valid [2, 3, 4, 6].
+  - Verified on 2026-11-04 with 0 model requests. Both runs list the same six passages, and
+    `library.search("What is LoRA?", k=6)` today returns those six in the same order with the same
+    scores (0.618, 0.593, 0.586, 0.582, 0.578, 0.574), so the stored text is what the model read.
+  - What the cited passages say. [4]: "As shown in Table 4, LoRA matches or exceeds the fine-tuning
+    baseline on all three datasets", which is section 5.5 and GPT-3 175B only. [2]: LoRA "can be a
+    competitive alternative to full fine-tuning on NLU" (GLUE). [6]: on E2E NLG Challenge (Table 3), LoRA
+    "outperforms several baselines with comparable or fewer trainable parameters".
+  - So both sentences apply [4]'s GPT-3 wording to GLUE and E2E NLG, which is F2, from combining
+    sources. "Far fewer" in the second run also goes beyond [6]'s "comparable or fewer".
+  - Evidence: the saved file no longer exists on disk (its scratchpad was cleared). Its full text
+    survives in the session transcript, where the command's output was printed as it was saved, and the
+    2026-10-25 output is there too. Neither output records passage text, only sections, pages and
+    scores, which is why the text above comes from the store.
 - **Third (checkpoint 7, LoRA summary, 2026-11-04)**: TL;DR claim 2: "Experiments on RoBERTa,
   DeBERTa, GPT-2, and GPT-3 across GLUE, WikiSQL, and SAMSum show LoRA matches or beats fine-tuning,
   though merging weights limits multi-task batching unless modules are selected dynamically [9, 13,

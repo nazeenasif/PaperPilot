@@ -388,7 +388,18 @@ def summary_plan(paper_id: str, retry_parts: list[str] | None = None) -> dict[st
 def facet_results(facet: str, paper_id: str) -> list[library.SearchResult]:
     """The passages a summary facet reads from a paper (research R2)."""
     sections = prompts.facet_sections(facet, library.paper_sections(paper_id))
-    return library.search(prompts.FACETS[facet].query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=sections)
+    query = prompts.FACETS[facet].query
+    named = prompts.limitation_sections(sections) if facet == "limitations" else []
+    if not named:
+        return library.search(query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=sections)
+    # Two from the Limitations sections, then two others from the whole paper, best first overall.
+    half = SUMMARY_PASSAGES // 2
+    own = library.search(query, k=half, paper_ids=[paper_id], sections=named)
+    taken = {r.passage_id for r in own}
+    whole = library.search(query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=sections)
+    others = [r for r in whole if r.passage_id not in taken][:half]
+    best_first = sorted([*own, *others], key=lambda r: r.score, reverse=True)
+    return [replace(r, rank=rank) for rank, r in enumerate(best_first, start=1)]
 
 
 def _complete(summary: Summary) -> bool:

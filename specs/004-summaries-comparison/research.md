@@ -77,6 +77,10 @@ when the facet queries, papers or threshold change.
   nothing. Questions are not filtered: someone can ask what a paper says about earlier work.
 - **Problem searches only the Abstract and Introduction**, which is where a paper states its problem;
   a paper with neither searches every section the first rule allows.
+- **Limitations reads 2 passages from sections named Limitations, Discussion or Conclusion, plus 2
+  others from a whole-paper search** (Related Work and Front Matter still excluded). Papers often state
+  limitations outside such a section, so it is not restricted to them. A paper whose named sections
+  hold one passage gets 3 in all; a paper with no such section gets 4 from the whole-paper search.
 
 **Alternatives considered**: using `TOP_K` (6) per facet (rejected per clarification: larger
 prompts for little gain); one retrieval for the whole paper (rejected: the "data" and

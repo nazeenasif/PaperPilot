@@ -193,7 +193,7 @@ NOT_REPORTED = "Not reported in the retrieved passages."
 # Raise whenever the facet queries, the facet retrieval rules, the instructions or the TL;DR rules
 # change: saved summaries made with an older version are then shown as earlier, not current
 # (research R6).
-SUMMARY_PROMPT_VERSION = 3
+SUMMARY_PROMPT_VERSION = 4
 
 # Sections no facet searches (research R2): Related Work describes other papers' work, and Front
 # Matter holds titles and authors.
@@ -220,6 +220,11 @@ def facet_sections(facet: str, sections: list[str]) -> list[str]:
     """The sections a facet searches: its own if the paper has them, else all searchable ones."""
     searchable = searchable_sections(sections)
     return _named(searchable, FACET_SECTION_WORDS.get(facet, ())) or searchable
+
+
+def limitation_sections(sections: list[str]) -> list[str]:
+    """The sections where a paper is likely to state its limitations; may be none (research R2)."""
+    return _named(searchable_sections(sections), ("limitation", "discussion", "conclusion"))
 
 
 @dataclass(frozen=True)

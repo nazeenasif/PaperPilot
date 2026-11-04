@@ -4,6 +4,7 @@ Fake embedder and a temporary library; no model and no network."""
 import pytest
 
 from paperpilot import library, prompts, service, store
+from paperpilot.library import SearchResult
 from paperpilot.store import build_where
 
 RELATED = (
@@ -120,3 +121,84 @@ def test_problem_uses_the_whole_paper_when_it_has_no_abstract_or_introduction(tm
     paper = library.add_paper(make_pdf(tmp_path / "plain.pdf", references=False, title="A Study of Layout Recovery Methods",
                                        sections=[("1 Method", BODY), ("2 Results", BODY + " Results.")]))
     assert {r.section for r in service.facet_results("problem", paper.paper_id)} == {"Methods", "Results"}
+
+
+# --- step 3: Limitations reads its own sections and the whole paper ---
+
+
+def hit(passage_id, score, section="Results"):
+    return SearchResult(1, score, passage_id, "paper", "A Paper", section, 1, passage_id)
+
+
+@pytest.fixture
+def scripted_search(monkeypatch):
+    """Replace search: `named` answers a search of the Limitations sections, `whole` any other."""
+
+    def install(sections, named, whole):
+        calls = []
+
+        def fake(query, k=None, paper_ids=None, sections=None):
+            calls.append((query, k, paper_ids, sections))
+            return named[:k] if sections == install.wanted else whole[:k]
+
+        install.wanted = [s for s in sections if s in ("Limitations", "Discussion", "Conclusion")]
+        monkeypatch.setattr(library, "paper_sections", lambda paper_id: sections)
+        monkeypatch.setattr(library, "search", fake)
+        return calls
+
+    return install
+
+
+def test_limitation_sections_are_found_by_name_among_the_searchable_ones():
+    sections = ["Front Matter", "Abstract", "Limitations", "4 Discussion", "Conclusion and Future Work", "Related Work"]
+    assert prompts.limitation_sections(sections) == ["Limitations", "4 Discussion", "Conclusion and Future Work"]
+    assert prompts.limitation_sections(["Abstract", "Methods", "Results"]) == []
+
+
+def test_limitations_takes_two_from_its_sections_and_two_from_the_whole_paper(scripted_search):
+    sections = ["Abstract", "Results", "Discussion", "Conclusion", "Related Work"]
+    calls = scripted_search(sections, [hit("d1", 0.60, "Discussion"), hit("c1", 0.55, "Conclusion"), hit("d2", 0.50, "Discussion")],
+                            [hit("r1", 0.70), hit("r2", 0.65), hit("r3", 0.62), hit("r4", 0.61)])
+    results = service.facet_results("limitations", "paper")
+    assert sorted(r.passage_id for r in results) == ["c1", "d1", "r1", "r2"]
+    query = prompts.FACETS["limitations"].query
+    assert calls == [(query, 2, ["paper"], ["Discussion", "Conclusion"]),
+                     (query, 4, ["paper"], ["Abstract", "Results", "Discussion", "Conclusion"])]
+
+
+def test_limitations_replaces_a_passage_the_whole_paper_search_repeats(scripted_search):
+    scripted_search(["Results", "Discussion"], [hit("d1", 0.70, "Discussion"), hit("d2", 0.65, "Discussion")],
+                    [hit("d1", 0.70, "Discussion"), hit("d2", 0.65, "Discussion"), hit("r1", 0.60), hit("r2", 0.58)])
+    assert sorted(r.passage_id for r in service.facet_results("limitations", "paper")) == ["d1", "d2", "r1", "r2"]
+
+
+def test_limitations_passages_are_ranked_best_first(scripted_search):
+    scripted_search(["Results", "Discussion"], [hit("d1", 0.55, "Discussion"), hit("d2", 0.50, "Discussion")],
+                    [hit("r1", 0.70), hit("r2", 0.65)])
+    results = service.facet_results("limitations", "paper")
+    assert [r.passage_id for r in results] == ["r1", "r2", "d1", "d2"]
+    assert [r.rank for r in results] == [1, 2, 3, 4]
+
+
+def test_limitations_with_one_passage_in_its_sections_reads_three(scripted_search):
+    scripted_search(["Results", "Conclusion"], [hit("c1", 0.55, "Conclusion")], [hit("r1", 0.70), hit("r2", 0.65), hit("r3", 0.60)])
+    assert sorted(r.passage_id for r in service.facet_results("limitations", "paper")) == ["c1", "r1", "r2"]
+
+
+def test_limitations_without_its_sections_reads_four_from_the_whole_paper(scripted_search):
+    calls = scripted_search(["Abstract", "Results", "Related Work"], [],
+                            [hit("r1", 0.70), hit("r2", 0.65), hit("r3", 0.62), hit("r4", 0.61)])
+    assert len(service.facet_results("limitations", "paper")) == 4
+    assert [(k, sections) for _, k, _, sections in calls] == [(4, ["Abstract", "Results"])]
+
+
+def test_limitations_retrieves_from_a_stored_paper_without_related_work(tmp_path, make_pdf, library_env, fake_embedder, llm_env):
+    paper = library.add_paper(make_pdf(tmp_path / "limits.pdf", references=False, title="A Study of Layout Recovery Methods", sections=[
+        ("Abstract", BODY), ("1 Introduction", BODY + " Introduction."), ("2 Related Work", RELATED),
+        ("3 Method", BODY + " Method."), ("4 Results", BODY + " Results."), ("5 Discussion", BODY + " Discussion."),
+        ("6 Conclusion", BODY + " Conclusion."),
+    ]))
+    results = service.facet_results("limitations", paper.paper_id)
+    sections = [r.section for r in results]
+    assert len(results) == 4 and len({r.passage_id for r in results}) == 4
+    assert "Related Work" not in sections and {"Discussion", "Conclusion"} <= set(sections)

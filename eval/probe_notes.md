@@ -115,7 +115,7 @@ evaluation feature's faithfulness test cases (claim-level support, not citation 
     "outperforms several baselines with comparable or fewer trainable parameters".
   - So both sentences apply [4]'s GPT-3 wording to GLUE and E2E NLG, which is F2, from combining
     sources. "Far fewer" in the second run also goes beyond [6]'s "comparable or fewer".
-  - Evidence: the saved file no longer exists on disk (its scratchpad was cleared). Its full text
+  - Evidence: the saved file is no longer on disk. Its full text
     survives in the session transcript, where the command's output was printed as it was saved, and the
     2026-10-25 output is there too. Neither output records passage text, only sections, pages and
     scores, which is why the text above comes from the store.

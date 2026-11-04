@@ -385,21 +385,36 @@ def summary_plan(paper_id: str, retry_parts: list[str] | None = None) -> dict[st
     return {"max_requests": len(_retry_facets(retry_parts)) + (TLDR in retry_parts)}
 
 
-def facet_results(facet: str, paper_id: str) -> list[library.SearchResult]:
-    """The passages a summary facet reads from a paper (research R2)."""
-    sections = prompts.facet_sections(facet, library.paper_sections(paper_id))
+@dataclass(frozen=True)
+class FacetRetrieval:
+    """What a facet reads, and the whole-paper top score the relevance gate judges (None if empty)."""
+
+    passages: list[library.SearchResult]
+    gate_score: float | None
+
+
+def facet_retrieval(facet: str, paper_id: str) -> FacetRetrieval:
+    """Search a paper for a facet. The whole-paper search answers "does this paper cover the facet?";
+    the facet's preferred sections answer "where to read it" (research R2)."""
     query = prompts.FACETS[facet].query
+    sections = library.paper_sections(paper_id)
+    searchable = prompts.searchable_sections(sections)
+    whole = library.search(query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=searchable)
+    gate_score = max((r.score for r in whole), default=None)
+
+    preferred = prompts.facet_sections(facet, sections)
     named = prompts.limitation_sections(sections) if facet == "limitations" else []
-    if not named:
-        return library.search(query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=sections)
-    # Two from the Limitations sections, then two others from the whole paper, best first overall.
-    half = SUMMARY_PASSAGES // 2
-    own = library.search(query, k=half, paper_ids=[paper_id], sections=named)
-    taken = {r.passage_id for r in own}
-    whole = library.search(query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=sections)
-    others = [r for r in whole if r.passage_id not in taken][:half]
-    best_first = sorted([*own, *others], key=lambda r: r.score, reverse=True)
-    return [replace(r, rank=rank) for rank, r in enumerate(best_first, start=1)]
+    if named:
+        # Two from the Limitations sections, then two others from the whole paper, best first overall.
+        half = SUMMARY_PASSAGES // 2
+        own = library.search(query, k=half, paper_ids=[paper_id], sections=named)
+        taken = {r.passage_id for r in own}
+        others = [r for r in whole if r.passage_id not in taken][:half]
+        best_first = sorted([*own, *others], key=lambda r: r.score, reverse=True)
+        return FacetRetrieval([replace(r, rank=rank) for rank, r in enumerate(best_first, start=1)], gate_score)
+    if preferred != searchable:
+        return FacetRetrieval(library.search(query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=preferred), gate_score)
+    return FacetRetrieval(whole, gate_score)
 
 
 def _complete(summary: Summary) -> bool:
@@ -493,8 +508,9 @@ def _run_summary(
             part = kept[key]
         else:
             emit("progress", {"part": key, "step": "searching"})
-            results = facet_results(key, paper_id)
-            if not results or max(r.score for r in results) < settings.relevance_threshold:
+            retrieval = facet_retrieval(key, paper_id)
+            results = retrieval.passages
+            if not results or retrieval.gate_score < settings.relevance_threshold:
                 part = Part(key, "not_reported", reason="no_passages" if not results else "below_threshold")
             else:
                 numbered = number_passages(results, seen)

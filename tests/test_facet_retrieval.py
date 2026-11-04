@@ -1,9 +1,11 @@
 """Section-aware facet retrieval (research R2): which sections each summary facet may search.
 Fake embedder and a temporary library; no model and no network."""
 
+from dataclasses import replace
+
 import pytest
 
-from paperpilot import library, prompts, service, store
+from paperpilot import library, llm, prompts, service, store
 from paperpilot.library import SearchResult
 from paperpilot.store import build_where
 
@@ -77,12 +79,11 @@ def test_paper_sections_lists_each_section_once(paper_with_related_work):
 
 @pytest.mark.parametrize("facet", list(prompts.FACETS))
 def test_no_facet_retrieves_related_work_even_when_it_matches_best(paper_with_related_work, facet):
-    sections = {r.section for r in service.facet_results(facet, paper_with_related_work)}
+    sections = {r.section for r in service.facet_retrieval(facet, paper_with_related_work).passages}
     assert sections and "Related Work" not in sections
 
 
 def test_a_summary_cites_no_related_work_passage(paper_with_related_work, monkeypatch):
-    from paperpilot import llm
     from test_summarize import PromptReadingLLM
 
     monkeypatch.setattr(llm, "generate", PromptReadingLLM())
@@ -93,7 +94,7 @@ def test_a_summary_cites_no_related_work_passage(paper_with_related_work, monkey
 def test_a_paper_that_is_all_related_work_still_gets_passages(tmp_path, make_pdf, library_env, fake_embedder, llm_env):
     paper = library.add_paper(make_pdf(tmp_path / "survey.pdf", references=False, sections=[("Related Work", RELATED)],
                                        title="A Survey of Layout Recovery Methods"))
-    assert service.facet_results("method", paper.paper_id)
+    assert service.facet_retrieval("method", paper.paper_id).passages
 
 
 # --- step 2: Problem reads the Abstract and Introduction ---
@@ -113,14 +114,14 @@ def test_other_facets_search_every_searchable_section():
 
 
 def test_problem_retrieves_only_from_the_abstract_and_introduction(paper_with_related_work):
-    results = service.facet_results("problem", paper_with_related_work)
+    results = service.facet_retrieval("problem", paper_with_related_work).passages
     assert {r.section for r in results} == {"Abstract", "Introduction"}
 
 
 def test_problem_uses_the_whole_paper_when_it_has_no_abstract_or_introduction(tmp_path, make_pdf, library_env, fake_embedder, llm_env):
     paper = library.add_paper(make_pdf(tmp_path / "plain.pdf", references=False, title="A Study of Layout Recovery Methods",
                                        sections=[("1 Method", BODY), ("2 Results", BODY + " Results.")]))
-    assert {r.section for r in service.facet_results("problem", paper.paper_id)} == {"Methods", "Results"}
+    assert {r.section for r in service.facet_retrieval("problem", paper.paper_id).passages} == {"Methods", "Results"}
 
 
 # --- step 3: Limitations reads its own sections and the whole paper ---
@@ -159,36 +160,36 @@ def test_limitations_takes_two_from_its_sections_and_two_from_the_whole_paper(sc
     sections = ["Abstract", "Results", "Discussion", "Conclusion", "Related Work"]
     calls = scripted_search(sections, [hit("d1", 0.60, "Discussion"), hit("c1", 0.55, "Conclusion"), hit("d2", 0.50, "Discussion")],
                             [hit("r1", 0.70), hit("r2", 0.65), hit("r3", 0.62), hit("r4", 0.61)])
-    results = service.facet_results("limitations", "paper")
+    results = service.facet_retrieval("limitations", "paper").passages
     assert sorted(r.passage_id for r in results) == ["c1", "d1", "r1", "r2"]
     query = prompts.FACETS["limitations"].query
-    assert calls == [(query, 2, ["paper"], ["Discussion", "Conclusion"]),
-                     (query, 4, ["paper"], ["Abstract", "Results", "Discussion", "Conclusion"])]
+    assert calls == [(query, 4, ["paper"], ["Abstract", "Results", "Discussion", "Conclusion"]),
+                     (query, 2, ["paper"], ["Discussion", "Conclusion"])]
 
 
 def test_limitations_replaces_a_passage_the_whole_paper_search_repeats(scripted_search):
     scripted_search(["Results", "Discussion"], [hit("d1", 0.70, "Discussion"), hit("d2", 0.65, "Discussion")],
                     [hit("d1", 0.70, "Discussion"), hit("d2", 0.65, "Discussion"), hit("r1", 0.60), hit("r2", 0.58)])
-    assert sorted(r.passage_id for r in service.facet_results("limitations", "paper")) == ["d1", "d2", "r1", "r2"]
+    assert sorted(r.passage_id for r in service.facet_retrieval("limitations", "paper").passages) == ["d1", "d2", "r1", "r2"]
 
 
 def test_limitations_passages_are_ranked_best_first(scripted_search):
     scripted_search(["Results", "Discussion"], [hit("d1", 0.55, "Discussion"), hit("d2", 0.50, "Discussion")],
                     [hit("r1", 0.70), hit("r2", 0.65)])
-    results = service.facet_results("limitations", "paper")
+    results = service.facet_retrieval("limitations", "paper").passages
     assert [r.passage_id for r in results] == ["r1", "r2", "d1", "d2"]
     assert [r.rank for r in results] == [1, 2, 3, 4]
 
 
 def test_limitations_with_one_passage_in_its_sections_reads_three(scripted_search):
     scripted_search(["Results", "Conclusion"], [hit("c1", 0.55, "Conclusion")], [hit("r1", 0.70), hit("r2", 0.65), hit("r3", 0.60)])
-    assert sorted(r.passage_id for r in service.facet_results("limitations", "paper")) == ["c1", "r1", "r2"]
+    assert sorted(r.passage_id for r in service.facet_retrieval("limitations", "paper").passages) == ["c1", "r1", "r2"]
 
 
 def test_limitations_without_its_sections_reads_four_from_the_whole_paper(scripted_search):
     calls = scripted_search(["Abstract", "Results", "Related Work"], [],
                             [hit("r1", 0.70), hit("r2", 0.65), hit("r3", 0.62), hit("r4", 0.61)])
-    assert len(service.facet_results("limitations", "paper")) == 4
+    assert len(service.facet_retrieval("limitations", "paper").passages) == 4
     assert [(k, sections) for _, k, _, sections in calls] == [(4, ["Abstract", "Results"])]
 
 
@@ -198,7 +199,81 @@ def test_limitations_retrieves_from_a_stored_paper_without_related_work(tmp_path
         ("3 Method", BODY + " Method."), ("4 Results", BODY + " Results."), ("5 Discussion", BODY + " Discussion."),
         ("6 Conclusion", BODY + " Conclusion."),
     ]))
-    results = service.facet_results("limitations", paper.paper_id)
+    results = service.facet_retrieval("limitations", paper.paper_id).passages
     sections = [r.section for r in results]
     assert len(results) == 4 and len({r.passage_id for r in results}) == 4
     assert "Related Work" not in sections and {"Discussion", "Conclusion"} <= set(sections)
+
+
+# --- the gate judges the whole paper; the preferred sections say where to read ---
+
+
+@pytest.fixture
+def problem_scores(monkeypatch):
+    """Score the Problem query: `restricted` in Abstract and Introduction, `whole` elsewhere, and
+    0.9 for any search that includes Related Work. The other facets score 0.9 throughout."""
+
+    def install(restricted, whole):
+        real = library.search
+
+        def fake(query, k=None, paper_ids=None, sections=None):
+            if query != prompts.FACETS["problem"].query or "Related Work" in sections:
+                score = 0.9
+            else:
+                score = restricted if set(sections) <= {"Abstract", "Introduction"} else whole
+            return [replace(r, score=score) for r in real(query, k=k, paper_ids=paper_ids, sections=sections)]
+
+        monkeypatch.setenv("RELEVANCE_THRESHOLD", "0.58")
+        monkeypatch.setattr(library, "search", fake)
+
+    return install
+
+
+@pytest.fixture
+def scripted_model(monkeypatch):
+    from test_summarize import PromptReadingLLM
+
+    fake = PromptReadingLLM()
+    monkeypatch.setattr(llm, "generate", fake)
+    return fake
+
+
+def problem_prompts(model):
+    return [prompt for _, prompt in model.calls if "Section: Problem." in prompt]
+
+
+def test_gate_score_comes_from_the_whole_paper_and_passages_from_the_preferred_sections(paper_with_related_work, problem_scores):
+    problem_scores(restricted=0.573, whole=0.642)
+    retrieval = service.facet_retrieval("problem", paper_with_related_work)
+    assert retrieval.gate_score == 0.642
+    assert {r.section for r in retrieval.passages} == {"Abstract", "Introduction"}
+    assert {r.score for r in retrieval.passages} == {0.573}
+
+
+def test_a_restricted_score_below_the_gate_passes_when_the_whole_paper_is_above(paper_with_related_work, problem_scores, scripted_model):
+    """LoRA: Introduction 0.573, whole paper 0.642, gate 0.58."""
+    problem_scores(restricted=0.573, whole=0.642)
+    summary = service.summarize(paper_with_related_work)
+    problem = next(s for s in summary.sections if s.part == "problem")
+    assert problem.state == "verified" and problem_prompts(scripted_model)
+    read = {p.number: p.section for p in summary.passages}
+    assert {read[n] for n in problem.passages} == {"Abstract", "Introduction"}
+
+
+def test_a_whole_paper_score_below_the_gate_is_not_reported_with_no_request(paper_with_related_work, problem_scores, scripted_model):
+    problem_scores(restricted=0.50, whole=0.57)
+    summary = service.summarize(paper_with_related_work)
+    problem = next(s for s in summary.sections if s.part == "problem")
+    assert (problem.state, problem.reason) == ("not_reported", "below_threshold")
+    assert problem_prompts(scripted_model) == []
+
+
+def test_related_work_cannot_lift_a_facet_over_the_gate(paper_with_related_work, problem_scores):
+    """problem_scores gives any search including Related Work 0.9, so a leak would show here."""
+    problem_scores(restricted=0.50, whole=0.57)
+    assert service.facet_retrieval("problem", paper_with_related_work).gate_score == 0.57
+
+
+def test_a_facet_without_preferred_sections_is_gated_on_what_it_reads(paper_with_related_work):
+    retrieval = service.facet_retrieval("method", paper_with_related_work)
+    assert retrieval.gate_score == max(r.score for r in retrieval.passages)

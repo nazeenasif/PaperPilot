@@ -22,7 +22,7 @@ def summarize(
   `"tldr"` is retried too.
 - Before the first request: computes the `RequestPlan` and raises `DailyLimitError` if
   `llm.usage().remaining < plan.max_requests` (no request sent).
-- Per facet: `facet_results(facet, paper_id)` (research R2: `library.search`, this paper only, in the
+- Per facet: `facet_retrieval(facet, paper_id)` (research R2: `library.search`, this paper only, in the
   sections the facet may search; up to 4 passages, and Limitations searches twice); below threshold → part
   `not_reported` (`below_threshold`) with no request; else one `llm.generate` call, then
   `review_reply(text, allowed=<this facet's numbers>)`.

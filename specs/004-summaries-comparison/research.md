@@ -81,6 +81,15 @@ when the facet queries, papers or threshold change.
   others from a whole-paper search** (Related Work and Front Matter still excluded). Papers often state
   limitations outside such a section, so it is not restricted to them. A paper whose named sections
   hold one passage gets 3 in all; a paper with no such section gets 4 from the whole-paper search.
+- **The relevance gate judges a whole-paper search; the preferred sections only choose what is read.**
+  The gate answers "does this paper cover the facet?", the restriction answers "where to read it".
+  They are separate because restricting a search lowers its top score, while the threshold was
+  calibrated on unrestricted searches: LoRA's Problem scored 0.573 in its Introduction (under 0.58)
+  and 0.642 across the paper, and its Introduction does state the problem. The whole-paper search
+  still leaves out Related Work and Front Matter. A wrong pass fails safe: the model is told to reply
+  "Not reported" when the passages do not cover the topic (`SECTION_INSTRUCTION` rule 6). That reply
+  is an instruction the model follows, not something the code enforces, and a wrong pass costs one
+  request.
 
 **Alternatives considered**: using `TOP_K` (6) per facet (rejected per clarification: larger
 prompts for little gain); one retrieval for the whole paper (rejected: the "data" and

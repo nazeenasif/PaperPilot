@@ -58,9 +58,10 @@ def searches(monkeypatch):
 
 def test_each_facet_retrieves_four_passages_from_the_paper(summary_env, model, searches):
     summary = service.summarize(summary_env.paper_id)
-    # Limitations searches twice: its own sections (k=2), then the whole paper (research R2).
-    assert [q for q, _, _ in searches] == [prompts.FACETS[f].query for f in [*FACET_ORDER, "limitations"]]
-    assert [k for _, k, _ in searches] == [4, 4, 4, 4, 2, 4]
+    # Problem and Limitations search twice: the whole paper for the gate, then their own sections.
+    order = ["problem", "problem", "method", "data", "results", "limitations", "limitations"]
+    assert [q for q, _, _ in searches] == [prompts.FACETS[f].query for f in order]
+    assert [k for _, k, _ in searches] == [4, 4, 4, 4, 4, 4, 2]
     assert {tuple(ids) for _, _, ids in searches} == {(summary_env.paper_id,)}
     assert {p.paper_id for p in summary.passages} == {summary_env.paper_id}
 

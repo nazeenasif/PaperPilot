@@ -19,7 +19,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 from paperpilot import ingest, library, prompts, store  # noqa: E402
 from paperpilot.config import load_settings  # noqa: E402
-from paperpilot.service import SUMMARY_PASSAGES, facet_results  # noqa: E402
+from paperpilot.service import SUMMARY_PASSAGES, facet_retrieval  # noqa: E402
 
 OUTPUT = ROOT / "eval" / "facet_probe.md"
 SHORT = {"attention": "Attention", "bert": "BERT", "retrieval": "RAG", "lora": "LoRA", "lost": "Lost in the Middle"}
@@ -57,11 +57,12 @@ def main() -> int:
         "passages come from an obvious section (Problem: Abstract, Introduction; Limitations: Limitations,",
         "Conclusion, Discussion), `MISS` means none, and `no such section` means the paper has none under",
         "those names. The other facets are not marked. **Related Work** counts passages from Related Work",
-        f"sections (target 0). **Gate** is `below` when the top score is under {threshold}: the section would",
-        "then read Not reported, with no request.",
+        f"sections (target 0). **Gate score** is the top score of a whole-paper search, and **Gate** is `below`",
+        f"when it is under {threshold}: the section would then read Not reported, with no request. **Read top** is",
+        "the best score among the passages actually read.",
         "",
-        "| Paper | Facet | Top score | Gate | Sections (passages) | Related Work | Mark |",
-        "|---|---|---|---|---|---|---|",
+        "| Paper | Facet | Gate score | Gate | Read top | Sections (passages) | Related Work | Mark |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     inventories: list[str] = ["", "## Sections per paper (passages)", ""]
     for paper in papers:
@@ -69,13 +70,14 @@ def main() -> int:
         inventory = Counter(m["section"] for m in store.paper_metadata(paper.paper_id))
         inventories.append(f"- **{name}**: " + ", ".join(f"{s} ({n})" for s, n in inventory.items()))
         for key, facet in prompts.FACETS.items():
-            results = facet_results(key, paper.paper_id)
+            retrieval = facet_retrieval(key, paper.paper_id)
+            results = retrieval.passages
             sections = [r.section for r in results]
             counts = ", ".join(f"{s} ({n})" for s, n in Counter(sections).items())
             top = max(r.score for r in results)
             related = sum("related work" in s.lower() for s in sections)
-            gate = "below" if top < threshold else "ok"
-            lines.append(f"| {name} | {facet.label} | {top:.3f} | {gate} | {counts} | {related} | "
+            gate = "below" if retrieval.gate_score < threshold else "ok"
+            lines.append(f"| {name} | {facet.label} | {retrieval.gate_score:.3f} | {gate} | {top:.3f} | {counts} | {related} | "
                          f"{mark(key, sections, inventory)} |")
     text = "\n".join([*lines, *inventories]) + "\n"
     OUTPUT.write_text(text, encoding="utf-8")

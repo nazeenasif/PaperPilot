@@ -95,3 +95,22 @@ evaluation feature's faithfulness test cases (claim-level support, not citation 
   LoRA "outperforms several baselines with comparable or fewer trainable parameters" on
   NLG. The sentence applies [4]'s strongest wording to all three.
 - **Validation result**: citations valid [2, 3, 4, 6], invalid [] → passed, no warning.
+
+**Further occurrences of F2.** All three came from combining sources, and each passed validation.
+
+- **Second (checkpoint 6, part `ask`, 2026-10-25)**: "What is LoRA?" again, a later run with the same
+  shape: "LoRA matches or exceeds full fine-tuning performance on various benchmarks including GLUE,
+  E2E NLG Challenge, and GPT-3 175B tasks, while using far fewer trainable parameters [2, 4, 6]."
+  Citations valid [2, 3, 4, 6], verified. This run's passages were not saved; the sentence comes from
+  the run's output, and the case was identified on 2026-11-04.
+- **Third (checkpoint 7, LoRA summary, 2026-11-04)**: TL;DR claim 2: "Experiments on RoBERTa,
+  DeBERTa, GPT-2, and GPT-3 across GLUE, WikiSQL, and SAMSum show LoRA matches or beats fine-tuning,
+  though merging weights limits multi-task batching unless modules are selected dynamically [9, 13,
+  14, 12, 15]."
+  - The Results section it was built from had scoped the claim correctly: "LoRA matches or exceeds
+    fine‑tuning on GPT‑3 175B across three datasets [13]." The scope was lost when the TL;DR combined
+    Data, Results and Limitations, so this one arose from combining verified sections, not passages.
+  - The TL;DR check passed: every sentence cites, every citation belongs to a verified section, and
+    the sentence states only the numbers in its model names. It cannot see a broadened claim, the same
+    blind spot as F1 (research R3 of Feature 4). See `docs/verification/checkpoint-7-2026-11-04.md`,
+    claims 2 and 10.

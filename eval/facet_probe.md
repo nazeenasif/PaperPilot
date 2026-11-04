@@ -15,17 +15,17 @@ the best score among the passages actually read.
 | Attention | Method | 0.703 | ok | 0.703 | Introduction (1), Model Architecture (1), Abstract (1), Results (1) | 0 |  |
 | Attention | Data | 0.752 | ok | 0.752 | Training (1), Results (3) | 0 |  |
 | Attention | Results | 0.713 | ok | 0.713 | Results (4) | 0 |  |
-| Attention | Limitations | 0.584 | ok | 0.584 | Results (1), Why Self-Attention (1), Conclusion (1) | 0 | 1/3 |
+| Attention | Limitations | 0.584 | ok | 0.584 | Results (2), Why Self-Attention (1), Conclusion (1) | 0 | 1/4 |
 | BERT | Problem | 0.644 | ok | 0.599 | Abstract (1), Introduction (3) | 0 | 4/4 |
 | BERT | Method | 0.724 | ok | 0.724 | BERT (1), Ablation Studies (3) | 0 |  |
 | BERT | Data | 0.745 | ok | 0.745 | Experiments (4) | 0 |  |
 | BERT | Results | 0.697 | ok | 0.697 | Experiments (4) | 0 |  |
-| BERT | Limitations | 0.601 | ok | 0.601 | Ablation Studies (1), Experiments (1), Conclusion (1) | 0 | 1/3 |
+| BERT | Limitations | 0.601 | ok | 0.601 | Ablation Studies (1), Experiments (2), Conclusion (1) | 0 | 1/4 |
 | LoRA | Problem | 0.642 | ok | 0.573 | Introduction (4) | 0 | 4/4 |
 | LoRA | Method | 0.715 | ok | 0.715 | Introduction (1), Our Method (2), Aren’t Existing Solutions Good Enough? (1) | 0 |  |
 | LoRA | Data | 0.736 | ok | 0.736 | Empirical Experiments (2), Problem Statement (1), Understanding the Low-Rank Updates (1) | 0 |  |
 | LoRA | Results | 0.707 | ok | 0.707 | Empirical Experiments (3), Understanding the Low-Rank Updates (1) | 0 |  |
-| LoRA | Limitations | 0.608 | ok | 0.608 | Understanding the Low-Rank Updates (1), Our Method (1), Conclusion and Future Work (1) | 0 | 1/3 |
+| LoRA | Limitations | 0.608 | ok | 0.608 | Understanding the Low-Rank Updates (1), Our Method (1), Empirical Experiments (1), Conclusion and Future Work (1) | 0 | 1/4 |
 | Lost in the Middle | Problem | 0.695 | ok | 0.673 | Introduction (4) | 0 | 4/4 |
 | Lost in the Middle | Method | 0.722 | ok | 0.722 | Why Are Language Models Not Robust (1), Conclusion (1), Introduction (2) | 0 |  |
 | Lost in the Middle | Data | 0.734 | ok | 0.734 | Multi-Document Question Answering (1), Why Are Language Models Not Robust (2), Is More Context Is Always Better? (1) | 0 |  |

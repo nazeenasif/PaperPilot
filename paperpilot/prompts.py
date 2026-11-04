@@ -193,7 +193,7 @@ NOT_REPORTED = "Not reported in the retrieved passages."
 # Raise whenever the facet queries, the facet retrieval rules, the instructions or the TL;DR rules
 # change: saved summaries made with an older version are then shown as earlier, not current
 # (research R6).
-SUMMARY_PROMPT_VERSION = 5
+SUMMARY_PROMPT_VERSION = 6
 
 # Sections no facet searches (research R2): Related Work describes other papers' work, and Front
 # Matter holds titles and authors.

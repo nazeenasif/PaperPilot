@@ -405,11 +405,10 @@ def facet_retrieval(facet: str, paper_id: str) -> FacetRetrieval:
     preferred = prompts.facet_sections(facet, sections)
     named = prompts.limitation_sections(sections) if facet == "limitations" else []
     if named:
-        # Two from the Limitations sections, then two others from the whole paper, best first overall.
-        half = SUMMARY_PASSAGES // 2
-        own = library.search(query, k=half, paper_ids=[paper_id], sections=named)
+        # Up to two from the Limitations sections; the whole paper fills the rest, best first overall.
+        own = library.search(query, k=SUMMARY_PASSAGES // 2, paper_ids=[paper_id], sections=named)
         taken = {r.passage_id for r in own}
-        others = [r for r in whole if r.passage_id not in taken][:half]
+        others = [r for r in whole if r.passage_id not in taken][:SUMMARY_PASSAGES - len(own)]
         best_first = sorted([*own, *others], key=lambda r: r.score, reverse=True)
         return FacetRetrieval([replace(r, rank=rank) for rank, r in enumerate(best_first, start=1)], gate_score)
     if preferred != searchable:

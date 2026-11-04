@@ -77,10 +77,11 @@ when the facet queries, papers or threshold change.
   nothing. Questions are not filtered: someone can ask what a paper says about earlier work.
 - **Problem searches only the Abstract and Introduction**, which is where a paper states its problem;
   a paper with neither searches every section the first rule allows.
-- **Limitations reads 2 passages from sections named Limitations, Discussion or Conclusion, plus 2
-  others from a whole-paper search** (Related Work and Front Matter still excluded). Papers often state
-  limitations outside such a section, so it is not restricted to them. A paper whose named sections
-  hold one passage gets 3 in all; a paper with no such section gets 4 from the whole-paper search.
+- **Limitations reads up to 2 passages from sections named Limitations, Discussion or Conclusion, and
+  fills the rest from a whole-paper search** (Related Work and Front Matter still excluded), so it
+  reads 4 as the spec says, unless the paper has fewer. Papers often state limitations outside such a
+  section, so it is not restricted to them. A paper with no such section reads 4 from the whole-paper
+  search.
 - **The relevance gate judges a whole-paper search; the preferred sections only choose what is read.**
   The gate answers "does this paper cover the facet?", the restriction answers "where to read it".
   They are separate because restricting a search lowers its top score, while the threshold was

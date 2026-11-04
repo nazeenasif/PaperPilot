@@ -181,9 +181,21 @@ def test_limitations_passages_are_ranked_best_first(scripted_search):
     assert [r.rank for r in results] == [1, 2, 3, 4]
 
 
-def test_limitations_with_one_passage_in_its_sections_reads_three(scripted_search):
-    scripted_search(["Results", "Conclusion"], [hit("c1", 0.55, "Conclusion")], [hit("r1", 0.70), hit("r2", 0.65), hit("r3", 0.60)])
-    assert sorted(r.passage_id for r in service.facet_retrieval("limitations", "paper").passages) == ["c1", "r1", "r2"]
+def test_limitations_tops_up_from_the_whole_paper_when_its_sections_hold_one_passage(scripted_search):
+    scripted_search(["Results", "Conclusion"], [hit("c1", 0.55, "Conclusion")],
+                    [hit("r1", 0.70), hit("r2", 0.65), hit("r3", 0.60), hit("r4", 0.58)])
+    assert sorted(r.passage_id for r in service.facet_retrieval("limitations", "paper").passages) == ["c1", "r1", "r2", "r3"]
+
+
+def test_limitations_top_up_skips_the_passage_it_already_has(scripted_search):
+    scripted_search(["Results", "Conclusion"], [hit("c1", 0.70, "Conclusion")],
+                    [hit("c1", 0.70, "Conclusion"), hit("r1", 0.65), hit("r2", 0.60), hit("r3", 0.58)])
+    assert sorted(r.passage_id for r in service.facet_retrieval("limitations", "paper").passages) == ["c1", "r1", "r2", "r3"]
+
+
+def test_limitations_reads_what_exists_in_a_paper_with_fewer_than_four_passages(scripted_search):
+    scripted_search(["Results", "Conclusion"], [hit("c1", 0.70, "Conclusion")], [hit("c1", 0.70, "Conclusion"), hit("r1", 0.65)])
+    assert sorted(r.passage_id for r in service.facet_retrieval("limitations", "paper").passages) == ["c1", "r1"]
 
 
 def test_limitations_without_its_sections_reads_four_from_the_whole_paper(scripted_search):

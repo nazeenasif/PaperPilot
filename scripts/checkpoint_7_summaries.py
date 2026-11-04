@@ -10,7 +10,8 @@ Usage: python scripts/checkpoint_7_summaries.py [part ...]   (default: every par
 Parts: states (0), summary (6, LoRA), reopen (0, needs summary or a saved LoRA summary)
 
 Every claim of the summary is printed with its cited passages (paper, section, page, excerpt)
-and written to docs/verification/checkpoint-7-<date>.md for the hand check (FR-027, SC-002).
+and written to docs/verification/checkpoint-7-<date>.md for the hand check (FR-027, SC-002); a
+later run on the same day adds -v2, -v3 and so on, so a filled-in hand check is never overwritten.
 """
 
 import os
@@ -264,12 +265,22 @@ PARTS: dict[str, Part] = {
 }
 
 
+def claims_path(folder: Path, day: str) -> Path:
+    """The first unused report name for this day: never an existing hand-check record."""
+    path = folder / f"checkpoint-7-{day}.md"
+    version = 2
+    while path.exists():
+        path = folder / f"checkpoint-7-{day}-v{version}.md"
+        version += 1
+    return path
+
+
 def write_claims(claims: Claims) -> Path | None:
     """The hand-check record: every claim with its cited passages, Verdict and Fault left empty."""
     if not claims.rows:
         return None
     VERIFICATION_DIR.mkdir(parents=True, exist_ok=True)
-    path = VERIFICATION_DIR / f"checkpoint-7-{date.today().isoformat()}.md"
+    path = claims_path(VERIFICATION_DIR, date.today().isoformat())
 
     def cell(text: str) -> str:
         return text.replace("|", "\\|").replace("\n", " ")

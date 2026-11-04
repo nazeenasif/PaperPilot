@@ -18,6 +18,8 @@ One summary section, the TL;DR, or one comparison cell.
 | rejected_text | str \| null | the unverified model text, only when `held_back` |
 | reason | str \| null | for `not_reported`: `below_threshold`, `no_passages`, `model_not_found`, `no_citations`, `missing_cell`, `no_verified_sections`; for `failed`/`not_started`: `cut_off`, `empty`, `malformed`, `model_busy`, `daily_limit`, `rate_limited`, `model_unavailable` |
 | sources | [str] | TL;DR only: the sections each sentence traced to, per sentence (research R3) |
+| built_from | [str] | TL;DR only: the sections whose text it used |
+| built_without | [str] | TL;DR only: sections it went without (failed, held back, or regenerated since) |
 | passages | [int] | numbers of the passages given for this part |
 | requests | {planned, retries} | requests this part used (0 for not reported without a request) |
 | tokens | {input?, output?, reasoning?} | as reported by the provider |
@@ -31,7 +33,8 @@ Rules (FR-011):
 
 State transitions: `pending → verified | not_reported | held_back | failed`; a run stopped by a
 daily limit, long wait, busy model or unavailable model leaves later parts `not_started`. A retry
-moves `failed`/`not_started` parts back to `pending`; a section retry also re-runs the TL;DR.
+moves `failed`/`not_started` parts back to `pending`; a section retry leaves the TL;DR as it is,
+marked `built_without` that section until the TL;DR is retried too.
 
 ## NumberedPassage (existing, Feature 2)
 

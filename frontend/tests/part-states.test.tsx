@@ -46,7 +46,7 @@ describe("PartState", () => {
   it("shows a cut-off part as failed with a retry, never with truncated text", async () => {
     const onRetry = vi.fn();
     const user = userEvent.setup();
-    render(<PartState part={part("results", { state: "failed", text: null, reason: "cut_off" })} noun="section" onRetry={onRetry} retryCost={2} />);
+    render(<PartState part={part("results", { state: "failed", text: null, reason: "cut_off" })} noun="section" onRetry={onRetry} />);
     expect(screen.getByText("The model's answer was cut off before it finished.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Retry this section" }));
     expect(onRetry).toHaveBeenCalledTimes(1);

@@ -107,6 +107,13 @@ export const GENERIC_FAILURE: FailureCopy = {
 
 export const PART_NOT_REPORTED = "Not reported in the retrieved passages.";
 
+/** "Built without Method and Data." for a TL;DR that went without those sections. */
+export function builtWithout(labels: string[]): string {
+  const last = labels[labels.length - 1];
+  const names = labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${last}` : last;
+  return `Built without ${names}.`;
+}
+
 /** "9–12" for a run of numbers, else "3, 7 and 8". */
 function passageList(numbers: number[]): string {
   const sorted = [...numbers].sort((a, b) => a - b);

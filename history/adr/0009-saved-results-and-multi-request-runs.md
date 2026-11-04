@@ -42,12 +42,13 @@
 - **Reuse**: GET endpoints and `summarize`/`compare` without `regenerate` return the current saved
   result with **0 requests**.
   - **Regeneration** writes a new result and replaces the old one only on completion.
-  - **Part retries** re-run only `failed`/`not_started` parts (plus the TL;DR when a section
-    changed) and rewrite the row.
+  - **Part retries** re-run only the named parts and rewrite the row. A regenerated section leaves
+    the TL;DR marked "Built without <section>" until it is regenerated too (amended 2026-11-04; it
+    was rewritten automatically before, costing an extra request per retry).
 - **Request plan before every run**:
   - A summary's plan is 6.
   - A comparison's plan is its number of aspects.
-  - A retry's plan is its failed parts (+1 for the TL;DR).
+  - A retry's plan is the parts it names; the TL;DR is its own part (amended 2026-11-04).
   - The plan is returned with every saved result and shown on every button ("uses 6 requests ·
     41 left today").
 - **Pre-check**: the engine raises `DailyLimitError` before any request when

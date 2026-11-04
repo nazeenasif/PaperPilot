@@ -11,12 +11,15 @@ export function TldrCard({
   progress,
   passages,
   onOpen,
+  note,
   children,
 }: {
   part: Part | undefined;
   progress: PartProgress | undefined;
   passages: Map<number, NumberedPassage>;
   onOpen: (passage: NumberedPassage) => void;
+  /** Shown whatever the part's state, e.g. the sections it was built without. */
+  note?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
@@ -34,9 +37,12 @@ export function TldrCard({
         </p>
       )}
       {part && part.state !== "verified" && children}
-      <p className="text-sm text-muted-foreground">
-        Built only from the verified sections below; it cites their passages, never new ones.
-      </p>
+      {note}
+      {!note && (
+        <p className="text-sm text-muted-foreground">
+          Built only from the verified sections below; it cites their passages, never new ones.
+        </p>
+      )}
     </section>
   );
 }

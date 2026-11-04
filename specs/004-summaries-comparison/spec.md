@@ -85,8 +85,9 @@ configured model) and confirm the old summary is no longer offered as current.
    changes, **Then** the saved summary is no longer shown as current; the researcher is told why
    and can generate a new one.
 4. **Given** a saved summary with a part that failed for a temporary reason (for example the model
-   was busy), **When** the researcher chooses to retry that part, **Then** only that part (and the
-   TL;DR, which depends on it) is generated again, with the cost shown first.
+   was busy), **When** the researcher chooses to retry that part, **Then** only that part is
+   generated again, with the cost shown first, and the TL;DR reads "Built without <section>" until
+   it is regenerated too.
 
 ---
 
@@ -287,7 +288,9 @@ completes when the retry succeeds.
   new one has finished; a failed regeneration MUST leave the saved result as it was.
 - **FR-020**: Completed parts of a run MUST be saved even when other parts failed for a temporary
   reason (busy, long wait, daily limit, cut off); the researcher MUST be able to retry only the
-  failed parts, and the TL;DR MUST be regenerated when any section it depends on changes.
+  failed parts. A TL;DR MUST record which sections it was built from. When a section is
+  regenerated, the TL;DR MUST read "Built without <section>" until it is regenerated too, which the
+  researcher chooses separately (amended 2026-11-04; it was rewritten automatically before).
 
 **Cost and limits (User Story 5)**
 

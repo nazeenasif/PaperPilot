@@ -17,8 +17,9 @@ def summarize(
 - Without `regenerate`/`retry_parts`, returns the **current** saved summary with **zero** model
   requests if there is one; otherwise generates.
 - `regenerate=True`: generates a new summary; the saved one is replaced only on completion.
-- `retry_parts`: re-runs only those `failed`/`not_started` sections (and the TL;DR if any section
-  changed); other parts are taken from the saved summary.
+- `retry_parts`: re-runs only the named parts (`"tldr"` is a part of its own); other parts come
+  from the saved summary. A regenerated section leaves the TL;DR marked `built_without` it until
+  `"tldr"` is retried too.
 - Before the first request: computes the `RequestPlan` and raises `DailyLimitError` if
   `llm.usage().remaining < plan.max_requests` (no request sent).
 - Per facet: `library.search(query, k=4, paper_ids=[paper_id])`; below threshold → part

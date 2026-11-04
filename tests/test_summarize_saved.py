@@ -88,7 +88,7 @@ def test_an_incomplete_regeneration_keeps_a_complete_saved_summary(summary_env, 
     assert service.saved_summary(summary_env.paper_id) == first
 
 
-def test_retrying_a_failed_section_reruns_it_and_the_tldr_only(summary_env, model):
+def test_retrying_a_failed_section_reruns_only_that_section(summary_env, model):
     summary = service.summarize(summary_env.paper_id)
     failed = dataclasses.replace(summary.sections[1], state="failed", text=None, reason="cut_off")
     sections = [summary.sections[0], failed, *summary.sections[2:]]
@@ -96,9 +96,9 @@ def test_retrying_a_failed_section_reruns_it_and_the_tldr_only(summary_env, mode
     calls = len(model.calls)
     retried = service.summarize(summary_env.paper_id, retry_parts=["method"])
     new_calls = model.calls[calls:]
-    assert len(new_calls) == 2
-    assert "Section: Method." in new_calls[0][1] and new_calls[1][0] == prompts.TLDR_INSTRUCTION
+    assert len(new_calls) == 1 and "Section: Method." in new_calls[0][1]
     assert retried.sections[1].state == "verified"
+    assert retried.tldr.text == summary.tldr.text
     assert retried.sections[0] == summary.sections[0] and retried.sections[2:] == summary.sections[2:]
     assert service.saved_summary(summary_env.paper_id) == retried
 
@@ -113,8 +113,9 @@ def test_retry_parts_needs_a_saved_summary_and_known_parts(summary_env, model):
 
 def test_summary_plan(summary_env, model):
     assert service.summary_plan(summary_env.paper_id) == {"max_requests": 6}
-    assert service.summary_plan(summary_env.paper_id, retry_parts=["method"]) == {"max_requests": 2}
-    assert service.summary_plan(summary_env.paper_id, retry_parts=["method", "data"]) == {"max_requests": 3}
+    assert service.summary_plan(summary_env.paper_id, retry_parts=["method"]) == {"max_requests": 1}
+    assert service.summary_plan(summary_env.paper_id, retry_parts=["method", "data"]) == {"max_requests": 2}
+    assert service.summary_plan(summary_env.paper_id, retry_parts=["method", "tldr"]) == {"max_requests": 2}
     assert service.summary_plan(summary_env.paper_id, retry_parts=["tldr"]) == {"max_requests": 1}
 
 

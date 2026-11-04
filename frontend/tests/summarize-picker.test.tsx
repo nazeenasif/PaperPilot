@@ -129,7 +129,7 @@ describe("A saved summary", () => {
     inProviders(<SummaryView paperId="lora" />);
     const method = await screen.findByRole("region", { name: "Method" });
     const retry = within(method).getByRole("button", { name: "Retry this section" });
-    expect(await within(method).findByText("uses 2 requests · 41 left today")).toBeInTheDocument(); // usage loads separately
+    expect(await within(method).findByText("uses 1 request · 41 left today")).toBeInTheDocument(); // usage loads separately
     await user.click(retry);
     await waitFor(() => expect(posted).toEqual([{ retry_parts: ["method"] }]));
   });

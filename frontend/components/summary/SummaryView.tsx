@@ -12,6 +12,7 @@ import { TldrCard } from "@/components/summary/TldrCard";
 import { TurnFailure } from "@/components/states/TurnFailure";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiGet } from "@/lib/api";
+import { builtWithout } from "@/lib/errorKinds";
 import { timeAgo } from "@/lib/time";
 import type { NumberedPassage, Part, StaleReason, SummaryListItem } from "@/lib/types";
 import { useSummary } from "@/lib/useSummary";
@@ -59,8 +60,12 @@ export function SummaryView({ paperId }: { paperId: string }) {
   const arxiv = done?.arxiv_id ?? paper?.arxiv_id;
   const stale = done?.status === "stale";
   const passages = useMemo(() => new Map((done?.passages ?? []).map((p) => [p.number, p])), [done]);
+  const savedPart = (key: string): Part | undefined =>
+    key === "tldr" ? done?.tldr : done?.sections.find((s) => s.part === key);
   const partOf = (key: string): Part | undefined =>
-    running ? summary.parts[key] : key === "tldr" ? done?.tldr : done?.sections.find((s) => s.part === key);
+    running && (summary.retrying === null || summary.retrying.includes(key)) ? summary.parts[key] : savedPart(key);
+  const tldrPart = partOf("tldr");
+  const without = SECTIONS.filter(({ key }) => tldrPart?.built_without?.includes(key)).map(({ label }) => label);
   const showResult = running || done !== null;
   const retry = (key: string) => () => void summary.start({ retry_parts: [key] });
 
@@ -76,7 +81,7 @@ export function SummaryView({ paperId }: { paperId: string }) {
                 <span className="rounded-full border border-amber/50 px-3 py-1 text-amber">
                   {STALE[done.stale_reason ?? "model_changed"]}
                 </span>
-              ) : done.verified_parts === 6 ? (
+              ) : done.verified_parts === 6 && without.length === 0 ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-teal/50 px-3 py-1 text-teal">
                   <Check aria-hidden className="size-4" /> All citations verified
                 </span>
@@ -107,19 +112,30 @@ export function SummaryView({ paperId }: { paperId: string }) {
 
       {showResult && (
         <>
-          <TldrCard part={partOf("tldr")} progress={summary.progress.tldr} passages={passages} onOpen={setOpen}>
-            {partOf("tldr") && (
-              // Retrying only the TL;DR costs 1 request (FR-020).
-              <PartState part={partOf("tldr") as Part} noun="TL;DR" onRetry={running ? undefined : retry("tldr")} retryCost={1} />
-            )}
+          <TldrCard
+            part={tldrPart}
+            progress={summary.progress.tldr}
+            passages={passages}
+            onOpen={setOpen}
+            note={
+              without.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-sm text-amber">{builtWithout(without)}</p>
+                  {!running && tldrPart?.state !== "failed" && tldrPart?.state !== "not_started" && (
+                    <CostButton label="Rewrite the TL;DR" cost={1} onClick={retry("tldr")} primary={false} />
+                  )}
+                </div>
+              )
+            }
+          >
+            {tldrPart && <PartState part={tldrPart} noun="TL;DR" onRetry={running ? undefined : retry("tldr")} />}
           </TldrCard>
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {SECTIONS.map(({ key, label }) => {
               const part = partOf(key);
               return (
                 <SectionCard key={key} label={label} part={part} progress={summary.progress[key]} passages={passages} onOpen={setOpen}>
-                  {/* A section retry also rewrites the TL;DR: 2 requests (FR-020). */}
-                  {part && <PartState part={part} noun="section" onRetry={running ? undefined : retry(key)} retryCost={2} />}
+                  {part && <PartState part={part} noun="section" onRetry={running ? undefined : retry(key)} />}
                 </SectionCard>
               );
             })}

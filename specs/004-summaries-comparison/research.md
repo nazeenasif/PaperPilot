@@ -111,6 +111,14 @@ asking the model to check its own TL;DR (rejected: model-graded checks are not c
 validation, Principle V); generating the TL;DR from passages (rejected: it could then state
 things no verified section says).
 
+**What it was built from** (added 2026-11-04): the TL;DR part records `built_from`, the sections
+whose text it used, and `built_without`, the sections it went without (failed, held back, or
+regenerated since). Regenerating a section costs 1 request and does not rewrite the TL;DR, whose
+text still reflects the old section, so it reads "Built without <section>" and the badge "All
+citations verified" is withheld until the TL;DR is regenerated too (1 request). A section the paper
+does not report is not listed: there was nothing to use. Summaries saved before this was recorded
+take these values from their section states, since no section could have been retried by then.
+
 **What the check catches, and what it cannot**: it catches (a) a TL;DR sentence with no
 citation, (b) a citation to a passage that no verified section cites, and (c) a number that
 does not appear in the sections the sentence cites. It **cannot** catch a non-numeric claim
@@ -276,7 +284,7 @@ and the API must stay a thin adapter).
 **Decision**:
 
 - **Plan**: a summary's maximum is `5 + 1 = 6` requests; a comparison's is the number of
-  aspects; a retry's is the number of failed parts (+1 TL;DR when a section is retried). The
+  aspects; a retry's is the number of parts retried (the TL;DR is its own part, R3). The
   plan is known before any request and returned with every saved result and every run.
 - **Pre-check**: `service` refuses a run when `llm.usage().remaining < plan` by raising
   `DailyLimitError` before any request (FR-023); the API maps it to the existing `daily_limit`

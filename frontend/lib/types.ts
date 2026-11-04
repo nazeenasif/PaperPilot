@@ -175,6 +175,10 @@ export interface Part {
   reason: string | null;
   /** TL;DR only: the sections each sentence traced to. */
   sources: string[][];
+  /** TL;DR only: the sections whose text it used. */
+  built_from: string[];
+  /** TL;DR only: sections it went without (failed, held back, or regenerated since). */
+  built_without: string[];
   passages: number[];
   requests: { planned: number; retries: number };
   tokens: { input?: number; output?: number; reasoning?: number };

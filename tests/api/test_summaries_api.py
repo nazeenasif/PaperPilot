@@ -148,9 +148,10 @@ def test_retry_parts_through_the_stream(summary_client):
     summarize_stream(summary_client, summary_client.paper.paper_id)
     calls = len(summary_client.model.calls)
     _, _, events = summarize_stream(summary_client, summary_client.paper.paper_id, {"retry_parts": ["method"]})
-    assert events[0] == ("plan", {"max_requests": 2, "parts": ["method", "tldr"]})
-    assert [d["part"] for n, d in events if n == "part"] == ["method", "tldr"]
-    assert len(summary_client.model.calls) == calls + 2
+    assert events[0] == ("plan", {"max_requests": 1, "parts": ["method"]})
+    assert [d["part"] for n, d in events if n == "part"] == ["method"]
+    assert len(summary_client.model.calls) == calls + 1
+    assert events[-1][1]["tldr"]["built_without"] == ["method"]
 
 
 def test_retry_parts_without_a_saved_summary_is_not_saved(summary_client):

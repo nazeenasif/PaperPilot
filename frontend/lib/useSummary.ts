@@ -21,6 +21,8 @@ export interface SummaryState {
   parts: Record<string, Part>;
   progress: Record<string, PartProgress>;
   retry: Record<string, { event: RetryWaitEvent; since: number }>;
+  /** The parts being retried; the other saved parts stay on screen meanwhile. */
+  retrying: string[] | null;
   error: { kind: string; fields: Record<string, unknown> } | null;
 }
 
@@ -31,6 +33,7 @@ const INITIAL: SummaryState = {
   parts: {},
   progress: {},
   retry: {},
+  retrying: null,
   error: null,
 };
 
@@ -64,7 +67,7 @@ export function useSummary(paperId: string, onSettled?: () => void) {
 
   const start = useCallback(
     async (body: { regenerate?: boolean; retry_parts?: string[] } = {}) => {
-      setState((s) => ({ ...s, phase: "running", parts: {}, progress: {}, retry: {}, error: null }));
+      setState((s) => ({ ...s, phase: "running", parts: {}, progress: {}, retry: {}, retrying: body.retry_parts ?? null, error: null }));
       try {
         const events = await postEventStream(`/api/summaries/${encodeURIComponent(paperId)}`, body);
         for await (const { event, data } of events) {

@@ -253,6 +253,8 @@ class Part:
     rejected_text: str | None = None
     reason: str | None = None
     sources: list[list[str]] = field(default_factory=list)
+    built_from: list[str] = field(default_factory=list)  # TL;DR only: sections whose text it used
+    built_without: list[str] = field(default_factory=list)  # TL;DR only: failed or since regenerated
     passages: list[int] = field(default_factory=list)
     requests: dict[str, int] = field(default_factory=lambda: {"planned": 0, "retries": 0})
     tokens: dict[str, int] = field(default_factory=dict)
@@ -331,12 +333,25 @@ def _part_from_dict(data: dict) -> Part:
     return Part(**{**data, "citations": CitationReport(**data["citations"])})
 
 
+def _built_from(sections: list[Part]) -> tuple[list[str], list[str]]:
+    """The sections a TL;DR written now uses, and those it goes without. A section the paper
+    does not report is not missing: there was nothing to use."""
+    built_from = [s.part for s in sections if s.state == "verified"]
+    built_without = [s.part for s in sections if s.state in ("held_back", "failed", "not_started")]
+    return built_from, built_without
+
+
 def summary_from_dict(data: dict) -> Summary:
     """Rebuild a summary saved with summary_to_dict."""
+    sections = [_part_from_dict(d) for d in data["sections"]]
+    tldr = data["tldr"]
+    if "built_from" not in tldr:  # saved before this was recorded; sections could not be retried then
+        built_from, built_without = _built_from(sections) if tldr.get("reason") != "no_verified_sections" else ([], [])
+        tldr = {**tldr, "built_from": built_from, "built_without": built_without}
     return Summary(**{
         **data,
-        "tldr": _part_from_dict(data["tldr"]),
-        "sections": [_part_from_dict(d) for d in data["sections"]],
+        "tldr": _part_from_dict(tldr),
+        "sections": sections,
         "passages": [NumberedPassage(**d) for d in data["passages"]],
     })
 
@@ -367,7 +382,7 @@ def summary_plan(paper_id: str, retry_parts: list[str] | None = None) -> dict[st
     """The most model requests a summary (or a retry of some parts) can make (FR-021)."""
     if retry_parts is None:
         return {"max_requests": len(prompts.FACETS) + 1}
-    return {"max_requests": len(_retry_facets(retry_parts)) + 1}  # the TL;DR is always rewritten
+    return {"max_requests": len(_retry_facets(retry_parts)) + (TLDR in retry_parts)}
 
 
 def _complete(summary: Summary) -> bool:
@@ -386,7 +401,8 @@ def summarize(
     - Default: return the saved summary (current or marked stale) with 0 requests, else generate.
     - `regenerate`: generate anew; the saved summary is replaced only when the new one finished,
       and a complete saved summary is kept over a new one with failed parts (FR-019).
-    - `retry_parts`: rerun those sections of the saved summary, then the TL;DR (FR-020).
+    - `retry_parts`: rerun those parts of the saved summary. A regenerated section leaves the
+      TL;DR marked `built_without` it, until "tldr" is regenerated too (FR-020).
 
     `on_event(kind, detail)` receives "plan", "progress" ({part, step, passages?}), "retry_wait"
     ({part, ...}) and "part" (a checked part). No event carries text before its part's check.
@@ -405,7 +421,7 @@ def summarize(
         if saved is not None and not regenerate:
             return saved
 
-    summary = _run_summary(paper, facets, base, on_event)
+    summary = _run_summary(paper, facets, retry_parts is None or TLDR in retry_parts, base, on_event)
     if retry_parts is None and regenerate:
         current = saved_summary(paper_id)
         if current is not None and current.status == "current" and _complete(current) and not _complete(summary):
@@ -418,10 +434,11 @@ def summarize(
 def _run_summary(
     paper: library.PaperSummary,
     facets: list[str],
+    rewrite_tldr: bool,
     base: Summary | None,
     on_event: Callable[[str, dict], None] | None,
 ) -> Summary:
-    """Generate the given sections (the others come from `base`), then the TL;DR."""
+    """Generate the given sections (the others come from `base`), then the TL;DR if asked."""
 
     def emit(kind: str, detail: dict) -> None:
         if on_event is not None:
@@ -429,8 +446,9 @@ def _run_summary(
 
     settings = load_settings()
     paper_id = paper.paper_id
-    plan = {"max_requests": len(facets) + 1}
-    emit("plan", {**plan, "parts": [*facets, TLDR]})
+    run_order = [*facets, TLDR] if rewrite_tldr else facets
+    plan = {"max_requests": len(run_order)}
+    emit("plan", {**plan, "parts": run_order})
 
     seen: dict[str, NumberedPassage] = {p.passage_id: p for p in base.passages} if base else {}
     kept = {p.part: p for p in base.sections} if base else {}
@@ -479,7 +497,15 @@ def _run_summary(
         if part.state == "verified":
             verified.append(VerifiedSection(prompts.FACETS[key].label, part.text or "", part.citations.valid))
 
-    if not verified:
+    built = dict(zip(("built_from", "built_without"), _built_from(sections)))
+    if not rewrite_tldr:
+        kept_tldr = base.tldr
+        tldr = replace(
+            kept_tldr,
+            built_from=[k for k in kept_tldr.built_from if k not in facets],
+            built_without=[k for k in prompts.FACETS if k in kept_tldr.built_without or k in facets],
+        )
+    elif not verified:
         tldr = Part(TLDR, "not_reported", reason="no_verified_sections")
     else:
         emit("progress", {"part": TLDR, "step": "generating"})
@@ -487,13 +513,14 @@ def _run_summary(
         reply, requests, tokens, failure = generate(TLDR, prompts.TLDR_INSTRUCTION,
                                                     prompts.build_tldr_prompt(verified), "tldr")
         if failure:
-            tldr = Part(TLDR, "failed", reason=failure, passages=cited, requests=requests)
+            tldr = Part(TLDR, "failed", reason=failure, passages=cited, requests=requests, **built)
         else:
             emit("progress", {"part": TLDR, "step": "checking"})
-            tldr = _tldr_part(reply.text, verified, passages=cited, requests=requests, tokens=tokens)
-    emit("part", part_body(tldr))
+            tldr = _tldr_part(reply.text, verified, passages=cited, requests=requests, tokens=tokens, **built)
+    if rewrite_tldr:
+        emit("part", part_body(tldr))
 
-    run_parts = [p for p in sections if p.part in facets] + [tldr]
+    run_parts = [p for p in sections if p.part in facets] + ([tldr] if rewrite_tldr else [])
     summary = Summary(
         paper_id=paper_id,
         title=paper.title,

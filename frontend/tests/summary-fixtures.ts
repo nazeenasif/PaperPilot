@@ -26,6 +26,8 @@ export function part(name: string, overrides: Partial<Part> = {}): Part {
     rejected_text: null,
     reason: null,
     sources: name === "tldr" ? [["Problem"]] : [],
+    built_from: name === "tldr" ? [...FACETS] : [],
+    built_without: [],
     passages: [1, 2, 3, 4],
     requests: { planned: 1, retries: 0 },
     tokens: { input: 900, output: 120, reasoning: 300 },

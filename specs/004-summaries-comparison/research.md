@@ -182,6 +182,24 @@ handling changes from "fail the answer" to "fail this part".
 it also raises the provider-side cost of runaway reasoning); summarising in one long call
 (rejected: the most likely way to be cut off).
 
+**Measured 2026-11-04 (checkpoint 7, LoRA summary): the headroom above was wrong.** The provider's
+output count includes reasoning. Reasoning was 943-1,679 tokens per call, about three times the
+220-510 assumed from Feature 2 and 3 answers, while visible text was only 75-246 tokens. Output
+used:
+
+| Part | Output of 2,048 | Reasoning | Visible |
+|---|---|---|---|
+| Limitations | 1,018 | 943 | 75 |
+| Problem | 1,301 | 1,184 | 117 |
+| Data | 1,473 | 1,317 | 156 |
+| TL;DR | 1,790 | 1,665 | 125 |
+| Results | 1,925 | 1,679 | 246 |
+| Method | cut off at the cap | unknown | none |
+
+Word limits do not create headroom on this model, because reasoning dominates. The per-part
+failure handling worked as designed (no truncated text; the other parts stayed), but one part in
+six being cut off is too often. How to give reasoning room is still to be decided.
+
 ## R6. Saved results: SQLite cache, keys and invalidation
 
 **Decision**: a SQLite file `<LIBRARY_DIR>/results.sqlite3` (WAL, `BEGIN IMMEDIATE` writes, as

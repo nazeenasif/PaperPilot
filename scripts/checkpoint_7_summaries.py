@@ -164,10 +164,10 @@ def print_summary(summary: dict) -> None:
     print(f"\nSummary of {summary['title']} ({summary['model']}, {summary['created_at']})")
     for part in [summary["tldr"], *summary["sections"]]:
         label = "TL;DR" if part["part"] == "tldr" else prompts.FACETS[part["part"]].label
-        tokens = part["tokens"]
-        spent = (tokens.get("output") or 0) + (tokens.get("reasoning") or 0)
+        tokens = part["tokens"]  # the provider's output count already includes reasoning
         print(f"\n  [{label}] {part['state']}" + (f" ({part['reason']})" if part["reason"] else "")
-              + (f" · tokens out+reasoning {spent} of {MAX_OUTPUT_TOKENS}" if tokens else ""))
+              + (f" · tokens {tokens.get('output')} of {MAX_OUTPUT_TOKENS}, {tokens.get('reasoning')} of them reasoning"
+                 if tokens else ""))
         if part["text"]:
             print(f"    {part['text']}")
         if part["rejected_text"]:
@@ -218,9 +218,9 @@ def part_summary(run: Run, client: httpx.Client, claims: Claims) -> None:
     shown = [p for p in [summary["tldr"], *summary["sections"]] if p["state"] == "verified"]
     run.check(all(not p["citations"]["invalid"] and set(p["citations"]["valid"]) <= set(p["passages"]) for p in shown),
               f"every shown citation is valid for its part ({len(shown)} of 6 parts verified)")
-    tokens_ok = all((p["tokens"].get("output") or 0) + (p["tokens"].get("reasoning") or 0) < MAX_OUTPUT_TOKENS
-                    for p in [summary["tldr"], *summary["sections"]] if p["tokens"])
-    run.check(tokens_ok, f"every part fit the output budget of {MAX_OUTPUT_TOKENS} tokens (reasoning included)")
+    cut_off = [p["part"] for p in [summary["tldr"], *summary["sections"]] if p["reason"] == "cut_off"]
+    run.check(not cut_off, f"every part fit the output budget of {MAX_OUTPUT_TOKENS} tokens, reasoning included"
+                           + (f" (cut off: {', '.join(cut_off)})" if cut_off else ""))
 
     passages = {p["number"]: p for p in summary["passages"]}
     cited = sorted({n for p in shown for n in p["citations"]["valid"]})

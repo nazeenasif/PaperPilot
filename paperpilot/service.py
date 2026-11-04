@@ -396,24 +396,22 @@ class FacetRetrieval:
 def facet_retrieval(facet: str, paper_id: str) -> FacetRetrieval:
     """Search a paper for a facet. The whole-paper search answers "does this paper cover the facet?";
     the facet's preferred sections answer "where to read it" (research R2)."""
-    query = prompts.FACETS[facet].query
+    spec = prompts.FACETS[facet]
     sections = library.paper_sections(paper_id)
-    searchable = prompts.searchable_sections(sections)
-    whole = library.search(query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=searchable)
+    whole = library.search(spec.query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=spec.searchable(sections))
     gate_score = max((r.score for r in whole), default=None)
 
-    preferred = prompts.facet_sections(facet, sections)
-    named = prompts.limitation_sections(sections) if facet == "limitations" else []
-    if named:
-        # Up to two from the Limitations sections; the whole paper fills the rest, best first overall.
-        own = library.search(query, k=SUMMARY_PASSAGES // 2, paper_ids=[paper_id], sections=named)
-        taken = {r.passage_id for r in own}
-        others = [r for r in whole if r.passage_id not in taken][:SUMMARY_PASSAGES - len(own)]
-        best_first = sorted([*own, *others], key=lambda r: r.score, reverse=True)
-        return FacetRetrieval([replace(r, rank=rank) for rank, r in enumerate(best_first, start=1)], gate_score)
-    if preferred != searchable:
-        return FacetRetrieval(library.search(query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=preferred), gate_score)
-    return FacetRetrieval(whole, gate_score)
+    preferred = spec.preferred(sections)
+    if not preferred:
+        return FacetRetrieval(whole, gate_score)
+    if spec.preferred_passages is None:
+        return FacetRetrieval(library.search(spec.query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=preferred), gate_score)
+    # Some from the preferred sections; the whole paper fills the rest, best first overall.
+    own = library.search(spec.query, k=spec.preferred_passages, paper_ids=[paper_id], sections=preferred)
+    taken = {r.passage_id for r in own}
+    others = [r for r in whole if r.passage_id not in taken][:SUMMARY_PASSAGES - len(own)]
+    best_first = sorted([*own, *others], key=lambda r: r.score, reverse=True)
+    return FacetRetrieval([replace(r, rank=rank) for rank, r in enumerate(best_first, start=1)], gate_score)
 
 
 def _complete(summary: Summary) -> bool:

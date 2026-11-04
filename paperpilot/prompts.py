@@ -200,10 +200,10 @@ SUMMARY_PROMPT_VERSION = 6
 EXCLUDED_SECTIONS = ("related work", "front matter")
 
 
-def searchable_sections(sections: list[str]) -> list[str]:
+def searchable_sections(sections: list[str], excluded: tuple[str, ...] = EXCLUDED_SECTIONS) -> list[str]:
     """The sections a facet may search: all but the excluded ones, or all of them if nothing
     else exists (a paper with no detected headings is all Front Matter)."""
-    kept = [s for s in sections if not any(name in s.lower() for name in EXCLUDED_SECTIONS)]
+    kept = [s for s in sections if not any(name in s.lower() for name in excluded)]
     return kept or sections
 
 
@@ -212,30 +212,33 @@ def _named(sections: list[str], words: tuple[str, ...]) -> list[str]:
     return [s for s in sections if any(word in s.lower() for word in words)]
 
 
-# The sections a facet is restricted to, when the paper has any of them (research R2).
-FACET_SECTION_WORDS = {"problem": ("abstract", "introduction")}
-
-
-def facet_sections(facet: str, sections: list[str]) -> list[str]:
-    """The sections a facet searches: its own if the paper has them, else all searchable ones."""
-    searchable = searchable_sections(sections)
-    return _named(searchable, FACET_SECTION_WORDS.get(facet, ())) or searchable
-
-
-def limitation_sections(sections: list[str]) -> list[str]:
-    """The sections where a paper is likely to state its limitations; may be none (research R2)."""
-    return _named(searchable_sections(sections), ("limitation", "discussion", "conclusion"))
-
 
 @dataclass(frozen=True)
 class Facet:
-    """One summary section: its label, the query that retrieves its passages and what it states."""
+    """One thing a paper is read for: its label, its retrieval rules and what it states. The table
+    below is shared by summaries and, later, comparison aspects (research R2).
+
+    preferred_sections: lower-case words naming the sections to read first, if the paper has any.
+    preferred_passages: how many passages come from them, the whole paper filling the rest; None
+    means read only from them.
+    """
 
     key: str
     label: str
     query: str
     focus: str
     max_words: int = 80
+    preferred_sections: tuple[str, ...] = ()
+    preferred_passages: int | None = None
+    excluded_sections: tuple[str, ...] = EXCLUDED_SECTIONS
+
+    def searchable(self, sections: list[str]) -> list[str]:
+        """The sections this facet may search: its whole-paper search."""
+        return searchable_sections(sections, self.excluded_sections)
+
+    def preferred(self, sections: list[str]) -> list[str]:
+        """The paper's sections this facet prefers; may be none."""
+        return _named(self.searchable(sections), self.preferred_sections)
 
 
 FACETS: dict[str, Facet] = {
@@ -243,7 +246,8 @@ FACETS: dict[str, Facet] = {
     for f in (
         Facet("problem", "Problem",
               "the problem, motivation and research question addressed by this paper",
-              "the problem the paper addresses and why it matters"),
+              "the problem the paper addresses and why it matters",
+              preferred_sections=("abstract", "introduction")),
         Facet("method", "Method",
               "the proposed method, model architecture and how it works",
               "the proposed method or approach and how it works"),
@@ -255,7 +259,8 @@ FACETS: dict[str, Facet] = {
               "the main results, with numbers copied exactly from the passages"),
         Facet("limitations", "Limitations",
               "limitations, weaknesses, failure cases and future work",
-              "the limitations the authors state; do not infer limitations they do not state"),
+              "the limitations the authors state; do not infer limitations they do not state",
+              preferred_sections=("limitation", "discussion", "conclusion"), preferred_passages=2),
     )
 }
 

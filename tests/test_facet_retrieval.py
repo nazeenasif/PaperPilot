@@ -50,6 +50,30 @@ def test_a_paper_with_only_excluded_sections_searches_them_all():
     assert prompts.searchable_sections(["Front Matter", "Related Work"]) == ["Front Matter", "Related Work"]
 
 
+# --- the shared facet table ---
+
+
+def test_the_facet_table_states_each_facets_retrieval_rules():
+    rules = {key: (f.preferred_sections, f.preferred_passages) for key, f in prompts.FACETS.items()}
+    assert rules == {
+        "problem": (("abstract", "introduction"), None),
+        "method": ((), None),
+        "data": ((), None),
+        "results": ((), None),
+        "limitations": (("limitation", "discussion", "conclusion"), 2),
+    }
+
+
+def test_every_facet_has_the_same_exclusions():
+    assert {f.excluded_sections for f in prompts.FACETS.values()} == {prompts.EXCLUDED_SECTIONS}
+
+
+def test_a_facets_exclusions_decide_what_it_may_search():
+    sections = ["Front Matter", "Methods", "Related Work"]
+    assert prompts.FACETS["method"].searchable(sections) == ["Methods"]
+    assert prompts.searchable_sections(sections, excluded=("methods",)) == ["Front Matter", "Related Work"]
+
+
 # --- filters ---
 
 
@@ -100,17 +124,18 @@ def test_a_paper_that_is_all_related_work_still_gets_passages(tmp_path, make_pdf
 # --- step 2: Problem reads the Abstract and Introduction ---
 
 
-def test_problem_sections_are_abstract_and_introduction():
+def test_problem_prefers_abstract_and_introduction():
     all_sections = ["Front Matter", "Abstract", "1 Introduction", "Methods", "Results", "Related Work"]
-    assert prompts.facet_sections("problem", all_sections) == ["Abstract", "1 Introduction"]
+    assert prompts.FACETS["problem"].preferred(all_sections) == ["Abstract", "1 Introduction"]
 
 
-def test_problem_falls_back_to_the_searchable_sections_when_neither_exists():
-    assert prompts.facet_sections("problem", ["Front Matter", "Methods", "Results", "Related Work"]) == ["Methods", "Results"]
+def test_a_paper_without_the_preferred_sections_has_none():
+    assert prompts.FACETS["problem"].preferred(["Front Matter", "Methods", "Results", "Related Work"]) == []
 
 
-def test_other_facets_search_every_searchable_section():
-    assert prompts.facet_sections("results", ["Front Matter", "Abstract", "Results"]) == ["Abstract", "Results"]
+@pytest.mark.parametrize("facet", ["method", "data", "results"])
+def test_other_facets_prefer_no_section(facet):
+    assert prompts.FACETS[facet].preferred(["Abstract", "Results", "Conclusion"]) == []
 
 
 def test_problem_retrieves_only_from_the_abstract_and_introduction(paper_with_related_work):
@@ -152,8 +177,9 @@ def scripted_search(monkeypatch):
 
 def test_limitation_sections_are_found_by_name_among_the_searchable_ones():
     sections = ["Front Matter", "Abstract", "Limitations", "4 Discussion", "Conclusion and Future Work", "Related Work"]
-    assert prompts.limitation_sections(sections) == ["Limitations", "4 Discussion", "Conclusion and Future Work"]
-    assert prompts.limitation_sections(["Abstract", "Methods", "Results"]) == []
+    limitations = prompts.FACETS["limitations"]
+    assert limitations.preferred(sections) == ["Limitations", "4 Discussion", "Conclusion and Future Work"]
+    assert limitations.preferred(["Abstract", "Methods", "Results"]) == []
 
 
 def test_limitations_takes_two_from_its_sections_and_two_from_the_whole_paper(scripted_search):

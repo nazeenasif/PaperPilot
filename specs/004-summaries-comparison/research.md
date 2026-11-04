@@ -67,7 +67,8 @@ limitations are phrased differently may be reported as not found without a reque
 when the facet queries, papers or threshold change.
 
 **Which sections a facet searches** (added 2026-11-04, one change at a time, each followed by
-`scripts/probe_facets.py`; results in `eval/facet_probe.md`):
+`scripts/probe_facets.py`; results in `eval/facet_probe.md`). The rules live in one table,
+`prompts.FACETS` (query, preferred sections, exclusions), which comparison aspects are to share:
 
 - **No facet searches Related Work or Front Matter.** Related Work describes other papers' work, so
   citing it in this paper's summary is a faithfulness hazard that citation checks cannot catch: the

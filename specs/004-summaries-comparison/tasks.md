@@ -257,7 +257,7 @@ generalised (T004).
   - `failed` with `cut_off` shows "The model's answer was cut off" and a retry; `not_started` shows why (daily limit, long wait, busy).
   - A held-back TL;DR shows its problem in plain words while the sections stay visible.
 - [X] T043 [US4] Implement `frontend/components/summary/PartState.tsx` (shared by sections, TL;DR and cells) with copy in `frontend/lib/errorKinds.ts`, reusing the Feature 3 `HeldBack` marking, so T042 passes.
-- [ ] T044 [US4] Add test "F4 US4 part states" to `frontend/e2e/smoke.spec.ts`: a summary with one not-reported and one held-back section, the rest verified.
+- [X] T044 [US4] Add test "F4 US4 part states" to `frontend/e2e/smoke.spec.ts`: a summary with one not-reported and one held-back section, the rest verified.
 
 ### US3 (P2): compare papers
 

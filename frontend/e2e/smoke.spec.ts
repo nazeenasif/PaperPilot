@@ -11,6 +11,7 @@ import {
   LIBRARY_PAPERS,
   LORA_CARD,
   LORA_SUMMARY,
+  summaryPart,
   NOT_FOUND_ANSWER,
   NOT_FOUND_TEXT,
   SCOPED_ANSWER,
@@ -458,7 +459,7 @@ test("reduced motion: the answer appears in one step", async ({ page }) => {
 
 // --- Feature 4: summaries ---
 
-function summaryRoutes(saved: boolean) {
+function summaryRoutes(saved: boolean, savedSummary: typeof LORA_SUMMARY = LORA_SUMMARY) {
   return {
     "/api/papers": async (route: import("@playwright/test").Route) =>
       route.fulfill({ status: 200, headers: CORS, json: { papers: [LORA_CARD], total_passages: 56 } }),
@@ -470,7 +471,7 @@ function summaryRoutes(saved: boolean) {
       ] } }),
     "/api/summaries/lora": async (route: import("@playwright/test").Route) =>
       saved
-        ? route.fulfill({ status: 200, headers: CORS, json: LORA_SUMMARY })
+        ? route.fulfill({ status: 200, headers: CORS, json: savedSummary })
         : route.fulfill({ status: 404, headers: CORS, json: { kind: "not_saved", plan: { max_requests: 6 } } }),
   };
 }
@@ -522,4 +523,33 @@ test("F4 US2 reopen", async ({ page }) => {
   await page.getByRole("dialog").getByRole("button", { name: "Regenerate" }).click();
   await expect(page.getByText(/A regenerated TL;DR about LoRA/)).toBeVisible();
   expect(await posts()).toBe(1);
+});
+
+test("F4 US4 part states", async ({ page }) => {
+  const mixed = {
+    ...LORA_SUMMARY,
+    verified_parts: 4,
+    sections: LORA_SUMMARY.sections.map((section) =>
+      section.part === "method"
+        ? summaryPart("method", { state: "not_reported", text: null, reason: "no_citations" })
+        : section.part === "data"
+          ? summaryPart("data", { state: "held_back", text: null, reason: "invalid_citations", passages: [1, 2, 3, 4],
+              rejected_text: "Experiments use GLUE [9].", citations: { valid: [], invalid: [9], uncited_sentences: [] } })
+          : section,
+    ),
+  };
+  await fakeBackend(page, { routes: summaryRoutes(true, mixed) });
+  await page.goto("/summarize/lora");
+  await expect(page.getByRole("region", { name: "Method" }).getByText("Not reported in the retrieved passages.")).toBeVisible();
+  const data = page.getByRole("region", { name: "Data" });
+  await expect(data.getByText("Held back: this section cited passage 9, but only passages 1–4 were provided.")).toBeVisible();
+  await expect(data.getByText(/GLUE/)).toHaveCount(0);
+  await data.getByRole("button", { name: "View the unverified text" }).click();
+  await expect(data.getByText("Not verified")).toBeVisible();
+  await expect(data.getByLabel("Citation 9: not among the provided passages")).toBeVisible();
+  for (const name of ["Problem", "Results", "Limitations"]) {
+    await expect(page.getByRole("region", { name }).getByText(/is described in the paper/)).toBeVisible();
+  }
+  await expect(page.getByText("4 of 6 parts verified")).toBeVisible();
+  await expect(page.getByText("All citations verified")).toHaveCount(0);
 });

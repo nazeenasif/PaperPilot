@@ -30,7 +30,10 @@ MAX_RESET_SECONDS = 48 * 3600  # an X-RateLimit-Reset further away is not truste
 USAGE_FILE = "usage.sqlite3"
 KEY_INFO_TIMEOUT_SECONDS = 10.0
 # Reasoning tokens count against this limit, so it is generous for a ~150-word answer.
-MAX_OUTPUT_TOKENS = 2048
+# max_tokens per task kind; reasoning counts against it (research R5, ADR-0008). A comparison
+# call writes one row, up to four cells. The configured free model allows 65,536 (OpenRouter's
+# model list, 2026-11-04).
+OUTPUT_TOKENS = {"answer": 2048, "summary_section": 4096, "tldr": 4096, "comparison": 4096}
 RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
 _MAX_MESSAGE_CHARS = 300
 
@@ -437,7 +440,7 @@ def _raise_for_error_body(response) -> None:
         raise ProviderError(502, "the provider returned no answer")
 
 
-def _to_reply(response, attempts: int, seconds: float) -> LLMReply:
+def _to_reply(response, attempts: int, seconds: float, max_tokens: int) -> LLMReply:
     choice = response.choices[0]
     text = choice.message.content or ""
     usage = getattr(response, "usage", None)
@@ -445,7 +448,7 @@ def _to_reply(response, attempts: int, seconds: float) -> LLMReply:
     reasoning = getattr(details, "reasoning_tokens", None) if details else None
     if choice.finish_reason == "length":
         raise LLMError(
-            f"The model's output was cut off at {MAX_OUTPUT_TOKENS} tokens "
+            f"The model's output was cut off at {max_tokens} tokens "
             f"({reasoning if reasoning is not None else 'unknown'} reasoning tokens used); "
             "set LLM_REASONING_EFFORT=low or choose another LLM_MODEL.",
             reason="cut_off",
@@ -475,10 +478,12 @@ def model_is_listed() -> bool:
 
 
 def generate(
-    system: str, prompt: str, on_retry: Callable[[RetryNotice], None] | None = None
+    system: str, prompt: str, on_retry: Callable[[RetryNotice], None] | None = None, task: str = "answer"
 ) -> LLMReply:
     """Send one system + user message to the configured model and return its reply.
 
+    `task` selects the output limit from OUTPUT_TOKENS; an unknown one raises ValueError before
+    anything is sent.
     Raises SettingsError for missing settings and LLMError for provider failures, cut-off or
     empty output. Retries rate limits and transient errors (research R3); `on_retry`, if given,
     is told about each wait before it starts. Raises DailyLimitError, without sending anything,
@@ -486,6 +491,9 @@ def generate(
     a wait longer than 60 s (ADR-0007). Every attempt is counted in the shared daily usage.
     """
     global _planned, _retries
+    if task not in OUTPUT_TOKENS:
+        raise ValueError(f"Unknown task kind for the output limit: {task}")
+    max_tokens = OUTPUT_TOKENS[task]
     settings = load_settings()
     _check_settings(settings)
     today = usage()
@@ -496,7 +504,7 @@ def generate(
         "model": settings.llm_model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
         "temperature": 0,
-        "max_tokens": MAX_OUTPUT_TOKENS,
+        "max_tokens": max_tokens,
     }
     if settings.llm_reasoning_effort:
         kwargs["extra_body"] = {"reasoning": {"effort": settings.llm_reasoning_effort}}
@@ -529,7 +537,7 @@ def generate(
                 on_retry(RetryNotice(attempt, MAX_ATTEMPTS, wait, _notice_reason(error)))
             _sleep(wait)
             continue
-        reply = _to_reply(response, attempt, time.perf_counter() - start)
+        reply = _to_reply(response, attempt, time.perf_counter() - start, max_tokens)
         logger.info(
             "LLM reply: %d attempt(s), %.2f s, tokens in=%s out=%s reasoning=%s",
             reply.attempts, reply.seconds, reply.input_tokens, reply.output_tokens, reply.reasoning_tokens,

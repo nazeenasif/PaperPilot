@@ -32,9 +32,10 @@ import httpx  # noqa: E402
 
 from checkpoint_6_web import API, WRITE_HEADERS, Run, parse_events, wait_until_ready  # noqa: E402
 from paperpilot import prompts  # noqa: E402
-from paperpilot.llm import MAX_OUTPUT_TOKENS, RequestCounts  # noqa: E402
+from paperpilot.llm import OUTPUT_TOKENS, RequestCounts  # noqa: E402
 from request_budget import budget_checks  # noqa: E402
 
+PART_TOKENS = OUTPUT_TOKENS["summary_section"]  # the same for the TL;DR
 SUMMARY_TIMEOUT = 900.0  # six free-model calls with retries can take minutes
 REOPEN_LIMIT = 1.0  # SC-003
 EXCERPT = 200
@@ -85,7 +86,7 @@ def part_states(run: Run, client: httpx.Client | None, claims: Claims) -> None:
     from paperpilot.errors import LLMError
     from paperpilot.llm import LLMReply
 
-    def scripted(system: str, prompt: str, on_retry=None) -> LLMReply:
+    def scripted(system: str, prompt: str, on_retry=None, task: str = "answer") -> LLMReply:
         if system == prompts.TLDR_INSTRUCTION:
             return LLMReply("A summary sentence without any citation.", 50, 20, None, 1, 0.0)
         facet = re.search(r"Section: (\w+)\.", prompt).group(1).lower()
@@ -166,7 +167,7 @@ def print_summary(summary: dict) -> None:
         label = "TL;DR" if part["part"] == "tldr" else prompts.FACETS[part["part"]].label
         tokens = part["tokens"]  # the provider's output count already includes reasoning
         print(f"\n  [{label}] {part['state']}" + (f" ({part['reason']})" if part["reason"] else "")
-              + (f" · tokens {tokens.get('output')} of {MAX_OUTPUT_TOKENS}, {tokens.get('reasoning')} of them reasoning"
+              + (f" · tokens {tokens.get('output')} of {PART_TOKENS}, {tokens.get('reasoning')} of them reasoning"
                  if tokens else ""))
         if part["text"]:
             print(f"    {part['text']}")
@@ -219,7 +220,7 @@ def part_summary(run: Run, client: httpx.Client, claims: Claims) -> None:
     run.check(all(not p["citations"]["invalid"] and set(p["citations"]["valid"]) <= set(p["passages"]) for p in shown),
               f"every shown citation is valid for its part ({len(shown)} of 6 parts verified)")
     cut_off = [p["part"] for p in [summary["tldr"], *summary["sections"]] if p["reason"] == "cut_off"]
-    run.check(not cut_off, f"every part fit the output budget of {MAX_OUTPUT_TOKENS} tokens, reasoning included"
+    run.check(not cut_off, f"every part fit the output budget of {PART_TOKENS} tokens, reasoning included"
                            + (f" (cut off: {', '.join(cut_off)})" if cut_off else ""))
 
     passages = {p["number"]: p for p in summary["passages"]}

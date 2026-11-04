@@ -61,10 +61,10 @@ def test_a_regeneration_that_fails_midway_keeps_the_saved_summary(summary_env, m
     first = service.summarize(summary_env.paper_id)
 
     class Exploding(PromptReadingLLM):
-        def __call__(self, system, prompt, on_retry=None):
+        def __call__(self, system, prompt, on_retry=None, task="answer"):
             if len(self.calls) == 2:
                 raise RuntimeError("process died")
-            return super().__call__(system, prompt, on_retry)
+            return super().__call__(system, prompt, on_retry, task)
 
     monkeypatch.setattr(llm, "generate", Exploding())
     with pytest.raises(RuntimeError):
@@ -77,7 +77,7 @@ def test_an_incomplete_regeneration_keeps_a_complete_saved_summary(summary_env, 
     parts all completed; it is kept and returned."""
     first = service.summarize(summary_env.paper_id)
 
-    def cut_off_method(system, prompt, on_retry=None):
+    def cut_off_method(system, prompt, on_retry=None, task="answer"):
         if "Section: Method." in prompt:
             raise llm.LLMError("cut off", reason="cut_off")
         return PromptReadingLLM()(system, prompt, on_retry)

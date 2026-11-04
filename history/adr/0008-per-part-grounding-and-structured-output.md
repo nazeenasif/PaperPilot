@@ -2,7 +2,7 @@
 
 > **Scope**: Document decision clusters, not individual technology choices. Group related decisions that work together (e.g., "Frontend Stack" not separate ADRs for framework, styling, deployment).
 
-- **Status:** Accepted (extends ADR-0004 from whole answers to parts)
+- **Status:** Accepted (extends ADR-0004 from whole answers to parts; output budget amended 2026-11-04)
 - **Date:** 2026-10-25
 - **Feature:** 004-summaries-comparison
 - **Context:**
@@ -58,8 +58,13 @@
     - A missing cell → not reported. Extra cells and keys → ignored.
   - Each cell then goes through `review_reply` with its own allowed set.
   - No provider-specific JSON mode, so any OpenAI-compatible model works.
-- **Output budget per part**: word limits (sections 80, TL;DR 60, cells 50) keep every call far
-  below `MAX_OUTPUT_TOKENS` (2048, reasoning included).
+- **Output budget per task kind** (amended 2026-11-04): `llm.OUTPUT_TOKENS` sets `max_tokens` per
+  call, reasoning included: answers 2048; summary sections, the TL;DR and comparison rows 4096.
+  - The first decision kept every call at 2048, relying on word limits (sections 80, TL;DR 60,
+    cells 50). Checkpoint 7 disproved it: reasoning was 943-1,679 tokens per summary part, against
+    220-510 assumed, visible text only 75-246, and Method was cut off.
+  - The configured free model allows 65,536 completion tokens (OpenRouter's model list,
+    2026-11-04). Reasoning effort is unchanged; that experiment belongs to the evaluation feature.
   - A cut-off (`LLMError(reason="cut_off")`) fails that part only; truncated text is never
     stored or shown.
 
@@ -76,7 +81,7 @@
   with a warning naming the broken rule.
 - **JSON avoids table parsing:** cells are located without parsing markdown, and parse failures
   are a designed state rather than a crash.
-- **Retries stay cheap:** small per-part outputs make cut-offs unlikely and retries cheap.
+- **Retries stay cheap:** a cut-off or failed part can be retried on its own.
 
 ### Negative
 

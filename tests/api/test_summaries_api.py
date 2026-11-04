@@ -168,7 +168,7 @@ def test_part_states_arrive_as_part_events_and_the_stream_still_ends_with_the_su
     model = PromptReadingLLM({"method": "No citation here.", "data": "Experiments use GLUE [99].",
                               "tldr": "Uncited summary sentence."})
 
-    def generate(system, prompt, on_retry=None):
+    def generate(system, prompt, on_retry=None, task="answer"):
         if "Section: Results." in prompt:
             raise LLMError("cut off", reason="cut_off")
         return model(system, prompt, on_retry)

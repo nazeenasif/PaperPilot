@@ -214,7 +214,7 @@ class ScriptedLLM:
         """Queue replies: a str becomes an LLMReply with 100 input and 40 output tokens."""
         self.queue.extend(items)
 
-    def __call__(self, system: str, prompt: str, on_retry=None):
+    def __call__(self, system: str, prompt: str, on_retry=None, task: str = "answer"):
         from paperpilot.llm import LLMReply
 
         self.calls.append((system, prompt))

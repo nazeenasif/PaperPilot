@@ -161,14 +161,21 @@ without contract changes); one retrieval across all selected papers (rejected: F
 
 ## R5. Output budget and cut-off
 
-**Decision**: keep `llm.MAX_OUTPUT_TOKENS = 2048` (reasoning tokens count against it on the
-configured model, Feature 2 research R3/R12) and size every request well inside it:
+**Decision** (amended 2026-11-04 after the measurement below): the output limit is set per task
+kind in `llm.OUTPUT_TOKENS`, passed as `llm.generate(..., task=...)`:
 
-| Call | Requested length | Expected visible output | Observed reasoning (Feature 2/3) | Headroom |
-|---|---|---|---|---|
-| section | ≤ 80 words | ~130 tokens | 220–510 tokens | > 1,300 |
-| TL;DR | ≤ 60 words, ≤ 3 sentences | ~100 tokens | same | > 1,400 |
-| comparison row (4 papers) | ≤ 50 words per cell | ~350 tokens incl. JSON | same | > 1,100 |
+| Task kind | `max_tokens` | Requested length | Note |
+|---|---|---|---|
+| `answer` | 2048 | ≤ 150 words | unchanged, so `ask()` behaves as before |
+| `summary_section` | 4096 | ≤ 80 words | |
+| `tldr` | 4096 | ≤ 60 words, ≤ 3 sentences | |
+| `comparison` | 4096 | ≤ 50 words per cell | one call writes a row of up to four cells |
+
+Reasoning effort stays as configured; that experiment belongs to the evaluation feature.
+OpenRouter's model list (2026-11-04) gives `nvidia/nemotron-3-ultra-550b-a55b:free` a
+`max_completion_tokens` of 65,536, so 4096 is well within it. **4096 is not yet verified by a real
+run.** The call that hit the old limit (Method) was cut off, so its true need is unknown, and a
+comparison row has not been measured at all.
 
 A `finish_reason == "length"` already raises `LLMError(reason="cut_off")` in `llm.generate`; the
 orchestrator catches it **per part**, marks that part *failed (cut_off)* and continues. Truncated
@@ -178,14 +185,16 @@ so the headroom is measured, not assumed.
 **Rationale**: the existing boundary already distinguishes cut-off from other failures; only the
 handling changes from "fail the answer" to "fail this part".
 
-**Alternatives considered**: raising `max_tokens` per call (rejected: no need at these sizes;
-it also raises the provider-side cost of runaway reasoning); summarising in one long call
-(rejected: the most likely way to be cut off).
+**Alternatives considered**: keeping 2048 with word limits, as first decided (rejected by the
+measurement below: word limits do not control reasoning); `LLM_REASONING_EFFORT=low` (not taken
+here: it could change faithfulness, so it stays an evaluation-feature experiment); raising the
+limit for every call (rejected: answers have no measured need, and a higher limit lets runaway
+reasoning take longer); summarising in one long call (rejected: the most likely way to be cut off).
 
-**Measured 2026-11-04 (checkpoint 7, LoRA summary): the headroom above was wrong.** The provider's
-output count includes reasoning. Reasoning was 943-1,679 tokens per call, about three times the
-220-510 assumed from Feature 2 and 3 answers, while visible text was only 75-246 tokens. Output
-used:
+**Measured 2026-11-04 (checkpoint 7, LoRA summary): the first decision's headroom was wrong.** It
+assumed 220-510 reasoning tokens from Feature 2 and 3 answers and over 1,100 tokens to spare. The
+provider's output count includes reasoning. Reasoning was 943-1,679 tokens per summary part, about
+three times the assumption, while visible text was only 75-246 tokens. Output used:
 
 | Part | Output of 2,048 | Reasoning | Visible |
 |---|---|---|---|
@@ -198,7 +207,7 @@ used:
 
 Word limits do not create headroom on this model, because reasoning dominates. The per-part
 failure handling worked as designed (no truncated text; the other parts stayed), but one part in
-six being cut off is too often. How to give reasoning room is still to be decided.
+six being cut off is too often, which led to the per-task limits above.
 
 ## R6. Saved results: SQLite cache, keys and invalidation
 

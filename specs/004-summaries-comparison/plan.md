@@ -37,7 +37,7 @@ Testing Library; Playwright with the fake backend; `scripts/checkpoint_7_summari
 **Performance Goals**: reopening a saved result < 1 s with 0 requests (SC-003); a summary
 completes in ~6 model calls (≈ 30–90 s on the free model), with progress per part
 **Constraints**: ≤ 6 requests per summary, ≤ 1 per aspect per comparison; every call inside
-`MAX_OUTPUT_TOKENS` = 2048 including reasoning (R5); ~50 free requests/day; one model task at a
+its `llm.OUTPUT_TOKENS` limit including reasoning (answers 2048, summary and comparison calls 4096, R5); ~50 free requests/day; one model task at a
 time; no unchecked text ever streamed
 **Scale/Scope**: a library of ~5–20 papers; 5 facets; 2–4 papers × ≤ 5 aspects per comparison
 
@@ -133,8 +133,8 @@ grounding stays in the package.
    failure holds back the TL;DR only.
 4. **Comparison rows as JSON** (R4): one request per aspect; per-paper retrieval (3 each); one
    object per cell; tolerant parser; malformed → failed row with retry.
-5. **Output budget** (R5): fixed word limits keep each call far below 2048 tokens with
-   reasoning; cut-off is a per-part failure.
+5. **Output budget** (R5, amended): `max_tokens` per task kind (answers 2048, summary and
+   comparison calls 4096), because reasoning dominates; cut-off is a per-part failure.
 6. **SQLite results cache** (R6): key = paper IDs + passage fingerprints + aspects + prompt
    version + model; explicit forget on delete/re-process; stale results readable, never current.
 7. **No new module** (R7).

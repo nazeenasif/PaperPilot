@@ -437,12 +437,13 @@ def _run_summary(
     sections: list[Part] = []
     verified: list[VerifiedSection] = []
 
-    def generate(part: str, system: str, prompt: str):
+    def generate(part: str, system: str, prompt: str, task: str):
         """One model request for a part: (reply or None, requests, tokens, failure reason)."""
         before = llm.request_counts().retries
         try:
             reply = llm.generate(system, prompt,
-                                 on_retry=lambda notice: emit("retry_wait", {"part": part, **asdict(notice)}))
+                                 on_retry=lambda notice: emit("retry_wait", {"part": part, **asdict(notice)}),
+                                 task=task)
         except LLMError as error:
             if error.reason not in PART_FAILURES:
                 raise
@@ -466,7 +467,7 @@ def _run_summary(
                 emit("progress", {"part": key, "step": "reading", "passages": len(numbered)})
                 emit("progress", {"part": key, "step": "generating"})
                 reply, requests, tokens, failure = generate(key, prompts.SECTION_INSTRUCTION,
-                                                            prompts.build_section_prompt(key, numbered))
+                                                            prompts.build_section_prompt(key, numbered), "summary_section")
                 if failure:
                     part = Part(key, "failed", reason=failure, passages=numbers, requests=requests)
                 else:
@@ -484,7 +485,7 @@ def _run_summary(
         emit("progress", {"part": TLDR, "step": "generating"})
         cited = sorted({n for v in verified for n in v.citations})
         reply, requests, tokens, failure = generate(TLDR, prompts.TLDR_INSTRUCTION,
-                                                    prompts.build_tldr_prompt(verified))
+                                                    prompts.build_tldr_prompt(verified), "tldr")
         if failure:
             tldr = Part(TLDR, "failed", reason=failure, passages=cited, requests=requests)
         else:

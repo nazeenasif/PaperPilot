@@ -12,7 +12,7 @@ def run(monkeypatch, paper_id, overrides=None, fail=None):
     """Summarize with scripted replies; `fail` maps a facet (or "tldr") to an LLMError reason."""
     fake = PromptReadingLLM(overrides)
 
-    def generate(system, prompt, on_retry=None):
+    def generate(system, prompt, on_retry=None, task="answer"):
         part = "tldr" if system == prompts.TLDR_INSTRUCTION else prompt.split("Section: ")[1].split(".")[0].lower()
         if fail and part in fail:
             fake.calls.append((system, prompt))

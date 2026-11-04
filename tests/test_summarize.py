@@ -23,7 +23,7 @@ class PromptReadingLLM:
         self.overrides = overrides or {}
         self.calls: list[tuple[str, str]] = []
 
-    def __call__(self, system: str, prompt: str, on_retry=None) -> LLMReply:
+    def __call__(self, system: str, prompt: str, on_retry=None, task: str = "answer") -> LLMReply:
         self.calls.append((system, prompt))
         if system == prompts.TLDR_INSTRUCTION:
             numbers = re.findall(r"\[(\d+)", prompt)

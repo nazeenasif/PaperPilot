@@ -66,6 +66,16 @@ Limitations is the weakest facet (0.584–0.639; Attention is 0.004 above the ga
 limitations are phrased differently may be reported as not found without a request. Re-measure
 when the facet queries, papers or threshold change.
 
+**Which sections a facet searches** (added 2026-11-04, one change at a time, each followed by
+`scripts/probe_facets.py`; results in `eval/facet_probe.md`):
+
+- **No facet searches Related Work or Front Matter.** Related Work describes other papers' work, so
+  citing it in this paper's summary is a faithfulness hazard that citation checks cannot catch: the
+  citation is valid, the passage really says it, and the claim is still not about this paper. Front
+  Matter holds titles and authors. Sections are matched by name, ignoring case, so "Related Works"
+  counts. A paper with nothing else (no detected headings) searches them anyway rather than report
+  nothing. Questions are not filtered: someone can ask what a paper says about earlier work.
+
 **Alternatives considered**: using `TOP_K` (6) per facet (rejected per clarification: larger
 prompts for little gain); one retrieval for the whole paper (rejected: the "data" and
 "limitations" passages rarely rank for a generic query).

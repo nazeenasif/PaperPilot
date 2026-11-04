@@ -22,7 +22,8 @@ def summarize(
   `"tldr"` is retried too.
 - Before the first request: computes the `RequestPlan` and raises `DailyLimitError` if
   `llm.usage().remaining < plan.max_requests` (no request sent).
-- Per facet: `library.search(query, k=4, paper_ids=[paper_id])`; below threshold → part
+- Per facet: `facet_results(facet, paper_id)` (research R2: `library.search` with `k=4`, this paper
+  only, in the sections the facet may search); below threshold → part
   `not_reported` (`below_threshold`) with no request; else one `llm.generate` call, then
   `review_reply(text, allowed=<this facet's numbers>)`.
 - TL;DR: only if ≥ 1 section is `verified`; one `llm.generate` call on the verified sections'

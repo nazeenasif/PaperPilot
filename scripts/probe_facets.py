@@ -19,7 +19,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 from paperpilot import ingest, library, prompts, store  # noqa: E402
 from paperpilot.config import load_settings  # noqa: E402
-from paperpilot.service import SUMMARY_PASSAGES  # noqa: E402
+from paperpilot.service import SUMMARY_PASSAGES, facet_results  # noqa: E402
 
 OUTPUT = ROOT / "eval" / "facet_probe.md"
 SHORT = {"attention": "Attention", "bert": "BERT", "retrieval": "RAG", "lora": "LoRA", "lost": "Lost in the Middle"}
@@ -52,7 +52,7 @@ def main() -> int:
     lines = [
         f"# Facet retrieval probe ({date.today().isoformat()})",
         "",
-        f"`python scripts/probe_facets.py`; 0 model requests. Each facet's current query, k = {SUMMARY_PASSAGES},",
+        f"`python scripts/probe_facets.py`; 0 model requests. Each facet's retrieval as summaries use it, k = {SUMMARY_PASSAGES},",
         "within one paper, on the 5 papers in `papers/`. Queries not changed. In **Mark**: `n/4` is how many",
         "passages come from an obvious section (Problem: Abstract, Introduction; Limitations: Limitations,",
         "Conclusion, Discussion), `MISS` means none, and `no such section` means the paper has none under",
@@ -69,7 +69,7 @@ def main() -> int:
         inventory = Counter(m["section"] for m in store.paper_metadata(paper.paper_id))
         inventories.append(f"- **{name}**: " + ", ".join(f"{s} ({n})" for s, n in inventory.items()))
         for key, facet in prompts.FACETS.items():
-            results = library.search(facet.query, k=SUMMARY_PASSAGES, paper_ids=[paper.paper_id])
+            results = facet_results(key, paper.paper_id)
             sections = [r.section for r in results]
             counts = ", ".join(f"{s} ({n})" for s, n in Counter(sections).items())
             top = max(r.score for r in results)

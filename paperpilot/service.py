@@ -385,6 +385,12 @@ def summary_plan(paper_id: str, retry_parts: list[str] | None = None) -> dict[st
     return {"max_requests": len(_retry_facets(retry_parts)) + (TLDR in retry_parts)}
 
 
+def facet_results(facet: str, paper_id: str) -> list[library.SearchResult]:
+    """The passages a summary facet reads from a paper (research R2)."""
+    sections = prompts.searchable_sections(library.paper_sections(paper_id))
+    return library.search(prompts.FACETS[facet].query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=sections)
+
+
 def _complete(summary: Summary) -> bool:
     return all(p.state not in ("failed", "not_started") for p in [summary.tldr, *summary.sections])
 
@@ -476,7 +482,7 @@ def _run_summary(
             part = kept[key]
         else:
             emit("progress", {"part": key, "step": "searching"})
-            results = library.search(facet.query, k=SUMMARY_PASSAGES, paper_ids=[paper_id])
+            results = facet_results(key, paper_id)
             if not results or max(r.score for r in results) < settings.relevance_threshold:
                 part = Part(key, "not_reported", reason="no_passages" if not results else "below_threshold")
             else:

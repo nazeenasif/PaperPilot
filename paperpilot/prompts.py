@@ -190,9 +190,21 @@ def word_count(text: str) -> int:
 
 NOT_REPORTED = "Not reported in the retrieved passages."
 
-# Raise whenever the facet queries, the instructions or the TL;DR rules change: saved summaries
-# made with an older version are then shown as earlier, not current (research R6).
-SUMMARY_PROMPT_VERSION = 1
+# Raise whenever the facet queries, the facet retrieval rules, the instructions or the TL;DR rules
+# change: saved summaries made with an older version are then shown as earlier, not current
+# (research R6).
+SUMMARY_PROMPT_VERSION = 2
+
+# Sections no facet searches (research R2): Related Work describes other papers' work, and Front
+# Matter holds titles and authors.
+EXCLUDED_SECTIONS = ("related work", "front matter")
+
+
+def searchable_sections(sections: list[str]) -> list[str]:
+    """The sections a facet may search: all but the excluded ones, or all of them if nothing
+    else exists (a paper with no detected headings is all Front Matter)."""
+    kept = [s for s in sections if not any(name in s.lower() for name in EXCLUDED_SECTIONS)]
+    return kept or sections
 
 
 @dataclass(frozen=True)

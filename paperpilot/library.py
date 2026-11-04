@@ -374,10 +374,18 @@ def _passage_layout(paper_id: str, passage_id: str, page: int) -> PassageLayout 
     return PassageLayout(pages, regions)
 
 
-def search(query: str, k: int | None = None, paper_ids: list[str] | None = None) -> list[SearchResult]:
+def paper_sections(paper_id: str) -> list[str]:
+    """The names of a paper's sections that hold stored passages, in passage order."""
+    return list(dict.fromkeys(m["section"] for m in store.paper_metadata(paper_id)))
+
+
+def search(
+    query: str, k: int | None = None, paper_ids: list[str] | None = None, sections: list[str] | None = None
+) -> list[SearchResult]:
     """Return up to k passages most similar to the query, best first.
 
-    k defaults to TOP_K; an empty paper_ids searches the whole library.
+    k defaults to TOP_K; an empty paper_ids searches the whole library; `sections` limits the
+    search to sections with those exact names.
     Raises EmptyQueryError for an empty or whitespace query and UnknownPaperError if a
     paper ID in paper_ids is not in the library.
     """
@@ -389,7 +397,7 @@ def search(query: str, k: int | None = None, paper_ids: list[str] | None = None)
     for paper_id in paper_ids or []:
         if not store.has_paper(paper_id):
             raise UnknownPaperError(f"Paper {paper_id} is not in the library")
-    hits = store.query(store.embed_query(query.strip()), k, paper_ids)
+    hits = store.query(store.embed_query(query.strip()), k, paper_ids, sections)
     return [
         SearchResult(
             rank=rank,

@@ -48,9 +48,9 @@ def searches(monkeypatch):
     calls = []
     real = library.search
 
-    def spy(query, k=None, paper_ids=None):
+    def spy(query, k=None, paper_ids=None, sections=None):
         calls.append((query, k, paper_ids))
-        return real(query, k=k, paper_ids=paper_ids)
+        return real(query, k=k, paper_ids=paper_ids, sections=sections)
 
     monkeypatch.setattr(library, "search", spy)
     return calls
@@ -89,7 +89,7 @@ def test_a_section_is_valid_only_against_its_own_passages(summary_env, monkeypat
     by_facet = {"problem": ids[:2], "method": ids[2:4], "data": ids[4:6], "results": ids[:2], "limitations": ids[2:4]}
     texts = {r.passage_id: r for r in library.search("method", k=6, paper_ids=[summary_env.paper_id])}
 
-    def fake_search(query, k=None, paper_ids=None):
+    def fake_search(query, k=None, paper_ids=None, sections=None):
         facet = next(f for f in FACET_ORDER if prompts.FACETS[f].query == query)
         return [SearchResult(i + 1, 0.9, pid, summary_env.paper_id, summary_env.title, texts[pid].section,
                              texts[pid].page, texts[pid].text) for i, pid in enumerate(by_facet[facet])]

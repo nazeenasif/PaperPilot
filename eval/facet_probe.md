@@ -4,35 +4,37 @@
 within one paper, on the 5 papers in `papers/`. Queries not changed. In **Mark**: `n/4` is how many
 passages come from an obvious section (Problem: Abstract, Introduction; Limitations: Limitations,
 Conclusion, Discussion), `MISS` means none, and `no such section` means the paper has none under
-those names. The other facets are not marked.
+those names. The other facets are not marked. **Related Work** counts passages from Related Work
+sections (target 0). **Gate** is `below` when the top score is under 0.58: the section would
+then read Not reported, with no request.
 
-| Paper | Facet | Top score | Sections (passages) | Mark |
-|---|---|---|---|---|
-| Attention | Problem | 0.699 | Front Matter (1), Results (2), Background (1) | MISS |
-| Attention | Method | 0.703 | Introduction (1), Model Architecture (1), Abstract (1), Results (1) |  |
-| Attention | Data | 0.752 | Training (1), Results (3) |  |
-| Attention | Results | 0.713 | Results (4) |  |
-| Attention | Limitations | 0.584 | Results (2), Why Self-Attention (1), Model Architecture (1) | MISS |
-| BERT | Problem | 0.644 | Experiments (3), Related Work (1) | MISS |
-| BERT | Method | 0.724 | BERT (1), Ablation Studies (2), Related Work (1) |  |
-| BERT | Data | 0.745 | Experiments (3), Related Work (1) |  |
-| BERT | Results | 0.697 | Experiments (4) |  |
-| BERT | Limitations | 0.601 | Ablation Studies (1), Experiments (2), Related Work (1) | MISS |
-| LoRA | Problem | 0.642 | Understanding the Low-Rank Updates (4) | MISS |
-| LoRA | Method | 0.715 | Introduction (1), Our Method (2), Aren’t Existing Solutions Good Enough? (1) |  |
-| LoRA | Data | 0.736 | Empirical Experiments (2), Problem Statement (1), Understanding the Low-Rank Updates (1) |  |
-| LoRA | Results | 0.707 | Empirical Experiments (3), Understanding the Low-Rank Updates (1) |  |
-| LoRA | Limitations | 0.608 | Understanding the Low-Rank Updates (1), Our Method (1), Empirical Experiments (2) | MISS |
-| Lost in the Middle | Problem | 0.695 | Multi-Document Question Answering (2), Front Matter (1), Introduction (1) | 1/4 |
-| Lost in the Middle | Method | 0.722 | Why Are Language Models Not Robust (1), Conclusion (1), Introduction (2) |  |
-| Lost in the Middle | Data | 0.734 | Multi-Document Question Answering (1), Why Are Language Models Not Robust (2), Is More Context Is Always Better? (1) |  |
-| Lost in the Middle | Results | 0.731 | Multi-Document Question Answering (1), How Well Can Language Models (1), Why Are Language Models Not Robust (2) |  |
-| Lost in the Middle | Limitations | 0.639 | Introduction (2), Multi-Document Question Answering (2) | MISS |
-| RAG | Problem | 0.698 | Discussion (1), Results (2), Experiments (1) | MISS |
-| RAG | Method | 0.707 | Related Work (2), Results (1), Introduction (1) |  |
-| RAG | Data | 0.747 | Experiments (2), Methods (1), Results (1) |  |
-| RAG | Results | 0.709 | Results (4) |  |
-| RAG | Limitations | 0.634 | Results (2), Experiments (1), Discussion (1) | 1/4 |
+| Paper | Facet | Top score | Gate | Sections (passages) | Related Work | Mark |
+|---|---|---|---|---|---|---|
+| Attention | Problem | 0.699 | ok | Front Matter (1), Results (2), Background (1) | 0 | MISS |
+| Attention | Method | 0.703 | ok | Introduction (1), Model Architecture (1), Abstract (1), Results (1) | 0 |  |
+| Attention | Data | 0.752 | ok | Training (1), Results (3) | 0 |  |
+| Attention | Results | 0.713 | ok | Results (4) | 0 |  |
+| Attention | Limitations | 0.584 | ok | Results (2), Why Self-Attention (1), Model Architecture (1) | 0 | MISS |
+| BERT | Problem | 0.644 | ok | Experiments (3), Related Work (1) | 1 | MISS |
+| BERT | Method | 0.724 | ok | BERT (1), Ablation Studies (2), Related Work (1) | 1 |  |
+| BERT | Data | 0.745 | ok | Experiments (3), Related Work (1) | 1 |  |
+| BERT | Results | 0.697 | ok | Experiments (4) | 0 |  |
+| BERT | Limitations | 0.601 | ok | Ablation Studies (1), Experiments (2), Related Work (1) | 1 | MISS |
+| LoRA | Problem | 0.642 | ok | Understanding the Low-Rank Updates (4) | 0 | MISS |
+| LoRA | Method | 0.715 | ok | Introduction (1), Our Method (2), Aren’t Existing Solutions Good Enough? (1) | 0 |  |
+| LoRA | Data | 0.736 | ok | Empirical Experiments (2), Problem Statement (1), Understanding the Low-Rank Updates (1) | 0 |  |
+| LoRA | Results | 0.707 | ok | Empirical Experiments (3), Understanding the Low-Rank Updates (1) | 0 |  |
+| LoRA | Limitations | 0.608 | ok | Understanding the Low-Rank Updates (1), Our Method (1), Empirical Experiments (2) | 0 | MISS |
+| Lost in the Middle | Problem | 0.695 | ok | Multi-Document Question Answering (2), Front Matter (1), Introduction (1) | 0 | 1/4 |
+| Lost in the Middle | Method | 0.722 | ok | Why Are Language Models Not Robust (1), Conclusion (1), Introduction (2) | 0 |  |
+| Lost in the Middle | Data | 0.734 | ok | Multi-Document Question Answering (1), Why Are Language Models Not Robust (2), Is More Context Is Always Better? (1) | 0 |  |
+| Lost in the Middle | Results | 0.731 | ok | Multi-Document Question Answering (1), How Well Can Language Models (1), Why Are Language Models Not Robust (2) | 0 |  |
+| Lost in the Middle | Limitations | 0.639 | ok | Introduction (2), Multi-Document Question Answering (2) | 0 | MISS |
+| RAG | Problem | 0.698 | ok | Discussion (1), Results (2), Experiments (1) | 0 | MISS |
+| RAG | Method | 0.707 | ok | Related Work (2), Results (1), Introduction (1) | 2 |  |
+| RAG | Data | 0.747 | ok | Experiments (2), Methods (1), Results (1) | 0 |  |
+| RAG | Results | 0.709 | ok | Results (4) | 0 |  |
+| RAG | Limitations | 0.634 | ok | Results (2), Experiments (1), Discussion (1) | 0 | 1/4 |
 
 ## Sections per paper (passages)
 

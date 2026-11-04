@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 sys.stdout.reconfigure(encoding="utf-8")
 
 from paperpilot import ingest, library, prompts, store  # noqa: E402
+from paperpilot.config import load_settings  # noqa: E402
 from paperpilot.service import SUMMARY_PASSAGES  # noqa: E402
 
 OUTPUT = ROOT / "eval" / "facet_probe.md"
@@ -47,6 +48,7 @@ def mark(facet: str, sections: list[str], inventory: Counter) -> str:
 def main() -> int:
     ids = {ingest.paper_id_for(path.read_bytes()) for path in sorted((ROOT / "papers").glob("*.pdf"))}
     papers = [p for p in library.list_papers() if p.paper_id in ids]
+    threshold = load_settings().relevance_threshold
     lines = [
         f"# Facet retrieval probe ({date.today().isoformat()})",
         "",
@@ -54,10 +56,12 @@ def main() -> int:
         "within one paper, on the 5 papers in `papers/`. Queries not changed. In **Mark**: `n/4` is how many",
         "passages come from an obvious section (Problem: Abstract, Introduction; Limitations: Limitations,",
         "Conclusion, Discussion), `MISS` means none, and `no such section` means the paper has none under",
-        "those names. The other facets are not marked.",
+        "those names. The other facets are not marked. **Related Work** counts passages from Related Work",
+        f"sections (target 0). **Gate** is `below` when the top score is under {threshold}: the section would",
+        "then read Not reported, with no request.",
         "",
-        "| Paper | Facet | Top score | Sections (passages) | Mark |",
-        "|---|---|---|---|---|",
+        "| Paper | Facet | Top score | Gate | Sections (passages) | Related Work | Mark |",
+        "|---|---|---|---|---|---|---|",
     ]
     inventories: list[str] = ["", "## Sections per paper (passages)", ""]
     for paper in papers:
@@ -69,7 +73,10 @@ def main() -> int:
             sections = [r.section for r in results]
             counts = ", ".join(f"{s} ({n})" for s, n in Counter(sections).items())
             top = max(r.score for r in results)
-            lines.append(f"| {name} | {facet.label} | {top:.3f} | {counts} | {mark(key, sections, inventory)} |")
+            related = sum("related work" in s.lower() for s in sections)
+            gate = "below" if top < threshold else "ok"
+            lines.append(f"| {name} | {facet.label} | {top:.3f} | {gate} | {counts} | {related} | "
+                         f"{mark(key, sections, inventory)} |")
     text = "\n".join([*lines, *inventories]) + "\n"
     OUTPUT.write_text(text, encoding="utf-8")
     print(text)

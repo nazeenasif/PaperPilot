@@ -193,7 +193,7 @@ NOT_REPORTED = "Not reported in the retrieved passages."
 # Raise whenever the facet queries, the facet retrieval rules, the instructions or the TL;DR rules
 # change: saved summaries made with an older version are then shown as earlier, not current
 # (research R6).
-SUMMARY_PROMPT_VERSION = 2
+SUMMARY_PROMPT_VERSION = 3
 
 # Sections no facet searches (research R2): Related Work describes other papers' work, and Front
 # Matter holds titles and authors.
@@ -205,6 +205,21 @@ def searchable_sections(sections: list[str]) -> list[str]:
     else exists (a paper with no detected headings is all Front Matter)."""
     kept = [s for s in sections if not any(name in s.lower() for name in EXCLUDED_SECTIONS)]
     return kept or sections
+
+
+def _named(sections: list[str], words: tuple[str, ...]) -> list[str]:
+    """The sections whose names contain one of the lower-case words."""
+    return [s for s in sections if any(word in s.lower() for word in words)]
+
+
+# The sections a facet is restricted to, when the paper has any of them (research R2).
+FACET_SECTION_WORDS = {"problem": ("abstract", "introduction")}
+
+
+def facet_sections(facet: str, sections: list[str]) -> list[str]:
+    """The sections a facet searches: its own if the paper has them, else all searchable ones."""
+    searchable = searchable_sections(sections)
+    return _named(searchable, FACET_SECTION_WORDS.get(facet, ())) or searchable
 
 
 @dataclass(frozen=True)

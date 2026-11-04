@@ -93,3 +93,30 @@ def test_a_paper_that_is_all_related_work_still_gets_passages(tmp_path, make_pdf
     paper = library.add_paper(make_pdf(tmp_path / "survey.pdf", references=False, sections=[("Related Work", RELATED)],
                                        title="A Survey of Layout Recovery Methods"))
     assert service.facet_results("method", paper.paper_id)
+
+
+# --- step 2: Problem reads the Abstract and Introduction ---
+
+
+def test_problem_sections_are_abstract_and_introduction():
+    all_sections = ["Front Matter", "Abstract", "1 Introduction", "Methods", "Results", "Related Work"]
+    assert prompts.facet_sections("problem", all_sections) == ["Abstract", "1 Introduction"]
+
+
+def test_problem_falls_back_to_the_searchable_sections_when_neither_exists():
+    assert prompts.facet_sections("problem", ["Front Matter", "Methods", "Results", "Related Work"]) == ["Methods", "Results"]
+
+
+def test_other_facets_search_every_searchable_section():
+    assert prompts.facet_sections("results", ["Front Matter", "Abstract", "Results"]) == ["Abstract", "Results"]
+
+
+def test_problem_retrieves_only_from_the_abstract_and_introduction(paper_with_related_work):
+    results = service.facet_results("problem", paper_with_related_work)
+    assert {r.section for r in results} == {"Abstract", "Introduction"}
+
+
+def test_problem_uses_the_whole_paper_when_it_has_no_abstract_or_introduction(tmp_path, make_pdf, library_env, fake_embedder, llm_env):
+    paper = library.add_paper(make_pdf(tmp_path / "plain.pdf", references=False, title="A Study of Layout Recovery Methods",
+                                       sections=[("1 Method", BODY), ("2 Results", BODY + " Results.")]))
+    assert {r.section for r in service.facet_results("problem", paper.paper_id)} == {"Methods", "Results"}

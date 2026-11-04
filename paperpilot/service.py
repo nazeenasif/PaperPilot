@@ -387,7 +387,7 @@ def summary_plan(paper_id: str, retry_parts: list[str] | None = None) -> dict[st
 
 def facet_results(facet: str, paper_id: str) -> list[library.SearchResult]:
     """The passages a summary facet reads from a paper (research R2)."""
-    sections = prompts.searchable_sections(library.paper_sections(paper_id))
+    sections = prompts.facet_sections(facet, library.paper_sections(paper_id))
     return library.search(prompts.FACETS[facet].query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=sections)
 
 

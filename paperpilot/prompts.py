@@ -193,7 +193,7 @@ NOT_REPORTED = "Not reported in the retrieved passages."
 # Raise whenever the facet queries, the facet retrieval rules, the instructions or the TL;DR rules
 # change: saved summaries made with an older version are then shown as earlier, not current
 # (research R6).
-SUMMARY_PROMPT_VERSION = 7
+SUMMARY_PROMPT_VERSION = 8
 
 # Sections no facet searches (research R2): Related Work describes other papers' work, and Front
 # Matter holds titles and authors.
@@ -219,8 +219,7 @@ class Facet:
     below is shared by summaries and, later, comparison aspects (research R2).
 
     preferred_sections: lower-case words naming the sections to read first, if the paper has any.
-    preferred_passages: how many passages come from them, the whole paper filling the rest; None
-    means read only from them.
+    preferred_passages: at most how many passages come from them; the whole paper fills the rest.
     """
 
     key: str
@@ -229,7 +228,7 @@ class Facet:
     focus: str
     max_words: int = 80
     preferred_sections: tuple[str, ...] = ()
-    preferred_passages: int | None = None
+    preferred_passages: int = 0
     excluded_sections: tuple[str, ...] = EXCLUDED_SECTIONS
 
     def searchable(self, sections: list[str]) -> list[str]:
@@ -247,7 +246,7 @@ FACETS: dict[str, Facet] = {
         Facet("problem", "Problem",
               "the problem, motivation and research question addressed by this paper",
               "the problem the paper addresses and why it matters",
-              preferred_sections=("abstract", "introduction")),
+              preferred_sections=("abstract", "introduction"), preferred_passages=4),
         Facet("method", "Method",
               "the proposed method, model architecture and how it works",
               "the proposed method or approach and how it works"),

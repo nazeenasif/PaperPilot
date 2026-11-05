@@ -76,8 +76,9 @@ when the facet queries, papers or threshold change.
   Matter holds titles and authors. Sections are matched by name, ignoring case, so "Related Works"
   counts. A paper with nothing else (no detected headings) searches them anyway rather than report
   nothing. Questions are not filtered: someone can ask what a paper says about earlier work.
-- **Problem searches only the Abstract and Introduction**, which is where a paper states its problem;
-  a paper with neither searches every section the first rule allows.
+- **Problem reads the Abstract and Introduction first**, which is where a paper states its problem, and
+  tops up to 4 from the whole-paper search if they hold fewer; a paper with neither reads 4 from the
+  whole-paper search.
 - **Limitations reads up to 2 passages from sections named Limitations, Discussion or Conclusion, and
   fills the rest from a whole-paper search** (Related Work and Front Matter still excluded), so it
   reads 4 as the spec says, unless the paper has fewer. Papers often state limitations outside such a

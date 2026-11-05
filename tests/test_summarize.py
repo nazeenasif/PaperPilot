@@ -80,7 +80,7 @@ def test_passages_are_numbered_once_per_summary(summary_env, model):
     ids = [p.passage_id for p in summary.passages]
     assert numbers == list(range(1, len(numbers) + 1)) and len(set(ids)) == len(ids)
     for section in summary.sections:
-        assert set(section.passages) <= set(numbers) and 0 < len(section.passages) <= 4
+        assert set(section.passages) <= set(numbers) and len(section.passages) == 4
     # Six passages in the paper, five facets of four: passages are shared and keep one number.
     assert len(summary.passages) <= 6
 

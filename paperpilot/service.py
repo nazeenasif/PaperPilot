@@ -404,9 +404,7 @@ def facet_retrieval(facet: str, paper_id: str) -> FacetRetrieval:
     preferred = spec.preferred(sections)
     if not preferred:
         return FacetRetrieval(whole, gate_score)
-    if spec.preferred_passages is None:
-        return FacetRetrieval(library.search(spec.query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=preferred), gate_score)
-    # Some from the preferred sections; the whole paper fills the rest, best first overall.
+    # Up to preferred_passages from the preferred sections; the whole paper fills the rest, best first.
     own = library.search(spec.query, k=spec.preferred_passages, paper_ids=[paper_id], sections=preferred)
     taken = {r.passage_id for r in own}
     others = [r for r in whole if r.passage_id not in taken][:SUMMARY_PASSAGES - len(own)]

@@ -56,10 +56,10 @@ def test_a_paper_with_only_excluded_sections_searches_them_all():
 def test_the_facet_table_states_each_facets_retrieval_rules():
     rules = {key: (f.preferred_sections, f.preferred_passages) for key, f in prompts.FACETS.items()}
     assert rules == {
-        "problem": (("abstract", "introduction"), None),
-        "method": ((), None),
-        "data": ((), None),
-        "results": ((), None),
+        "problem": (("abstract", "introduction"), 4),
+        "method": ((), 0),
+        "data": ((), 0),
+        "results": ((), 0),
         "limitations": (("limitation", "discussion", "conclusion"), 2),
     }
 
@@ -138,9 +138,24 @@ def test_other_facets_prefer_no_section(facet):
     assert prompts.FACETS[facet].preferred(["Abstract", "Results", "Conclusion"]) == []
 
 
-def test_problem_retrieves_only_from_the_abstract_and_introduction(paper_with_related_work):
+def test_problem_reads_its_preferred_sections_and_tops_up_from_the_whole_paper(paper_with_related_work):
+    """The fixture's Abstract and Introduction hold one passage each; Methods is the only other one."""
     results = service.facet_retrieval("problem", paper_with_related_work).passages
-    assert {r.section for r in results} == {"Abstract", "Introduction"}
+    assert {r.section for r in results} == {"Abstract", "Introduction", "Methods"}
+
+
+def test_problem_tops_up_to_four_passages_from_the_whole_paper(scripted_search):
+    scripted_search(["Abstract", "Results"], [hit("a1", 0.60, "Abstract")],
+                    [hit("r1", 0.70), hit("a1", 0.60, "Abstract"), hit("r2", 0.58), hit("r3", 0.55)], wanted=["Abstract"])
+    results = service.facet_retrieval("problem", "paper").passages
+    assert [r.passage_id for r in results] == ["r1", "a1", "r2", "r3"] and [r.rank for r in results] == [1, 2, 3, 4]
+
+
+def test_problem_with_four_preferred_passages_reads_nothing_else(scripted_search):
+    own = [hit(f"i{n}", 0.57, "Introduction") for n in range(4)]
+    scripted_search(["Introduction", "Results"], own, [hit("r1", 0.70), hit("r2", 0.65)], wanted=["Introduction"])
+    results = service.facet_retrieval("problem", "paper").passages
+    assert {r.section for r in results} == {"Introduction"} and len(results) == 4
 
 
 def test_problem_uses_the_whole_paper_when_it_has_no_abstract_or_introduction(tmp_path, make_pdf, library_env, fake_embedder, llm_env):
@@ -160,14 +175,14 @@ def hit(passage_id, score, section="Results"):
 def scripted_search(monkeypatch):
     """Replace search: `named` answers a search of the Limitations sections, `whole` any other."""
 
-    def install(sections, named, whole):
+    def install(sections, named, whole, wanted=None):
         calls = []
 
         def fake(query, k=None, paper_ids=None, sections=None):
             calls.append((query, k, paper_ids, sections))
             return named[:k] if sections == install.wanted else whole[:k]
 
-        install.wanted = [s for s in sections if s in ("Limitations", "Discussion", "Conclusion")]
+        install.wanted = wanted or [s for s in sections if s in ("Limitations", "Discussion", "Conclusion")]
         monkeypatch.setattr(library, "paper_sections", lambda paper_id: sections)
         monkeypatch.setattr(library, "search", fake)
         return calls
@@ -284,8 +299,8 @@ def test_gate_score_comes_from_the_whole_paper_and_passages_from_the_preferred_s
     problem_scores(restricted=0.573, whole=0.642)
     retrieval = service.facet_retrieval("problem", paper_with_related_work)
     assert retrieval.gate_score == 0.642
-    assert {r.section for r in retrieval.passages} == {"Abstract", "Introduction"}
-    assert {r.score for r in retrieval.passages} == {0.573}
+    assert {r.score for r in retrieval.passages if r.section in ("Abstract", "Introduction")} == {0.573}
+    assert {"Abstract", "Introduction"} <= {r.section for r in retrieval.passages}
 
 
 def test_a_restricted_score_below_the_gate_passes_when_the_whole_paper_is_above(paper_with_related_work, problem_scores, scripted_model):
@@ -295,7 +310,7 @@ def test_a_restricted_score_below_the_gate_passes_when_the_whole_paper_is_above(
     problem = next(s for s in summary.sections if s.part == "problem")
     assert problem.state == "verified" and problem_prompts(scripted_model)
     read = {p.number: p.section for p in summary.passages}
-    assert {read[n] for n in problem.passages} == {"Abstract", "Introduction"}
+    assert {"Abstract", "Introduction"} <= {read[n] for n in problem.passages}
 
 
 def test_a_whole_paper_score_below_the_gate_is_not_reported_with_no_request(paper_with_related_work, problem_scores, scripted_model):

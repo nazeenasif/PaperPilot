@@ -96,7 +96,7 @@ evaluation feature's faithfulness test cases (claim-level support, not citation 
   NLG. The sentence applies [4]'s strongest wording to all three.
 - **Validation result**: citations valid [2, 3, 4, 6], invalid [] → passed, no warning.
 
-**Further occurrences of F2.** All three came from combining sources, and each passed validation.
+**Further occurrences of F2.** All four cases came from combining sources, and each passed validation.
 
 - **Second (checkpoint 6, part `ask`, 2026-10-24 and 2026-10-25)**: "What is LoRA?", two runs with the
   same shape. Both passed validation.
@@ -130,3 +130,9 @@ evaluation feature's faithfulness test cases (claim-level support, not citation 
     the sentence states only the numbers in its model names. It cannot see a broadened claim, the same
     blind spot as F1 (research R3 of Feature 4). See `docs/verification/checkpoint-7-2026-11-04.md`,
     claims 2 and 10.
+- **Fourth (checkpoint 7, LoRA summary v2, 2026-11-05)**: TL;DR claim 1: "LoRA adds low-rank updates to
+  attention matrices, reducing trainable parameters and matching or exceeding full fine-tuning on GPT-3
+  175B and DeBERTa_XXL [5,3,7,13,12,14]."
+  - [13]'s "matches or exceeds" is for GPT-3 175B. Table 2 (p. 6) has DeBERTa LoRA below fine-tuning on
+    SST-2 (96.9±.2 against 97.2), tied on QNLI and above on the other six tasks. The Results section
+    said only "comparable", for MNLI [14]. See `docs/verification/checkpoint-7-2026-11-05-v2.md`.

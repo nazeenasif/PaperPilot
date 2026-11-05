@@ -158,6 +158,15 @@ the same validator. Detecting it requires checking what each cited passage says,
 assigned to the evaluation feature's **faithfulness judge**; until then the limitation is
 recorded in `docs/known-limitations.md` and claims are checked by hand in checkpoint 7.
 
+**Scope rule (added 2026-11-05; a hypothesis, not a measured fix).** The section and TL;DR instructions
+now say: "Keep every claim's scope exactly as its source passage states it (models, datasets,
+conditions); never extend a result to models or tasks the passage does not name." It comes from F2
+(`eval/probe_notes.md`), which has 4 recorded occurrences: a result stated for one model or task,
+extended to others while combining sources. Validation cannot see this, because the citations are valid
+and the numbers appear in the passages. Whether the rule reduces F2 is to be measured in the evaluation
+feature: one regenerated summary shows nothing either way. Comparison cells take the same rule when
+they are built (T016).
+
 ## R4. Comparison rows as structured JSON
 
 **Decision**: one request per aspect (clarification). For aspect `a`, each paper `p` gets its

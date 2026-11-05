@@ -33,6 +33,29 @@ def test_not_reported_sentence_and_version():
     assert isinstance(prompts.SUMMARY_PROMPT_VERSION, int)
 
 
+# --- the scope rule (research R3, a hypothesis from F2) ---
+
+
+def test_the_scope_rule_has_the_agreed_wording():
+    assert prompts.SCOPE_RULE == (
+        "Keep every claim's scope exactly as its source passage states it (models, datasets, conditions); "
+        "never extend a result to models or tasks the passage does not name."
+    )
+
+
+@pytest.mark.parametrize("instruction", [prompts.SECTION_INSTRUCTION, prompts.TLDR_INSTRUCTION])
+def test_section_and_tldr_instructions_carry_the_scope_rule(instruction):
+    assert prompts.SCOPE_RULE in instruction
+
+
+def test_the_answer_instruction_does_not_change():
+    assert prompts.SCOPE_RULE not in prompts.SYSTEM_INSTRUCTION
+
+
+def test_the_prompt_version_records_the_scope_rule():
+    assert prompts.SUMMARY_PROMPT_VERSION >= 7
+
+
 # --- builders ---
 
 

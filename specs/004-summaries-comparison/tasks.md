@@ -136,6 +136,7 @@ generalised (T004).
   - Malformed replies (`""`, `"not json"`, `{"cells": "x"}`, truncated JSON, a JSON list) raise `RowFormatError`.
   - **Note (2026-11-04, research R2):** aspects use the shared `prompts.FACETS` table for their query, preferred sections and exclusions rather than their own copies, so Related Work and Front Matter are excluded from comparisons too. `datasets` is the `data` facet. Not yet settled: how a Limitations row splits its passages when `k=3` (T017), and whether a paper's cell is gated on a whole-paper search as summaries are; `facet_retrieval` is fixed at 4 passages today.
 - [ ] T016 [US3] Implement `ASPECTS`, `ROW_INSTRUCTION`, `build_row_prompt` and `parse_row` in `paperpilot/prompts.py`, and `RowFormatError` in `paperpilot/errors.py`, so T015 passes.
+  - **Note (2026-11-05, research R3):** `ROW_INSTRUCTION` carries `prompts.SCOPE_RULE`, as the section and TL;DR instructions do; add a test.
 - [ ] T017 [US3] Create failing tests in `tests/test_compare.py` (`summary_paper`, `second_paper`, `fake_answers`, `row_reply`):
   - Input checks: 1 or 5 papers, duplicates, no aspects, an unknown aspect → `ValueError`; an unknown paper → `UnknownPaperError`; 0 requests in every case.
   - Per aspect and per paper: `library.search(aspect_query, k=3, paper_ids=[p])` (spy); passages de-duplicated and numbered once per comparison.

@@ -159,8 +159,8 @@ describe("Uncited sentences", () => {
     });
     const flagged = container.querySelectorAll("[data-uncited]");
     expect(flagged).toHaveLength(1);
-    expect(flagged[0].textContent).toContain(uncited);
-    expect(flagged[0].getAttribute("title")).toBe("This sentence has no citation");
+    expect(flagged[0]?.textContent).toContain(uncited);
+    expect(flagged[0]?.getAttribute("title")).toBe("This sentence has no citation");
     expect(screen.getByText("1 sentence has no citation")).toBeInTheDocument();
   });
 

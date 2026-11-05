@@ -1,5 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 
+import { UncitedFlag } from "@/components/states/UncitedFlag";
 import { CitedText } from "@/components/summary/CitedText";
 import type { NumberedPassage, Part } from "@/lib/types";
 import type { PartProgress } from "@/lib/useSummary";
@@ -53,9 +54,12 @@ export function SectionCard({
         </p>
       )}
       {part?.state === "verified" && part.text && (
-        <p className="leading-relaxed text-text">
-          <CitedText text={part.text} passages={passages} onOpen={onOpen} />
-        </p>
+        <>
+          <p className="leading-relaxed text-text">
+            <CitedText text={part.text} passages={passages} onOpen={onOpen} uncited={part.citations.uncited_sentences} />
+          </p>
+          <UncitedFlag count={part.citations.uncited_sentences.length} />
+        </>
       )}
       {part && part.state !== "verified" && children}
     </section>

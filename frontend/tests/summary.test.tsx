@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { StatusProvider } from "@/components/app/StatusGate";
 import { UsageProvider } from "@/components/app/UsageMeter";
 import { PaperCard } from "@/components/library/PaperCard";
+import { SectionCard } from "@/components/summary/SectionCard";
 import { SummaryView } from "@/components/summary/SummaryView";
 import type { Summary } from "@/lib/types";
 
@@ -134,6 +135,39 @@ describe("Progress and parts", () => {
     await screen.findByRole("region", { name: "TL;DR" });
     expect(screen.queryByText("All citations verified")).not.toBeInTheDocument();
     expect(screen.getByText("5 of 6 parts verified")).toBeInTheDocument();
+  });
+});
+
+describe("Uncited sentences", () => {
+  const cited = "The second sentence is cited [1].";
+  const uncited = "The first sentence has no citation.";
+  const render_ = (overrides: Parameters<typeof part>[1]) =>
+    render(
+      <SectionCard
+        label="Limitations"
+        part={part("limitations", overrides)}
+        progress={undefined}
+        passages={new Map(PASSAGES.map((p) => [p.number, p]))}
+        onOpen={() => {}}
+      />,
+    );
+
+  it("marks an uncited sentence and counts it, as Ask does", () => {
+    const { container } = render_({
+      text: `${uncited} ${cited}`,
+      citations: { valid: [1], invalid: [], uncited_sentences: [uncited] },
+    });
+    const flagged = container.querySelectorAll("[data-uncited]");
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0].textContent).toContain(uncited);
+    expect(flagged[0].getAttribute("title")).toBe("This sentence has no citation");
+    expect(screen.getByText("1 sentence has no citation")).toBeInTheDocument();
+  });
+
+  it("marks nothing when every sentence is cited", () => {
+    const { container } = render_({ text: cited });
+    expect(container.querySelectorAll("[data-uncited]")).toHaveLength(0);
+    expect(screen.queryByText(/no citation/)).toBeNull();
   });
 });
 

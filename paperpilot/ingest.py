@@ -461,27 +461,64 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
 TABLE_MIN_TOKENS = 10
 TABLE_SYMBOL_FRACTION = 0.5
 _TABLE_CAPTION = re.compile(r"^Table\s+\d+\s*[:.]")
+# A header row: at most this many tokens, directly before a table on the same page and column.
+HEADER_MAX_TOKENS = 30
+_NOT_A_HEADER = re.compile(r"^(Table|Figure|Fig\.)\s*\d")
+_SENTENCE_END = re.compile(r"[A-Za-z]{5,}[.:;]|[!?](\s|$)")
+_PROSE_WORDS = frozenset(
+    "a an and are as at be by for from has in is it of on or that the this to was we were which with".split()
+)
+
+
+def _mostly_symbolic(tokens: list[str]) -> bool:
+    symbolic = sum(1 for t in tokens if t[0].isdigit() or not any(c.isalpha() for c in t))
+    return symbolic > TABLE_SYMBOL_FRACTION * len(tokens)
 
 
 def is_table_like(text: str) -> bool:
     """True for a block that is mostly numbers or symbols, such as a flattened table."""
     tokens = text.split()
-    if len(tokens) < TABLE_MIN_TOKENS:
+    return len(tokens) >= TABLE_MIN_TOKENS and _mostly_symbolic(tokens)
+
+
+def is_table_header(text: str) -> bool:
+    """True for a block that reads like a table's header row: a few short labels, not prose.
+
+    Abbreviations such as "Avg." and "Acc." are allowed; a word of five or more letters ending in
+    sentence punctuation is not, nor a line broken at a hyphen, nor everyday prose words.
+    """
+    tokens = text.split()
+    if not 2 <= len(tokens) <= HEADER_MAX_TOKENS or _mostly_symbolic(tokens):
         return False
-    symbolic = sum(1 for t in tokens if t[0].isdigit() or not any(c.isalpha() for c in t))
-    return symbolic > TABLE_SYMBOL_FRACTION * len(tokens)
+    if _NOT_A_HEADER.match(text) or tokens[-1].endswith("-") or _SENTENCE_END.search(text):
+        return False
+    return not any(t.lower() in _PROSE_WORDS for t in tokens)
+
+
+def _same_column(first: Block, second: Block) -> bool:
+    """True if two blocks share most of the narrower one's width; blocks without boxes count."""
+    if not first.words or not second.words:
+        return True
+    a0, a1 = min(w.x0 for w in first.words), max(w.x1 for w in first.words)
+    b0, b1 = min(w.x0 for w in second.words), max(w.x1 for w in second.words)
+    return min(a1, b1) - max(a0, b0) > 0.5 * min(a1 - a0, b1 - b0)
 
 
 def _units(blocks: list[Block]) -> list[tuple[str, list[Block]]]:
     """Group a section's blocks into ("text", [block]) and ("table", [caption?, rows..., caption?]).
 
-    Consecutive table-like blocks form one table. A "Table N:" caption directly before the
-    table joins it; otherwise a caption directly after it does (unless that caption belongs
-    to a following table).
+    Consecutive table-like blocks form one table, with any header rows directly before it on
+    the same page and in the same column. A "Table N:" caption directly before the table joins
+    it; otherwise a caption directly after it does (unless that caption belongs to a following
+    table).
     """
     tables = [is_table_like(b.text) for b in blocks]
     captions = [bool(_TABLE_CAPTION.match(b.text)) for b in blocks]
     n = len(blocks)
+    for j in range(n - 2, -1, -1):  # backwards, so a header over two blocks joins whole
+        if (not tables[j] and tables[j + 1] and blocks[j].page == blocks[j + 1].page
+                and is_table_header(blocks[j].text) and _same_column(blocks[j], blocks[j + 1])):
+            tables[j] = True
     units: list[tuple[str, list[Block]]] = []
     i = 0
     while i < n:

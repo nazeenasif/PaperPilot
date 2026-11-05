@@ -1,4 +1,4 @@
-# Facet retrieval probe (2026-11-04)
+# Facet retrieval probe (2026-11-05)
 
 `python scripts/probe_facets.py`; 0 model requests. Each facet's retrieval as summaries use it, k = 4,
 within one paper, on the 5 papers in `papers/`. Queries not changed. In **Mark**: `n/4` is how many
@@ -19,7 +19,7 @@ the best score among the passages actually read.
 | BERT | Problem | 0.644 | ok | 0.599 | Abstract (1), Introduction (3) | 0 | 4/4 |
 | BERT | Method | 0.724 | ok | 0.724 | BERT (1), Ablation Studies (3) | 0 |  |
 | BERT | Data | 0.745 | ok | 0.745 | Experiments (4) | 0 |  |
-| BERT | Results | 0.697 | ok | 0.697 | Experiments (4) | 0 |  |
+| BERT | Results | 0.696 | ok | 0.696 | Experiments (4) | 0 |  |
 | BERT | Limitations | 0.601 | ok | 0.601 | Ablation Studies (1), Experiments (2), Conclusion (1) | 0 | 1/4 |
 | LoRA | Problem | 0.642 | ok | 0.573 | Introduction (4) | 0 | 4/4 |
 | LoRA | Method | 0.715 | ok | 0.715 | Introduction (1), Our Method (2), Aren’t Existing Solutions Good Enough? (1) | 0 |  |
@@ -29,7 +29,7 @@ the best score among the passages actually read.
 | Lost in the Middle | Problem | 0.695 | ok | 0.673 | Introduction (4) | 0 | 4/4 |
 | Lost in the Middle | Method | 0.722 | ok | 0.722 | Why Are Language Models Not Robust (1), Conclusion (1), Introduction (2) | 0 |  |
 | Lost in the Middle | Data | 0.734 | ok | 0.734 | Multi-Document Question Answering (1), Why Are Language Models Not Robust (2), Is More Context Is Always Better? (1) | 0 |  |
-| Lost in the Middle | Results | 0.731 | ok | 0.731 | Multi-Document Question Answering (1), How Well Can Language Models (1), Why Are Language Models Not Robust (2) | 0 |  |
+| Lost in the Middle | Results | 0.731 | ok | 0.731 | Multi-Document Question Answering (1), How Well Can Language Models (2), Why Are Language Models Not Robust (1) | 0 |  |
 | Lost in the Middle | Limitations | 0.639 | ok | 0.639 | Introduction (2), Conclusion (2) | 0 | 2/4 |
 | RAG | Problem | 0.698 | ok | 0.662 | Introduction (3), Abstract (1) | 0 | 4/4 |
 | RAG | Method | 0.702 | ok | 0.702 | Results (1), Introduction (1), Abstract (1), Methods (1) | 0 |  |
@@ -40,7 +40,7 @@ the best score among the passages actually read.
 ## Sections per paper (passages)
 
 - **Attention**: Front Matter (1), Abstract (2), Introduction (2), Background (2), Model Architecture (10), Why Self-Attention (3), Training (5), Results (7), Conclusion (1)
-- **BERT**: Abstract (1), Introduction (3), Related Work (4), BERT (10), Experiments (12), Ablation Studies (11), Conclusion (1)
+- **BERT**: Abstract (1), Introduction (3), Related Work (4), BERT (10), Experiments (12), Ablation Studies (10), Conclusion (1)
 - **LoRA**: Front Matter (1), Abstract (1), Introduction (5), Problem Statement (2), Aren’t Existing Solutions Good Enough? (5), Our Method (7), Empirical Experiments (14), Related Works (5), Understanding the Low-Rank Updates (15), Conclusion and Future Work (1)
 - **Lost in the Middle**: Front Matter (1), Abstract (1), Introduction (9), Multi-Document Question Answering (14), How Well Can Language Models (5), Why Are Language Models Not Robust (10), Is More Context Is Always Better? (3), Related Work (3), Conclusion (2)
-- **RAG**: Front Matter (1), Abstract (1), Introduction (5), Methods (6), Experiments (6), Results (17), Related Work (4), Discussion (4)
+- **RAG**: Front Matter (1), Abstract (1), Introduction (5), Methods (6), Experiments (6), Results (16), Related Work (4), Discussion (4)

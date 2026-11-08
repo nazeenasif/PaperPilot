@@ -282,7 +282,7 @@ generalised (T004).
   - `409 busy_task` shows the busy copy.
   - The usage meter updates after a run from the result's request totals or `/api/usage`.
 - [X] T049 [US5] Wire limits into `frontend/components/summary/CostButton.tsx`, `useSummary.ts` and `useComparison.ts` (reusing `DailyLimit`, `Busy` and `useUsage`), so T048 passes.
-- [ ] T050 [US5] Add test "F4 US5 cost and limits" to `frontend/e2e/smoke.spec.ts`: at 50/50 the Summarize button is disabled with the daily-limit state, and a saved summary still opens.
+- [X] T050 [US5] Add test "F4 US5 cost and limits" to `frontend/e2e/smoke.spec.ts`: at 50/50 the Summarize button is disabled with the daily-limit state, and a saved summary still opens.
 
 ---
 

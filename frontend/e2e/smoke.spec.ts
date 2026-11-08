@@ -627,3 +627,19 @@ test("F4 US3 compare", async ({ page }, testInfo) => {
   expect(widths.page).toBeLessThanOrEqual(widths.window);
   if (testInfo.project.name === "phone") expect(widths.inner).toBeGreaterThan(widths.outer);
 });
+
+test("F4 US5 cost and limits", async ({ page }) => {
+  const usedUp = { ...USAGE, used: 50, limit: 50, remaining: 0 };
+  await fakeBackend(page, { usage: usedUp, routes: summaryRoutes(false) });
+  await page.goto("/summarize/lora");
+  await expect(page.getByRole("button", { name: "Summarize this paper" })).toBeDisabled({ timeout: 30_000 });
+  await expect(page.getByText("Daily limit")).toBeVisible();
+  await expect(page.getByText(/Summaries resume at/)).toBeVisible();
+});
+
+test("F4 US5 a saved summary opens at the daily limit", async ({ page }) => {
+  await fakeBackend(page, { usage: { ...USAGE, used: 50, limit: 50, remaining: 0 }, routes: summaryRoutes(true) });
+  await page.goto("/summarize/lora");
+  await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Regenerate summary" })).toBeDisabled();
+});

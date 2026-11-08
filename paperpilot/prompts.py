@@ -37,6 +37,8 @@ _CITATION = re.compile(r"\[\s*(\d+(?:\s*[-–,]\s*\d+)*)\s*\]")
 _REFERENCE_MARKER = re.compile(r"\s*\[\s*\d+(?:\s*[-–,]\s*\d+)*\s*\]")
 _BULLET = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\[(\"'])")
+# A sentence does not end after these. Same pattern as frontend/lib/sentences.ts.
+_ABBREVIATION_END = re.compile(r"(?:^|[\s(])(?:et al|e\.g|i\.e|E\.g|I\.e|Fig|Eq|Sec|Tab|vs|cf|Cf)\.$")
 
 
 @dataclass(frozen=True)
@@ -141,14 +143,16 @@ def _sentences(text: str) -> list[str]:
     sentences: list[str] = []
     for line in text.splitlines():
         line = _BULLET.sub("", line).strip()
+        after_abbreviation = False
         for piece in _SENTENCE_END.split(line):
             piece = piece.strip()
             if not piece:
                 continue
-            if sentences and not _CITATION.sub("", piece).strip(" .,;"):
+            if after_abbreviation or (sentences and not _CITATION.sub("", piece).strip(" .,;")):
                 sentences[-1] += " " + piece  # a citation after the full stop belongs to the sentence
             else:
                 sentences.append(piece)
+            after_abbreviation = bool(_ABBREVIATION_END.search(piece))
     return sentences
 
 

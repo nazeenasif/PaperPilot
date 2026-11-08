@@ -7,6 +7,8 @@ const CITATION = /\[\s*(\d+(?:\s*[-–,]\s*\d+)*)\s*\]/g;
 const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/;
 /** A sentence ends at . ! or ? followed by whitespace and a capital, digit, bracket or quote. */
 const SENTENCE_END = /(?<=[.!?])\s+(?=[A-Z0-9[("'])/;
+/** A sentence does not end after these. Same pattern as prompts._ABBREVIATION_END. */
+const ABBREVIATION_END = /(?:^|[\s(])(?:et al|e\.g|i\.e|E\.g|I\.e|Fig|Eq|Sec|Tab|vs|cf|Cf)\.$/;
 
 export type Segment = { kind: "text"; text: string } | { kind: "citation"; numbers: number[] };
 
@@ -34,14 +36,16 @@ export function splitSentences(text: string): string[] {
   const sentences: string[] = [];
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.replace(BULLET, "").trim();
+    let afterAbbreviation = false;
     for (const rawPiece of line.split(SENTENCE_END)) {
       const piece = rawPiece.trim();
       if (!piece) continue;
-      if (sentences.length > 0 && onlyCitations(piece)) {
+      if (afterAbbreviation || (sentences.length > 0 && onlyCitations(piece))) {
         sentences[sentences.length - 1] += ` ${piece}`;
       } else {
         sentences.push(piece);
       }
+      afterAbbreviation = ABBREVIATION_END.test(piece);
     }
   }
   return sentences;

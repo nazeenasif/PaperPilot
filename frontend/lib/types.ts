@@ -184,6 +184,8 @@ export interface Part {
   passages: number[];
   requests: { planned: number; retries: number };
   tokens: { input?: number; output?: number; reasoning?: number };
+  /** not_started: when requests resume (daily limit, long wait). */
+  until?: string | null;
 }
 
 export interface RequestPlan {
@@ -218,6 +220,9 @@ export interface ComparisonRow {
   state: "ok" | "failed" | "not_started";
   reason: string | null;
   cells: Part[];
+  /** not_started: when requests resume. */
+  until?: string | null;
+  tokens?: { input?: number; output?: number; reasoning?: number };
 }
 
 export interface Comparison {
@@ -235,6 +240,8 @@ export interface Comparison {
   stale_reason: StaleReason | null;
   verified_cells: number;
   total_cells: number;
+  /** A later regeneration that ended with failed rows, kept beside this comparison. */
+  pending?: { created_at: string; failed_aspects: string[]; retry_aspects: string[]; verified_cells: number } | null;
 }
 
 export interface SummaryListItem {

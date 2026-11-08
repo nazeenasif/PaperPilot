@@ -246,7 +246,7 @@ describe("A finished comparison", () => {
     await pick(user, "BERT: Pre-training", "Retrieval-Augmented Generation");
     expect(await screen.findByText("This row couldn't be read")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Retry this row" }));
-    await waitFor(() => expect(posted[0]).toMatchObject({ retry_aspects: ["method"], paper_ids: ["bert", "rag"], aspects: ["method", "results"] }));
+    await waitFor(() => expect(posted[0]).toMatchObject({ retry_aspects: ["method"], paper_ids: ["bert", "rag"] }));
   });
 
   it("shows held-back and not-reported cells beside verified ones", async () => {

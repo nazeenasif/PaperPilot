@@ -7,12 +7,15 @@ import { useUsage } from "@/components/app/UsageMeter";
 export function CostButton({
   label,
   cost,
+  costNote,
   onClick,
   disabled = false,
   primary = true,
 }: {
   label: string;
   cost: number;
+  /** In place of "uses N requests", e.g. "uses 5 requests, 1 per aspect". */
+  costNote?: string;
   onClick: () => void;
   disabled?: boolean;
   primary?: boolean;
@@ -32,7 +35,7 @@ export function CostButton({
         {label}
       </button>
       <p className="font-mono text-xs text-muted-foreground">
-        uses {cost} request{cost === 1 ? "" : "s"}
+        {costNote ?? `uses ${cost} request${cost === 1 ? "" : "s"}`}
         {left}
       </p>
     </div>

@@ -147,7 +147,7 @@ const PART_NOT_STARTED: Record<string, string> = {
 };
 
 /** The line shown for a failed or not-started part. */
-export function partProblem(state: "failed" | "not_started", reason: string | null): string {
+export function partProblem(state: "failed" | "not_started", reason: string | null, _until: string | null = null): string {
   if (state === "failed") return (reason && PART_FAILED[reason]) || "This part couldn't be written.";
   return (reason && PART_NOT_STARTED[reason]) || "Not started.";
 }

@@ -285,10 +285,13 @@ completes when the retry succeeds.
   generation.
 - **FR-018**: Saved results MUST show when they were generated and with which model.
 - **FR-019**: Regenerate MUST show its cost first and MUST replace the saved result only after the
-  new one has finished; a failed regeneration MUST leave the saved result as it was.
+  new one has finished; a failed regeneration MUST leave the saved result as it was. A regeneration
+  with any failed part MUST NOT replace the last complete result, current or stale, which stays
+  available (amended 2026-11-08).
 - **FR-020**: Completed parts of a run MUST be saved even when other parts failed for a temporary
-  reason (busy, long wait, daily limit, cut off); the researcher MUST be able to retry only the
-  failed parts. A TL;DR MUST record which sections it was built from. When a section is
+  reason (busy, long wait, daily limit, cut off), beside a complete result if there is one; the
+  researcher MUST be able to retry only the failed parts, and the run replaces the complete result
+  once it is complete itself. A TL;DR MUST record which sections it was built from. When a section is
   regenerated, the TL;DR MUST read "Built without <section>" until it is regenerated too, which the
   researcher chooses separately (amended 2026-11-04; it was rewritten automatically before).
 

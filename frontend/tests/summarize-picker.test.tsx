@@ -118,6 +118,18 @@ describe("A saved summary", () => {
     expect(screen.getByText(/The problem of LoRA is stated here/)).toBeInTheDocument();
   });
 
+  it("keeps the complete summary and offers to finish an unfinished regeneration", async () => {
+    const pending = { created_at: TWO_HOURS_AGO(), failed_parts: ["results"], retry_parts: ["results", "tldr"], verified_parts: 5 };
+    const posted = backend({ saved: summary({ pending }), posts: [[["summary", summary()]]] });
+    const user = userEvent.setup();
+    inProviders(<SummaryView paperId="lora" />);
+    expect(await screen.findByText(/last regeneration did not finish Results/i)).toBeInTheDocument();
+    expect(screen.getByText(/The problem of LoRA is stated here/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Finish the regeneration/ }));
+    await waitFor(() => expect(posted).toEqual([{ retry_parts: ["results", "tldr"] }]));
+    await waitFor(() => expect(screen.queryByText(/last regeneration did not finish/i)).toBeNull());
+  });
+
   it("offers to retry a failed section with its cost", async () => {
     const failed = summary({
       verified_parts: 5,

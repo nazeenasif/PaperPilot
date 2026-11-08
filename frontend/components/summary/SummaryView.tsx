@@ -68,6 +68,8 @@ export function SummaryView({ paperId }: { paperId: string }) {
   const without = SECTIONS.filter(({ key }) => tldrPart?.built_without?.includes(key)).map(({ label }) => label);
   const showResult = running || done !== null;
   const retry = (key: string) => () => void summary.start({ retry_parts: [key] });
+  const pending = done?.pending;
+  const pendingNames = (pending?.failed_parts ?? []).map((key) => SECTIONS.find((s) => s.key === key)?.label ?? key);
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-8 px-4 pt-10 pb-16 sm:px-6">
@@ -108,6 +110,22 @@ export function SummaryView({ paperId }: { paperId: string }) {
 
       {summary.phase === "failed" && summary.error && (
         <TurnFailure kind={summary.error.kind} fields={summary.error.fields} question={title} onRetry={() => void summary.start()} />
+      )}
+
+      {pending && !running && (
+        <div role="status" className="flex flex-col gap-3 rounded-2xl border border-amber/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-text">
+            {pendingNames.length > 0
+              ? `The last regeneration did not finish ${pendingNames.join(", ")}, so this summary stays until it does.`
+              : "The last regeneration still needs its TL;DR, so this summary stays until it has one."}
+          </p>
+          <CostButton
+            label="Finish the regeneration"
+            cost={pending.retry_parts.length}
+            onClick={() => void summary.start({ retry_parts: pending.retry_parts })}
+            primary={false}
+          />
+        </div>
       )}
 
       {showResult && (

@@ -425,7 +425,7 @@ _prepare_results_lock = threading.Lock()
 class ResultKey:
     """What a saved result is about: its kind, papers and aspects, in a canonical order."""
 
-    kind: str  # "summary" or "comparison"
+    kind: str  # "summary", "summary_unfinished" or "comparison"
     paper_ids: tuple[str, ...]
     aspects: tuple[str, ...] = ()
 
@@ -514,6 +514,15 @@ def load_result(key: ResultKey, model: str, prompt_version: int) -> tuple[dict, 
     if saved_model != model:
         return result, "model_changed"
     return result, None
+
+
+def delete_result(key: ResultKey) -> None:
+    """Delete one saved result, if there is one."""
+    db = _results_connection()
+    try:
+        db.execute("DELETE FROM results WHERE key = ?", (key.digest,))
+    finally:
+        db.close()
 
 
 def forget_results(paper_id: str) -> int:

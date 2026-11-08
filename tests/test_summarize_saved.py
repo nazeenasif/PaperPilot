@@ -84,8 +84,9 @@ def test_an_incomplete_regeneration_keeps_a_complete_saved_summary(summary_env, 
 
     monkeypatch.setattr(llm, "generate", cut_off_method)
     kept = service.summarize(summary_env.paper_id, regenerate=True)
-    assert kept == first
-    assert service.saved_summary(summary_env.paper_id) == first
+    assert kept.sections == first.sections and kept.tldr == first.tldr and kept.created_at == first.created_at
+    saved = service.saved_summary(summary_env.paper_id)
+    assert saved.sections == first.sections and saved.status == "current"
 
 
 def test_retrying_a_failed_section_reruns_only_that_section(summary_env, model):
@@ -122,3 +123,126 @@ def test_summary_plan(summary_env, model):
 def test_summaries_survive_a_round_trip_through_the_cache(summary_env, model):
     summary = service.summarize(summary_env.paper_id)
     assert service.summary_from_dict(service.summary_to_dict(summary)) == summary
+
+
+# --- a run with a failed part never replaces the last complete summary (US2, FR-019, FR-020) ---
+
+
+class CutOffParts(PromptReadingLLM):
+    """Cuts off the sections whose names are given; `parts` can be changed between runs."""
+
+    def __init__(self, *parts):
+        super().__init__()
+        self.parts = parts
+
+    def __call__(self, system, prompt, on_retry=None, task="answer"):
+        if any(f"Section: {part}." in prompt for part in self.parts):
+            raise llm.LLMError("cut off", reason="cut_off", tokens={"output": 8192, "reasoning": 8100})
+        return super().__call__(system, prompt, on_retry, task)
+
+
+def regenerate_with_cut_off(paper_id, monkeypatch, *parts):
+    fake = CutOffParts(*parts)
+    monkeypatch.setattr(llm, "generate", fake)
+    return fake, service.summarize(paper_id, regenerate=True)
+
+
+def test_a_failed_regeneration_does_not_replace_a_complete_stale_summary(summary_env, model, monkeypatch):
+    """A stale summary is still the last complete one. It stays available, marked stale."""
+    first = service.summarize(summary_env.paper_id)
+    monkeypatch.setattr(prompts, "SUMMARY_PROMPT_VERSION", prompts.SUMMARY_PROMPT_VERSION + 1)
+    _, kept = regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results")
+    assert kept.sections == first.sections and kept.created_at == first.created_at
+    assert (kept.status, kept.stale_reason) == ("stale", "instructions_changed")
+
+
+def test_a_failed_regeneration_keeps_its_finished_parts_for_a_retry(summary_env, model, monkeypatch):
+    service.summarize(summary_env.paper_id)
+    _, kept = regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results")
+    assert kept.pending["failed_parts"] == ["results"]
+    assert kept.pending["retry_parts"] == ["results", "tldr"]
+    assert kept.pending["verified_parts"] == 5
+    assert service.saved_summary(summary_env.paper_id).pending == kept.pending
+
+
+def test_a_failed_regeneration_reports_the_requests_it_used_not_the_old_ones(summary_env, model, monkeypatch):
+    service.summarize(summary_env.paper_id)
+    _, kept = regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results", "Data")
+    assert kept.requests == {"planned": 6, "retries": 0}
+
+
+def test_retrying_the_failed_parts_runs_only_them_and_replaces_the_complete_summary(summary_env, model, monkeypatch):
+    first = service.summarize(summary_env.paper_id)
+    fake, kept = regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results")
+    partial_problem = fake.calls  # every call of the failed run
+    fake.parts, before = (), len(partial_problem)
+    done = service.summarize(summary_env.paper_id, retry_parts=kept.pending["retry_parts"])
+    new_calls = fake.calls[before:]
+    assert len(new_calls) == 2 and "Section: Results." in new_calls[0][1]
+    assert done.created_at >= first.created_at and done.pending is None and done.requests["planned"] == 2
+    assert all(p.state == "verified" for p in [done.tldr, *done.sections]) and done.tldr.built_without == []
+    assert service.saved_summary(summary_env.paper_id).pending is None
+
+
+def test_a_retry_that_fails_again_leaves_the_complete_summary(summary_env, model, monkeypatch):
+    first = service.summarize(summary_env.paper_id)
+    _, kept = regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results")
+    again = service.summarize(summary_env.paper_id, retry_parts=kept.pending["retry_parts"])
+    assert again.sections == first.sections and again.pending["failed_parts"] == ["results"]
+
+
+def test_retrying_a_section_without_the_tldr_does_not_replace_the_complete_summary(summary_env, model, monkeypatch):
+    """Its TL;DR would still be built without that section."""
+    first = service.summarize(summary_env.paper_id)
+    fake, _ = regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results")
+    fake.parts = ()
+    still = service.summarize(summary_env.paper_id, retry_parts=["results"])
+    assert still.sections == first.sections and still.pending["failed_parts"] == []
+    assert still.pending["retry_parts"] == ["tldr"]
+
+
+def test_a_full_regeneration_clears_the_unfinished_run(summary_env, model, monkeypatch):
+    service.summarize(summary_env.paper_id)
+    fake, _ = regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results")
+    fake.parts = ()
+    new = service.summarize(summary_env.paper_id, regenerate=True)
+    assert new.pending is None and service.saved_summary(summary_env.paper_id).pending is None
+
+
+def test_a_first_run_with_a_failed_part_is_saved_as_the_summary(summary_env, monkeypatch):
+    monkeypatch.setattr(llm, "generate", CutOffParts("Results"))
+    summary = service.summarize(summary_env.paper_id)
+    saved = service.saved_summary(summary_env.paper_id)
+    assert saved.sections == summary.sections and saved.pending is None
+    assert next(s for s in saved.sections if s.part == "results").state == "failed"
+
+
+def test_a_failed_regeneration_replaces_an_incomplete_summary(summary_env, monkeypatch):
+    monkeypatch.setattr(llm, "generate", CutOffParts("Results"))
+    service.summarize(summary_env.paper_id)
+    monkeypatch.setattr(llm, "generate", CutOffParts("Data"))
+    new = service.summarize(summary_env.paper_id, regenerate=True)
+    assert next(s for s in new.sections if s.part == "data").state == "failed" and new.pending is None
+
+
+def test_a_held_back_section_is_not_a_failure(summary_env, model, monkeypatch):
+    """Only failed parts protect the complete summary: a held-back one is a finished result."""
+    service.summarize(summary_env.paper_id)
+    monkeypatch.setattr(llm, "generate", PromptReadingLLM({"results": "Claim [99]."}))
+    new = service.summarize(summary_env.paper_id, regenerate=True)
+    assert next(s for s in new.sections if s.part == "results").state == "held_back" and new.pending is None
+
+
+def test_an_unfinished_run_made_with_other_instructions_is_ignored(summary_env, model, monkeypatch):
+    first = service.summarize(summary_env.paper_id)
+    regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results")
+    monkeypatch.setattr(prompts, "SUMMARY_PROMPT_VERSION", prompts.SUMMARY_PROMPT_VERSION + 1)
+    saved = service.saved_summary(summary_env.paper_id)
+    assert saved.pending is None and saved.created_at == first.created_at
+
+
+def test_re_processing_forgets_the_unfinished_run_too(summary_env, model, monkeypatch):
+    service.summarize(summary_env.paper_id)
+    regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results")
+    assert library.forget_results(summary_env.paper_id) == 2
+    assert service.saved_summary(summary_env.paper_id) is None

@@ -277,6 +277,9 @@ class Summary:
     created_at: str
     status: str = "current"  # or "stale" (research R6)
     stale_reason: str | None = None
+    # A later regeneration that ended with failed parts: {created_at, failed_parts, retry_parts,
+    # verified_parts}. Set when read, never saved (FR-019, FR-020).
+    pending: dict | None = None
 
     @property
     def verified_parts(self) -> int:
@@ -360,15 +363,38 @@ def _summary_key(paper_id: str) -> library.ResultKey:
     return library.result_key("summary", [paper_id])
 
 
+def _unfinished_key(paper_id: str) -> library.ResultKey:
+    return library.result_key("summary_unfinished", [paper_id])
+
+
+def _unfinished_run(paper_id: str) -> Summary | None:
+    """The regeneration left unfinished beside a complete summary; ignored once it is stale."""
+    settings = load_settings()
+    found = library.load_result(_unfinished_key(paper_id), settings.llm_model, prompts.SUMMARY_PROMPT_VERSION)
+    return summary_from_dict(found[0]) if found and found[1] is None else None
+
+
+def _save(key: library.ResultKey, summary: Summary) -> None:
+    library.save_result(key, summary_to_dict(replace(summary, pending=None)), summary.model, summary.prompt_version)
+
+
 def saved_summary(paper_id: str) -> Summary | None:
-    """The saved summary, current or stale (with its reason); never generates (FR-016, FR-017)."""
+    """The saved summary, current or stale (with its reason), and any unfinished regeneration beside
+    it; never generates (FR-016, FR-017, FR-020)."""
     settings = load_settings()
     found = library.load_result(_summary_key(paper_id), settings.llm_model, prompts.SUMMARY_PROMPT_VERSION)
     if found is None:
         return None
     data, stale_reason = found
     summary = summary_from_dict(data)
-    return replace(summary, status="stale" if stale_reason else "current", stale_reason=stale_reason)
+    unfinished = _unfinished_run(paper_id)
+    pending = {
+        "created_at": unfinished.created_at,
+        "failed_parts": _failed_sections(unfinished),
+        "retry_parts": _parts_to_finish(unfinished),
+        "verified_parts": unfinished.verified_parts,
+    } if unfinished else None
+    return replace(summary, status="stale" if stale_reason else "current", stale_reason=stale_reason, pending=pending)
 
 
 def _retry_facets(retry_parts: list[str]) -> list[str]:
@@ -412,8 +438,20 @@ def facet_retrieval(facet: str, paper_id: str) -> FacetRetrieval:
     return FacetRetrieval([replace(r, rank=rank) for rank, r in enumerate(best_first, start=1)], gate_score)
 
 
+def _failed_sections(summary: Summary) -> list[str]:
+    return [s.part for s in summary.sections if s.state in ("failed", "not_started")]
+
+
+def _parts_to_finish(summary: Summary) -> list[str]:
+    """What a retry must run: failed sections, and the TL;DR if it failed or misses a section it
+    could now use. A held-back section is a finished result, not something to finish."""
+    held_back = {s.part for s in summary.sections if s.state == "held_back"}
+    tldr_unfinished = summary.tldr.state in ("failed", "not_started") or set(summary.tldr.built_without) - held_back
+    return [*_failed_sections(summary), *([TLDR] if tldr_unfinished else [])]
+
+
 def _complete(summary: Summary) -> bool:
-    return all(p.state not in ("failed", "not_started") for p in [summary.tldr, *summary.sections])
+    return not _parts_to_finish(summary)
 
 
 def summarize(
@@ -426,10 +464,13 @@ def summarize(
     TL;DR from the verified sections (FR-002-FR-005). Saved summaries are reused (FR-016).
 
     - Default: return the saved summary (current or marked stale) with 0 requests, else generate.
-    - `regenerate`: generate anew; the saved summary is replaced only when the new one finished,
-      and a complete saved summary is kept over a new one with failed parts (FR-019).
-    - `retry_parts`: rerun those parts of the saved summary. A regenerated section leaves the
-      TL;DR marked `built_without` it, until "tldr" is regenerated too (FR-020).
+    - `regenerate`: generate anew; the saved summary is replaced only when the new one finished.
+      A complete saved summary, current or stale, is kept over a new one with failed parts, whose
+      finished parts are saved beside it and reported as `pending` (FR-019, FR-020).
+    - `retry_parts`: rerun those parts of the unfinished regeneration if there is one, else of the
+      saved summary. A regenerated section leaves the TL;DR marked `built_without` it, until "tldr"
+      is regenerated too (FR-020). An unfinished regeneration replaces the saved summary only once
+      it is complete.
 
     `on_event(kind, detail)` receives "plan", "progress" ({part, step, passages?}), "retry_wait"
     ({part, ...}) and "part" (a checked part). No event carries text before its part's check.
@@ -437,9 +478,11 @@ def summarize(
     """
     paper = _paper(paper_id)
     base: Summary | None = None
+    unfinished: Summary | None = None
     if retry_parts is not None:
         facets = _retry_facets(retry_parts)
-        base = saved_summary(paper_id)
+        unfinished = _unfinished_run(paper_id)
+        base = unfinished or saved_summary(paper_id)
         if base is None:
             raise ValueError(f"No saved summary of {paper_id} to retry parts of")
     else:
@@ -449,12 +492,14 @@ def summarize(
             return saved
 
     summary = _run_summary(paper, facets, retry_parts is None or TLDR in retry_parts, base, on_event)
-    if retry_parts is None and regenerate:
-        current = saved_summary(paper_id)
-        if current is not None and current.status == "current" and _complete(current) and not _complete(summary):
-            logger.warning("Regeneration of %s ended with failed parts; kept the saved summary", paper_id)
-            return current
-    library.save_result(_summary_key(paper_id), summary_to_dict(summary), summary.model, summary.prompt_version)
+    saved = saved_summary(paper_id)
+    keep_saved = saved is not None and _complete(saved) and not _complete(summary)
+    if (unfinished is not None or retry_parts is None) and keep_saved:
+        logger.warning("Summary run of %s ended with failed parts; kept the saved summary", paper_id)
+        _save(_unfinished_key(paper_id), summary)
+        return replace(saved_summary(paper_id), requests=summary.requests)
+    _save(_summary_key(paper_id), summary)
+    library.delete_result(_unfinished_key(paper_id))
     return summary
 
 

@@ -311,6 +311,12 @@ processes without extra locking); storing summaries in ChromaDB metadata (reject
 re-embedding coupling); keying by passage ids only (rejected: misses model and instruction
 changes).
 
+**A run with failed parts beside a complete summary** (added 2026-11-08, FR-019, FR-020). It is saved
+under its own key (`summary_unfinished`) and reported as `pending`; retries run on it, and it replaces
+the summary once complete, then is deleted. A complete summary is kept even when stale, because it is
+still the last one the researcher can read in full. Re-processing a paper forgets both: their citations
+point at passages that may have changed.
+
 ## R7. Module placement under Principle II
 
 **Decision**: no new module.

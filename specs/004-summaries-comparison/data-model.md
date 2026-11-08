@@ -22,7 +22,7 @@ One summary section, the TL;DR, or one comparison cell.
 | built_without | [str] | TL;DR only: sections it went without (failed, held back, or regenerated since) |
 | passages | [int] | numbers of the passages given for this part |
 | requests | {planned, retries} | requests this part used (0 for not reported without a request) |
-| tokens | {input?, output?, reasoning?} | as reported by the provider |
+| tokens | {input?, output?, reasoning?} | as reported by the provider, for cut-off parts too |
 
 Rules (FR-011):
 - `verified` ⇔ text has ≥ 1 citation, all in `passages` (cells: that paper's passages for that

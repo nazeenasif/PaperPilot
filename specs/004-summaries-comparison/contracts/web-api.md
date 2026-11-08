@@ -21,7 +21,9 @@ trace or a provider message.
 
 ### `GET /api/summaries/{paper_id}`
 `200 Summary` (data-model.md) with `status` `current` or `stale` (+ `stale_reason`), and
-`"plan": {"max_requests": 6}` for a regeneration. `404 not_saved` (body also carries `plan`) |
+`"plan": {"max_requests": 6}` for a regeneration, and `pending` (`null`, or `{created_at, failed_parts,
+retry_parts, verified_parts}` when a later regeneration ended with failed parts and this complete summary
+was kept; posting `retry_parts` finishes it). `404 not_saved` (body also carries `plan`) |
 `404 unknown_paper`. Never sends a model request.
 
 ### `POST /api/summaries/{paper_id}` (response: text/event-stream)

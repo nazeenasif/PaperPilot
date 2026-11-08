@@ -207,6 +207,8 @@ export interface Summary {
   status: ResultStatus;
   stale_reason: StaleReason | null;
   verified_parts: number;
+  /** A later regeneration that ended with failed parts, kept beside this summary. */
+  pending?: { created_at: string; failed_parts: string[]; retry_parts: string[]; verified_parts: number } | null;
 }
 
 export interface ComparisonRow {

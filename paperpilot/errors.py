@@ -58,6 +58,10 @@ class StorageError(PaperPilotError):
     """Writing to the library failed; any partial data has been removed."""
 
 
+class RowFormatError(PaperPilotError):
+    """A comparison row's reply is not the expected JSON; a per-row failure, never shown raw."""
+
+
 class LLMError(PaperPilotError):
     """The language model failed; the message is one readable line with no secrets. `tokens` holds
     the provider's counts when it charged for output, as a cut-off does."""

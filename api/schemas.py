@@ -65,7 +65,7 @@ def answer_body(answer: Answer, requests: RequestCounts, usage: dict | None = No
         "citations": asdict(answer.citations),
         # The badge claims only what the code checked (FR-005).
         "verified": not answer.not_found and not answer.citations.invalid,
-        "passages": [asdict(p) for p in answer.passages],
+        "passages": [{k: v for k, v in asdict(p).items() if k != "moved"} for p in answer.passages],
         "papers_read": len({p.paper_id for p in answer.passages}),
         "word_count": answer.word_count,
         "llm_calls": answer.llm_calls,

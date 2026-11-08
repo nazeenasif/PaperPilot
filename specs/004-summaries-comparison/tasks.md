@@ -129,7 +129,7 @@ generalised (T004).
 
 ### US3 (P2): comparison table, one request per aspect, JSON cells
 
-- [ ] T015 [P] [US3] Create failing tests in `tests/test_prompts_compare.py`:
+- [X] T015 [P] [US3] Create failing tests in `tests/test_prompts_compare.py`:
   - `ASPECTS` has problem, method, datasets, results, limitations with queries; cells are ≤ 50 words.
   - `build_row_prompt(aspect, papers)` labels papers `P1…Pn` with their titles, lists each paper's passages with run-wide numbers, asks for JSON only with the exact shape, and tells a paper with no passages to answer `NOT_REPORTED`.
   - `parse_row`: plain JSON; JSON in a ```json fence; JSON with a sentence before and after; returns `{label: text}`; extra cells and keys ignored; a missing label is absent from the result; a non-string `text` dropped.

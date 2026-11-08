@@ -13,7 +13,14 @@ from datetime import datetime, timezone
 
 from paperpilot import library, llm, prompts, store
 from paperpilot.config import load_settings
-from paperpilot.errors import EmptyQueryError, LLMError, RowFormatError, UnknownPaperError
+from paperpilot.errors import (
+    DailyLimitError,
+    EmptyQueryError,
+    LLMError,
+    RateLimitedError,
+    RowFormatError,
+    UnknownPaperError,
+)
 from paperpilot.prompts import CitationReport, NumberedPassage, Turn, VerifiedSection
 
 __all__ = [
@@ -258,6 +265,7 @@ class Part:
     passages: list[int] = field(default_factory=list)
     requests: dict[str, int] = field(default_factory=lambda: {"planned": 0, "retries": 0})
     tokens: dict[str, int] = field(default_factory=dict)
+    until: str | None = None  # not_started: when requests resume (daily limit, long wait)
 
 
 @dataclass(frozen=True)
@@ -327,16 +335,43 @@ def _tldr_part(reply_text: str, sections: list[VerifiedSection], **extra) -> Par
 PART_FAILURES = {"cut_off", "empty"}  # a failed part; the run goes on (research R5, R8)
 
 
+class _RunStopped(Exception):
+    """A systemic model failure: no further request for this run (research R8, FR-024)."""
+
+    def __init__(self, error: LLMError, requests: dict[str, int]) -> None:
+        super().__init__(str(error))
+        self.error = error
+        self.requests = requests
+
+    @property
+    def until(self) -> str | None:
+        if isinstance(self.error, DailyLimitError):
+            return self.error.resets_at.isoformat()
+        if isinstance(self.error, RateLimitedError):
+            return self.error.until.isoformat()
+        return None
+
+
+def check_request_budget(needed: int) -> None:
+    """Refuse a run before any request when fewer requests remain than its plan (FR-023)."""
+    today = llm.usage()
+    if today.remaining < needed:
+        raise DailyLimitError(today.used, today.limit, today.resets_at, needed=needed)
+
+
 def _generate_part(part: str, system: str, prompt: str, task: str, emit: Callable[[str, dict], None]):
-    """One model request for a part: (reply or None, requests, tokens, failure reason)."""
-    before = llm.request_counts().retries
+    """One model request for a part: (reply or None, requests, tokens, failure reason). Raises
+    _RunStopped for a failure that should end the run."""
+    start = llm.request_counts()
+    before = start.retries
     try:
         reply = llm.generate(system, prompt,
                              on_retry=lambda notice: emit("retry_wait", {"part": part, **asdict(notice)}),
                              task=task)
     except LLMError as error:
         if error.reason not in PART_FAILURES:
-            raise
+            used = llm.request_counts() - start
+            raise _RunStopped(error, {"planned": used.planned, "retries": used.retries}) from error
         requests = {"planned": 1, "retries": llm.request_counts().retries - before}
         return None, requests, error.tokens or {}, error.reason
     tokens: dict[str, int] = {}
@@ -499,7 +534,11 @@ def summarize(
 
     `on_event(kind, detail)` receives "plan", "progress" ({part, step, passages?}), "retry_wait"
     ({part, ...}) and "part" (a checked part). No event carries text before its part's check.
-    Raises UnknownPaperError, SettingsError, ValueError (bad retry_parts or nothing to retry).
+    A daily limit, long wait, busy or unavailable model stops the run: finished parts are kept and
+    saved, the rest are `not_started` with the reason (FR-024). If nothing had finished, the error
+    is raised and nothing is saved.
+    Raises UnknownPaperError, SettingsError, ValueError (bad retry_parts or nothing to retry),
+    DailyLimitError (fewer requests left than the plan, nothing sent), or the stopping LLMError.
     """
     paper = _paper(paper_id)
     base: Summary | None = None
@@ -518,7 +557,9 @@ def summarize(
         if saved is not None and not regenerate:
             return saved
 
-    summary = _run_summary(paper, facets, retry_parts is None or TLDR in retry_parts, base, on_event)
+    rewrite_tldr = retry_parts is None or TLDR in retry_parts
+    check_request_budget(len(facets) + rewrite_tldr)
+    summary = _run_summary(paper, facets, rewrite_tldr, base, on_event)
     saved = saved_summary(paper_id)
     keep_saved = saved is not None and _complete(saved) and not _complete(summary)
     if (unfinished is not None or retry_parts is None) and keep_saved:
@@ -553,10 +594,14 @@ def _run_summary(
     kept = {p.part: p for p in base.sections} if base else {}
     sections: list[Part] = []
     verified: list[VerifiedSection] = []
+    stopped: _RunStopped | None = None
 
     for key, facet in prompts.FACETS.items():
         if key not in facets:
             part = kept[key]
+        elif stopped:
+            part = Part(key, "not_started", reason=stopped.error.reason, until=stopped.until)
+            emit("part", part_body(part))
         else:
             emit("progress", {"part": key, "step": "searching"})
             retrieval = facet_retrieval(key, paper_id)
@@ -568,9 +613,18 @@ def _run_summary(
                 numbers = [p.number for p in numbered]
                 emit("progress", {"part": key, "step": "reading", "passages": len(numbered)})
                 emit("progress", {"part": key, "step": "generating"})
-                reply, requests, tokens, failure = _generate_part(
-                    key, prompts.SECTION_INSTRUCTION, prompts.build_section_prompt(key, numbered), "summary_section", emit)
-                if failure:
+                try:
+                    reply, requests, tokens, failure = _generate_part(
+                        key, prompts.SECTION_INSTRUCTION, prompts.build_section_prompt(key, numbered), "summary_section", emit)
+                except _RunStopped as stop:
+                    if not any(s.part in facets for s in sections):
+                        raise stop.error from None  # nothing finished, so nothing to keep
+                    stopped = stop
+                    reply, requests, tokens, failure = None, stop.requests, {}, None
+                if stopped:
+                    part = Part(key, "not_started", reason=stopped.error.reason, passages=numbers, requests=requests,
+                                until=stopped.until)
+                elif failure:
                     part = Part(key, "failed", reason=failure, passages=numbers, requests=requests, tokens=tokens)
                 else:
                     emit("progress", {"part": key, "step": "checking"})
@@ -589,14 +643,25 @@ def _run_summary(
             built_from=[k for k in kept_tldr.built_from if k not in facets],
             built_without=[k for k in prompts.FACETS if k in kept_tldr.built_without or k in facets],
         )
+    elif stopped:
+        tldr = Part(TLDR, "not_started", reason=stopped.error.reason, until=stopped.until, **built)
     elif not verified:
         tldr = Part(TLDR, "not_reported", reason="no_verified_sections")
     else:
         emit("progress", {"part": TLDR, "step": "generating"})
         cited = sorted({n for v in verified for n in v.citations})
-        reply, requests, tokens, failure = _generate_part(
-            TLDR, prompts.TLDR_INSTRUCTION, prompts.build_tldr_prompt(verified), "tldr", emit)
-        if failure:
+        try:
+            reply, requests, tokens, failure = _generate_part(
+                TLDR, prompts.TLDR_INSTRUCTION, prompts.build_tldr_prompt(verified), "tldr", emit)
+        except _RunStopped as stop:
+            if not facets:
+                raise stop.error from None  # only the TL;DR was asked for
+            stopped = stop
+            reply, requests, tokens, failure = None, stop.requests, {}, None
+        if stopped:
+            tldr = Part(TLDR, "not_started", reason=stopped.error.reason, passages=cited, requests=requests,
+                        until=stopped.until, **built)
+        elif failure:
             tldr = Part(TLDR, "failed", reason=failure, passages=cited, requests=requests, tokens=tokens, **built)
         else:
             emit("progress", {"part": TLDR, "step": "checking"})
@@ -639,6 +704,7 @@ class ComparisonRow:
     cells: list[Part] = field(default_factory=list)
     requests: dict[str, int] = field(default_factory=lambda: {"planned": 0, "retries": 0})
     tokens: dict[str, int] = field(default_factory=dict)
+    until: str | None = None  # not_started: when requests resume
 
 
 @dataclass(frozen=True)
@@ -751,7 +817,9 @@ def compare(
 
     `on_event(kind, detail)` receives "plan", "progress" ({part: aspect, step, passages?}),
     "retry_wait" ({part, ...}), "part" (a checked cell, named "<aspect>:<paper_id>") and "row_failed"
-    ({aspect, reason}). Raises ValueError (bad input, or nothing to retry) and UnknownPaperError.
+    ({aspect, reason}). A systemic model failure stops the run as for summaries (FR-024).
+    Raises ValueError (bad input, or nothing to retry), UnknownPaperError, DailyLimitError (fewer
+    requests left than the plan, nothing sent), or the stopping LLMError if nothing had finished.
     """
     papers = _check_papers(paper_ids)
     wanted = _ordered_aspects(aspects)
@@ -773,6 +841,7 @@ def compare(
         if saved is not None and not regenerate:
             return saved
 
+    check_request_budget(len(retried))
     comparison = _run_comparison(papers, wanted, retried, base, on_event)
     key = _comparison_key(paper_ids, wanted)
     saved = saved_comparison(paper_ids, wanted)
@@ -809,11 +878,23 @@ def _run_comparison(
         for i, p in enumerate(papers, start=1)
     ]
     rows: list[ComparisonRow] = []
+    stopped: _RunStopped | None = None
     for aspect in wanted:
         if aspect not in retried:
             rows.append(kept[aspect])
-            continue
-        rows.append(_run_row(aspect, labelled, seen, settings.relevance_threshold, emit))
+        elif stopped:
+            emit("row_failed", {"aspect": aspect, "reason": stopped.error.reason})
+            rows.append(ComparisonRow(aspect, "not_started", reason=stopped.error.reason, until=stopped.until))
+        else:
+            try:
+                rows.append(_run_row(aspect, labelled, seen, settings.relevance_threshold, emit))
+            except _RunStopped as stop:
+                if not any(row.aspect in retried for row in rows):
+                    raise stop.error from None  # nothing finished, so nothing to keep
+                stopped = stop
+                emit("row_failed", {"aspect": aspect, "reason": stop.error.reason})
+                rows.append(ComparisonRow(aspect, "not_started", reason=stop.error.reason, requests=stop.requests,
+                                          until=stop.until))
 
     run_rows = [row for row in rows if row.aspect in retried]
     comparison = Comparison(

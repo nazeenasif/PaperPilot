@@ -155,7 +155,7 @@ generalised (T004).
   - **Accounting:** a summary's first attempts never exceed its plan; with a scripted 429 then success on one facet, `requests == {planned: 6, retries: 1}` and the shared usage counter rose by 7.
   - **Stop rules:** a `DailyLimitError` or `RateLimitedError` raised in the third facet → facets 1–2 kept, 3–5 and the TL;DR `not_started` with the reason, no further `generate` call, and the partial summary saved; `LLMError(reason="busy")` likewise; `cut_off` does **not** stop the run.
   - **Events:** `retry_wait` events carry the `part` being retried.
-- [ ] T020 [US5] Implement the plan, pre-check and stop rules in `paperpilot/service.py` (`RequestPlan`, `_run_parts` shared by `summarize` and `compare`), so T019 passes.
+- [X] T020 [US5] Implement the plan, pre-check and stop rules in `paperpilot/service.py` (`RequestPlan`, `_run_parts` shared by `summarize` and `compare`), so T019 passes.
 
 **Checkpoint (engine)**: full `pytest` passes; the `ask()` tests are unchanged since T004.
 

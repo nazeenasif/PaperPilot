@@ -77,7 +77,7 @@ class LLMError(PaperPilotError):
 class DailyLimitError(LLMError):
     """Today's free model requests are used up; no request was sent."""
 
-    def __init__(self, used: int, limit: int, resets_at: datetime) -> None:
+    def __init__(self, used: int, limit: int, resets_at: datetime, needed: int | None = None) -> None:
         super().__init__(
             f"Daily model request limit reached ({used} of {limit}); resets at {resets_at.isoformat()}",
             reason="daily_limit",
@@ -85,6 +85,7 @@ class DailyLimitError(LLMError):
         self.used = used
         self.limit = limit
         self.resets_at = resets_at
+        self.needed = needed  # a run's plan, when it was refused before starting
 
 
 class RateLimitedError(LLMError):

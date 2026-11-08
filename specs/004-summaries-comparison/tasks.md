@@ -146,7 +146,7 @@ generalised (T004).
   - Every paper below the threshold for an aspect → row `not_reported` cells with **no** `generate` call.
   - Saving and reuse: a second `compare` with the same papers and aspects in another order → 0 requests; `retry_aspects=["datasets"]` re-runs only that row (1 `generate` call); `comparison_plan` = number of aspects.
   - Events: `plan`, then per aspect `progress` and per cell `part`, `row_failed` for a malformed row.
-- [ ] T018 [US3] Implement `compare()`, `saved_comparison()` and `comparison_plan()` in `paperpilot/service.py` (per-paper retrieval, numbering, `parse_row`, per-cell `review_reply(allowed=…)`, saving through the results cache), so T017 passes.
+- [X] T018 [US3] Implement `compare()`, `saved_comparison()` and `comparison_plan()` in `paperpilot/service.py` (per-paper retrieval, numbering, `parse_row`, per-cell `review_reply(allowed=…)`, saving through the results cache), so T017 passes.
 
 ### US5 (P2): request plan, pre-check and stop rules (ADR-0009)
 

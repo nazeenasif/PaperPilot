@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from paperpilot import library, llm, prompts, store
 from paperpilot.config import load_settings
-from paperpilot.errors import EmptyQueryError, LLMError, UnknownPaperError
+from paperpilot.errors import EmptyQueryError, LLMError, RowFormatError, UnknownPaperError
 from paperpilot.prompts import CitationReport, NumberedPassage, Turn, VerifiedSection
 
 __all__ = [
@@ -327,6 +327,23 @@ def _tldr_part(reply_text: str, sections: list[VerifiedSection], **extra) -> Par
 PART_FAILURES = {"cut_off", "empty"}  # a failed part; the run goes on (research R5, R8)
 
 
+def _generate_part(part: str, system: str, prompt: str, task: str, emit: Callable[[str, dict], None]):
+    """One model request for a part: (reply or None, requests, tokens, failure reason)."""
+    before = llm.request_counts().retries
+    try:
+        reply = llm.generate(system, prompt,
+                             on_retry=lambda notice: emit("retry_wait", {"part": part, **asdict(notice)}),
+                             task=task)
+    except LLMError as error:
+        if error.reason not in PART_FAILURES:
+            raise
+        requests = {"planned": 1, "retries": llm.request_counts().retries - before}
+        return None, requests, error.tokens or {}, error.reason
+    tokens: dict[str, int] = {}
+    _add_tokens(tokens, reply)
+    return reply, {"planned": 1, "retries": llm.request_counts().retries - before}, tokens, None
+
+
 def summary_to_dict(summary: Summary) -> dict:
     """A summary as plain data, for saving and the API."""
     return asdict(summary)
@@ -427,21 +444,21 @@ class FacetRetrieval:
     gate_score: float | None
 
 
-def facet_retrieval(facet: str, paper_id: str) -> FacetRetrieval:
-    """Search a paper for a facet. The whole-paper search answers "does this paper cover the facet?";
-    the facet's preferred sections answer "where to read it" (research R2)."""
+def facet_retrieval(facet: str, paper_id: str, k: int = SUMMARY_PASSAGES) -> FacetRetrieval:
+    """Search a paper for a facet, for `k` passages. The whole-paper search answers "does this paper
+    cover the facet?"; the facet's preferred sections answer "where to read it" (research R2)."""
     spec = prompts.FACETS[facet]
     sections = library.paper_sections(paper_id)
-    whole = library.search(spec.query, k=SUMMARY_PASSAGES, paper_ids=[paper_id], sections=spec.searchable(sections))
+    whole = library.search(spec.query, k=k, paper_ids=[paper_id], sections=spec.searchable(sections))
     gate_score = max((r.score for r in whole), default=None)
 
     preferred = spec.preferred(sections)
     if not preferred:
         return FacetRetrieval(whole, gate_score)
     # Up to preferred_passages from the preferred sections; the whole paper fills the rest, best first.
-    own = library.search(spec.query, k=spec.preferred_passages, paper_ids=[paper_id], sections=preferred)
+    own = library.search(spec.query, k=min(spec.preferred_passages, k), paper_ids=[paper_id], sections=preferred)
     taken = {r.passage_id for r in own}
-    others = [r for r in whole if r.passage_id not in taken][:SUMMARY_PASSAGES - len(own)]
+    others = [r for r in whole if r.passage_id not in taken][:k - len(own)]
     best_first = sorted([*own, *others], key=lambda r: r.score, reverse=True)
     return FacetRetrieval([replace(r, rank=rank) for rank, r in enumerate(best_first, start=1)], gate_score)
 
@@ -537,22 +554,6 @@ def _run_summary(
     sections: list[Part] = []
     verified: list[VerifiedSection] = []
 
-    def generate(part: str, system: str, prompt: str, task: str):
-        """One model request for a part: (reply or None, requests, tokens, failure reason)."""
-        before = llm.request_counts().retries
-        try:
-            reply = llm.generate(system, prompt,
-                                 on_retry=lambda notice: emit("retry_wait", {"part": part, **asdict(notice)}),
-                                 task=task)
-        except LLMError as error:
-            if error.reason not in PART_FAILURES:
-                raise
-            requests = {"planned": 1, "retries": llm.request_counts().retries - before}
-            return None, requests, error.tokens or {}, error.reason
-        tokens: dict[str, int] = {}
-        _add_tokens(tokens, reply)
-        return reply, {"planned": 1, "retries": llm.request_counts().retries - before}, tokens, None
-
     for key, facet in prompts.FACETS.items():
         if key not in facets:
             part = kept[key]
@@ -567,8 +568,8 @@ def _run_summary(
                 numbers = [p.number for p in numbered]
                 emit("progress", {"part": key, "step": "reading", "passages": len(numbered)})
                 emit("progress", {"part": key, "step": "generating"})
-                reply, requests, tokens, failure = generate(key, prompts.SECTION_INSTRUCTION,
-                                                            prompts.build_section_prompt(key, numbered), "summary_section")
+                reply, requests, tokens, failure = _generate_part(
+                    key, prompts.SECTION_INSTRUCTION, prompts.build_section_prompt(key, numbered), "summary_section", emit)
                 if failure:
                     part = Part(key, "failed", reason=failure, passages=numbers, requests=requests, tokens=tokens)
                 else:
@@ -593,8 +594,8 @@ def _run_summary(
     else:
         emit("progress", {"part": TLDR, "step": "generating"})
         cited = sorted({n for v in verified for n in v.citations})
-        reply, requests, tokens, failure = generate(TLDR, prompts.TLDR_INSTRUCTION,
-                                                    prompts.build_tldr_prompt(verified), "tldr")
+        reply, requests, tokens, failure = _generate_part(
+            TLDR, prompts.TLDR_INSTRUCTION, prompts.build_tldr_prompt(verified), "tldr", emit)
         if failure:
             tldr = Part(TLDR, "failed", reason=failure, passages=cited, requests=requests, tokens=tokens, **built)
         else:
@@ -620,3 +621,266 @@ def _run_summary(
     logger.info("Summarized %s: %d of 6 parts verified, %d requests", paper_id, summary.verified_parts,
                 summary.requests["planned"])
     return summary
+
+
+# --- Feature 4: comparisons (spec US3, research R4, ADR-0008) ---
+
+COMPARE_PASSAGES = 3  # passages per paper per aspect (research R4)
+MIN_PAPERS, MAX_PAPERS = 2, 4
+
+
+@dataclass(frozen=True)
+class ComparisonRow:
+    """One aspect of a comparison: a failed row has no cells."""
+
+    aspect: str
+    state: str  # ok, failed, not_started
+    reason: str | None = None
+    cells: list[Part] = field(default_factory=list)
+    requests: dict[str, int] = field(default_factory=lambda: {"planned": 0, "retries": 0})
+    tokens: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Comparison:
+    """A table of 2-4 papers and a set of aspects, with numbered passages (data-model.md)."""
+
+    paper_ids: list[str]
+    papers: list[dict]  # paper_id, title, arxiv_id, label
+    aspects: list[str]
+    rows: list[ComparisonRow]
+    passages: list[NumberedPassage]
+    plan: dict
+    requests: dict[str, int]
+    model: str
+    prompt_version: int
+    created_at: str
+    status: str = "current"
+    stale_reason: str | None = None
+    pending: dict | None = None
+
+    @property
+    def total_cells(self) -> int:
+        return len(self.papers) * len(self.rows)
+
+    @property
+    def verified_cells(self) -> int:
+        return sum(1 for row in self.rows for cell in row.cells if cell.state == "verified")
+
+
+def comparison_to_dict(comparison: Comparison) -> dict:
+    return asdict(comparison)
+
+
+def comparison_from_dict(data: dict) -> Comparison:
+    """Rebuild a comparison saved with comparison_to_dict."""
+    rows = [ComparisonRow(**{**row, "cells": [_part_from_dict(c) for c in row["cells"]]}) for row in data["rows"]]
+    return Comparison(**{**data, "rows": rows, "passages": [NumberedPassage(**d) for d in data["passages"]]})
+
+
+def _comparison_key(paper_ids: list[str], aspects: list[str], kind: str = "comparison") -> library.ResultKey:
+    return library.result_key(kind, paper_ids, aspects)
+
+
+def _ordered_aspects(aspects: list[str]) -> list[str]:
+    unknown = [a for a in aspects if a not in prompts.ASPECTS]
+    if unknown or not aspects:
+        raise ValueError(f"Unknown or missing comparison aspects: {unknown or aspects}")
+    return [a for a in prompts.ASPECTS if a in aspects]
+
+
+def _check_papers(paper_ids: list[str]) -> list[library.PaperSummary]:
+    if not MIN_PAPERS <= len(paper_ids) <= MAX_PAPERS or len(set(paper_ids)) != len(paper_ids):
+        raise ValueError(f"A comparison needs {MIN_PAPERS} to {MAX_PAPERS} different papers")
+    return [_paper(paper_id) for paper_id in paper_ids]
+
+
+def comparison_plan(paper_ids: list[str], aspects: list[str], retry_aspects: list[str] | None = None) -> dict:
+    """The most model requests a comparison (or a retry of some rows) can make (FR-021)."""
+    parts = _ordered_aspects(retry_aspects if retry_aspects is not None else aspects)
+    return {"max_requests": len(parts), "parts": parts}
+
+
+def _rows_to_finish(comparison: Comparison) -> list[str]:
+    return [row.aspect for row in comparison.rows if row.state in ("failed", "not_started")]
+
+
+def _unfinished_comparison(paper_ids: list[str], aspects: list[str]) -> Comparison | None:
+    settings = load_settings()
+    found = library.load_result(_comparison_key(paper_ids, aspects, "comparison_unfinished"), settings.llm_model,
+                                prompts.SUMMARY_PROMPT_VERSION)
+    return comparison_from_dict(found[0]) if found and found[1] is None else None
+
+
+def saved_comparison(paper_ids: list[str], aspects: list[str]) -> Comparison | None:
+    """The saved comparison, current or stale, in any paper and aspect order; never generates."""
+    settings = load_settings()
+    aspects = _ordered_aspects(aspects)
+    found = library.load_result(_comparison_key(paper_ids, aspects), settings.llm_model, prompts.SUMMARY_PROMPT_VERSION)
+    if found is None:
+        return None
+    data, stale_reason = found
+    comparison = comparison_from_dict(data)
+    if stale_reason == "passages_changed":
+        comparison = replace(comparison, passages=[replace(p, moved=_passage_moved(p)) for p in comparison.passages])
+    unfinished = _unfinished_comparison(paper_ids, aspects)
+    pending = {
+        "created_at": unfinished.created_at,
+        "failed_aspects": _rows_to_finish(unfinished),
+        "retry_aspects": _rows_to_finish(unfinished),
+        "verified_cells": unfinished.verified_cells,
+    } if unfinished else None
+    return replace(comparison, status="stale" if stale_reason else "current", stale_reason=stale_reason, pending=pending)
+
+
+def _save_comparison(key: library.ResultKey, comparison: Comparison) -> None:
+    library.save_result(key, comparison_to_dict(replace(comparison, pending=None)), comparison.model,
+                        comparison.prompt_version)
+
+
+def compare(
+    paper_ids: list[str],
+    aspects: list[str],
+    regenerate: bool = False,
+    retry_aspects: list[str] | None = None,
+    on_event: Callable[[str, dict], None] | None = None,
+) -> Comparison:
+    """Compare 2-4 papers on some aspects: one request per aspect, the same number of passages per
+    paper, each cell validated against its own paper's passages (FR-007-FR-010). Saved comparisons
+    are reused in any order; a run with failed rows never replaces a complete one (FR-019, FR-020).
+
+    `on_event(kind, detail)` receives "plan", "progress" ({part: aspect, step, passages?}),
+    "retry_wait" ({part, ...}), "part" (a checked cell, named "<aspect>:<paper_id>") and "row_failed"
+    ({aspect, reason}). Raises ValueError (bad input, or nothing to retry) and UnknownPaperError.
+    """
+    papers = _check_papers(paper_ids)
+    wanted = _ordered_aspects(aspects)
+    base: Comparison | None = None
+    unfinished: Comparison | None = None
+    if retry_aspects is not None:
+        retried = _ordered_aspects(retry_aspects)
+        if set(retried) - set(wanted):
+            raise ValueError(f"Rows to retry are not in this comparison: {retried}")
+        unfinished = _unfinished_comparison(paper_ids, wanted)
+        base = unfinished or saved_comparison(paper_ids, wanted)
+        if base is None:
+            raise ValueError("No saved comparison to retry rows of")
+        if base.status == "stale":
+            raise ValueError("The saved comparison is an earlier one; regenerate it in full")
+    else:
+        retried = wanted
+        saved = saved_comparison(paper_ids, wanted)
+        if saved is not None and not regenerate:
+            return saved
+
+    comparison = _run_comparison(papers, wanted, retried, base, on_event)
+    key = _comparison_key(paper_ids, wanted)
+    saved = saved_comparison(paper_ids, wanted)
+    keep_saved = saved is not None and not _rows_to_finish(saved) and _rows_to_finish(comparison)
+    if (unfinished is not None or retry_aspects is None) and keep_saved:
+        logger.warning("Comparison ended with failed rows; kept the saved comparison")
+        _save_comparison(_comparison_key(paper_ids, wanted, "comparison_unfinished"), comparison)
+        return replace(saved_comparison(paper_ids, wanted), requests=comparison.requests)
+    _save_comparison(key, comparison)
+    library.delete_result(_comparison_key(paper_ids, wanted, "comparison_unfinished"))
+    return comparison
+
+
+def _run_comparison(
+    papers: list[library.PaperSummary],
+    wanted: list[str],
+    retried: list[str],
+    base: Comparison | None,
+    on_event: Callable[[str, dict], None] | None,
+) -> Comparison:
+    """Generate the retried rows (the others come from `base`)."""
+
+    def emit(kind: str, detail: dict) -> None:
+        if on_event is not None:
+            on_event(kind, detail)
+
+    settings = load_settings()
+    plan = comparison_plan([p.paper_id for p in papers], wanted, retried)
+    emit("plan", plan)
+    seen: dict[str, NumberedPassage] = {p.passage_id: p for p in base.passages} if base else {}
+    kept = {row.aspect: row for row in base.rows} if base else {}
+    labelled = base.papers if base else [
+        {"paper_id": p.paper_id, "title": p.title, "arxiv_id": p.arxiv_id, "label": f"P{i}"}
+        for i, p in enumerate(papers, start=1)
+    ]
+    rows: list[ComparisonRow] = []
+    for aspect in wanted:
+        if aspect not in retried:
+            rows.append(kept[aspect])
+            continue
+        rows.append(_run_row(aspect, labelled, seen, settings.relevance_threshold, emit))
+
+    run_rows = [row for row in rows if row.aspect in retried]
+    comparison = Comparison(
+        paper_ids=[p["paper_id"] for p in labelled],
+        papers=labelled,
+        aspects=wanted,
+        rows=rows,
+        passages=sorted(seen.values(), key=lambda p: p.number),
+        plan=plan,
+        requests={k: sum(row.requests[k] for row in run_rows) for k in ("planned", "retries")},
+        model=settings.llm_model,
+        prompt_version=prompts.SUMMARY_PROMPT_VERSION,
+        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
+    logger.info("Compared %d papers: %d of %d cells verified, %d requests", len(labelled), comparison.verified_cells,
+                comparison.total_cells, comparison.requests["planned"])
+    return comparison
+
+
+def _run_row(
+    aspect: str, labelled: list[dict], seen: dict[str, NumberedPassage], threshold: float, emit: Callable[[str, dict], None]
+) -> ComparisonRow:
+    """One aspect: retrieve per paper, one model request, then judge each cell on its own."""
+    spec = prompts.ASPECTS[aspect]
+    emit("progress", {"part": aspect, "step": "searching"})
+    numbered: dict[str, list[NumberedPassage]] = {}
+    for paper in labelled:
+        retrieval = facet_retrieval(spec.facet, paper["paper_id"], k=COMPARE_PASSAGES)
+        relevant = retrieval.passages and retrieval.gate_score is not None and retrieval.gate_score >= threshold
+        numbered[paper["paper_id"]] = number_passages(retrieval.passages, seen) if relevant else []
+
+    def cell_name(paper: dict) -> str:
+        return f"{aspect}:{paper['paper_id']}"
+
+    def not_retrieved(paper: dict) -> Part:
+        return Part(cell_name(paper), "not_reported", reason="below_threshold")
+
+    if not any(numbered.values()):
+        cells = [not_retrieved(paper) for paper in labelled]
+        for cell in cells:
+            emit("part", part_body(cell))
+        return ComparisonRow(aspect, "ok", cells=cells)
+
+    emit("progress", {"part": aspect, "step": "reading", "passages": sum(len(p) for p in numbered.values())})
+    emit("progress", {"part": aspect, "step": "generating"})
+    prompt = prompts.build_row_prompt(aspect, [(p["label"], p["title"], numbered[p["paper_id"]]) for p in labelled])
+    reply, requests, tokens, failure = _generate_part(aspect, prompts.ROW_INSTRUCTION, prompt, "comparison", emit)
+    if failure:
+        emit("row_failed", {"aspect": aspect, "reason": failure})
+        return ComparisonRow(aspect, "failed", reason=failure, requests=requests, tokens=tokens)
+    emit("progress", {"part": aspect, "step": "checking"})
+    try:
+        texts = prompts.parse_row(reply.text, [p["label"] for p in labelled])
+    except RowFormatError:
+        logger.warning("The comparison row %s was not valid JSON", aspect)
+        emit("row_failed", {"aspect": aspect, "reason": "malformed"})
+        return ComparisonRow(aspect, "failed", reason="malformed", requests=requests, tokens=tokens)
+
+    cells = []
+    for paper in labelled:
+        numbers = [p.number for p in numbered[paper["paper_id"]]]
+        if not numbers:
+            cell = not_retrieved(paper)
+        elif paper["label"] not in texts:
+            cell = Part(cell_name(paper), "not_reported", reason="missing_cell", passages=numbers)
+        else:
+            cell = _section_part(cell_name(paper), texts[paper["label"]], set(numbers), passages=numbers)
+        emit("part", part_body(cell))
+        cells.append(cell)
+    return ComparisonRow(aspect, "ok", cells=cells, requests=requests, tokens=tokens)

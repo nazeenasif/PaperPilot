@@ -263,7 +263,7 @@ generalised (T004).
 
 ### US3 (P2): compare papers
 
-- [ ] T045 [P] [US3] Create failing tests in `frontend/tests/compare.test.tsx`:
+- [X] T045 [P] [US3] Create failing tests in `frontend/tests/compare.test.tsx`:
   - Papers 2–4 (chips, "+ Add paper"), aspects from the fixed five (all selected by default); "Compare papers" is disabled with the reason for 1 paper, 5 papers or no aspect.
   - The cost line reads "uses K requests, 1 per aspect · N left today".
   - Progress per aspect; cells appear only from `part` events; a table with one column per paper and one row per aspect, arXiv IDs in the header.

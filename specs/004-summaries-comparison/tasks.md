@@ -188,7 +188,7 @@ generalised (T004).
 
 ### US3: comparisons over HTTP
 
-- [ ] T027 [P] [US3] Create failing tests in `tests/api/test_comparisons_api.py`:
+- [X] T027 [P] [US3] Create failing tests in `tests/api/test_comparisons_api.py`:
   - `POST /api/comparisons` with 2 papers and 3 aspects streams `plan` (`max_requests: 3`), per-aspect `progress`, per-cell `part`, `row_failed` for a malformed row, then `comparison`.
   - `422 invalid_request` for 1 or 5 papers, duplicates, no or unknown aspects; `404 unknown_paper`.
   - `GET /api/comparisons?papers=b,a&aspects=results,method` finds the saved comparison regardless of order; `404 not_saved` otherwise.

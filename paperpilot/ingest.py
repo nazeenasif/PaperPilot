@@ -542,14 +542,48 @@ def _units(blocks: list[Block]) -> list[tuple[str, list[Block]]]:
     return units
 
 
+def _split_table(blocks: list[Block], budget: int) -> list[list[tuple[str, tuple[Block, int]]]]:
+    """Split a table's blocks into pieces of at most `budget` (word, source) pairs.
+
+    Every piece after the first starts with the nearest header row above it, so its numbers keep
+    their column names; a header of more than half the budget is not repeated. A table with no
+    header is split evenly.
+    """
+    words: list[tuple[str, tuple[Block, int]]] = []
+    headers: list[list[tuple[str, tuple[Block, int]]]] = []  # per word: the header above it
+    header: list[tuple[str, tuple[Block, int]]] = []
+    previous_was_header = False
+    for b in blocks:
+        split = [(word, (b, k)) for k, word in enumerate(b.text.split())]
+        is_header = is_table_header(b.text) and not is_table_like(b.text)
+        if is_header:
+            header = header + split if previous_was_header else split
+        words += split
+        headers += [[] if is_header else header] * len(split)
+        previous_was_header = is_header
+    if not any(headers):
+        pieces = math.ceil(len(words) / budget)
+        size = math.ceil(len(words) / pieces)
+        return [words[start : start + size] for start in range(0, len(words), size)]
+    result = []
+    start = 0
+    while start < len(words):
+        repeated = headers[start] if start and len(headers[start]) <= budget // 2 else []
+        room = budget - len(repeated)
+        result.append(repeated + words[start : start + room])
+        start += room
+    return result
+
+
 def chunk_sections(sections: list[Section], paper_id: str, title: str, settings: Settings) -> list[Passage]:
     """Split sections into passages of about `chunk_words` words (research R8, ADR-0002).
 
     Whole paragraphs are packed up to the budget, which includes the overlap words carried
     from the previous passage of the same section. Only paragraphs longer than the budget
     are split. Prose with fewer than `min_chunk_words` new words is dropped at the end of a
-    section or before a table. Table-like blocks (with their captions) become their own
-    "table" passages, split evenly if longer than the budget; overlap never crosses them.
+    section or before a table. Table-like blocks (with their captions and header rows) become
+    their own "table" passages, split if longer than the budget, each piece repeating the header
+    row (`_split_table`); overlap never crosses them.
     Each passage records the page of its first new (non-overlap) word, and the regions of
     every word it contains, overlap included (research R4, ADR-0006).
     """
@@ -582,16 +616,8 @@ def chunk_sections(sections: list[Section], paper_id: str, title: str, settings:
                 if new_words >= settings.min_chunk_words:
                     emit(current, current_src, first_page, section.name)
                 current, current_src, new_words = [], [], 0
-                table_words: list[str] = []
-                table_src: list[tuple[Block, int]] = []
-                for b in blocks:
-                    split = b.text.split()
-                    table_words += split
-                    table_src += [(b, k) for k in range(len(split))]
-                pieces = math.ceil(len(table_words) / budget)
-                size = math.ceil(len(table_words) / pieces)
-                for start in range(0, len(table_words), size):
-                    emit(table_words[start : start + size], table_src[start : start + size], blocks[0].page,
+                for piece in _split_table(blocks, budget):
+                    emit([word for word, _ in piece], [source for _, source in piece], blocks[0].page,
                          section.name, "table")
                 continue
             block = blocks[0]

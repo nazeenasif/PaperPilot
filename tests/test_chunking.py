@@ -288,3 +288,75 @@ def test_a_short_block_on_the_previous_page_is_not_attached():
 def test_a_header_like_block_with_no_table_after_it_stays_text():
     passages = chunk(Section("Results", [Block(ATTENTION_HEADER, 9), para("b", 8)]))
     assert {p.kind for p in passages} == {"text"} and "dmodel" in passages[0].text
+
+
+# --- a split table repeats its header row (real case: LoRA Table 2, p. 6) ---
+
+LORA_TABLE_2_HEADER = "Parameters MNLI SST-2 MRPC CoLA QNLI QQP RTE STS-B Avg."
+LORA_TABLE_2_ROWS = [
+    "RoBbase (FT)* 125.0M 87.6 94.8 90.2 63.6 92.8 91.9 78.7 91.2 86.4",
+    "RoBlarge (AdptH)† 0.8M 90.3±.3 96.3±.5 87.7±1.7 66.3±2.0 94.7±.2 91.5±.1 72.9±2.9 91.5±.5 86.4",
+    "RoBlarge (LoRA)† 0.8M 90.6±.2 96.2±.5 90.2±1.0 68.2±1.9 94.8±.3 91.6±.2 85.2±1.1 92.3±.5 88.6",
+    "DeBXXL (FT)* 1500.0M 91.8 97.2 92.0 72.0 96.0 92.7 93.9 92.9 91.1",
+    "DeBXXL (LoRA) 4.7M 91.9±.2 96.9±.2 92.6±.6 72.4±1.1 96.0±.1 92.9±.1 94.9±.4 93.0±.2 91.3",
+]
+HEADER_WORDS = LORA_TABLE_2_HEADER.split()
+
+
+def table_2(*before):
+    section = Section("Empirical Experiments", [para("a", 8), *before, Block(LORA_TABLE_2_HEADER, 6),
+                                                *(Block(row, 6) for row in LORA_TABLE_2_ROWS)])
+    return [p for p in chunk(section) if p.kind == "table"]
+
+
+def test_every_passage_of_a_split_table_starts_with_its_header_row():
+    tables = table_2()
+    assert len(tables) > 1
+    assert all(p.text.split()[: len(HEADER_WORDS)] == HEADER_WORDS for p in tables)
+
+
+def test_a_split_table_loses_no_row_words_and_repeats_none():
+    rows = " ".join(LORA_TABLE_2_ROWS).split()
+    assert [w for p in table_2() for w in p.text.split()[len(HEADER_WORDS):]] == rows
+
+
+def test_a_split_table_stays_within_the_budget_and_counts_the_repeated_words():
+    assert all(p.word_count == len(p.text.split()) <= SETTINGS.chunk_words for p in table_2())
+
+
+def test_a_repeated_header_comes_after_the_caption_only_in_the_first_piece():
+    caption = "Table 2: GLUE results."
+    tables = table_2(Block(caption, 6))
+    assert tables[0].text.startswith(f"{caption} {LORA_TABLE_2_HEADER}")
+    assert all(p.text.startswith(LORA_TABLE_2_HEADER) for p in tables[1:])
+
+
+def test_a_split_table_uses_the_header_nearest_above_it():
+    second = "System Dev Test EM F1 EM F1"
+    section = Section("Results", [
+        Block(LORA_TABLE_2_HEADER, 6), Block(" ".join(LORA_TABLE_2_ROWS[:2]), 6),
+        Block(second, 6), Block(" ".join(LORA_TABLE_2_ROWS[2:]), 6),
+    ])
+    tables = [p for p in chunk(section) if p.kind == "table"]
+    assert tables[0].text.startswith(LORA_TABLE_2_HEADER) and tables[-1].text.startswith(second)
+
+
+def test_a_header_too_long_to_repeat_is_not_repeated():
+    header = "Model NQ TQA WQ CT Jeopardy-QGen MSMarco FVR-3 FVR-2 Exact Match"  # over half of 20 words
+    section = Section("Results", [Block(header, 6), *(Block(row, 6) for row in LORA_TABLE_2_ROWS)])
+    tables = [p for p in chunk(section) if p.kind == "table"]
+    assert tables[0].text.startswith(header) and not any(p.text.startswith(header) for p in tables[1:])
+    assert [w for p in tables for w in p.text.split()] == f"{header} {' '.join(LORA_TABLE_2_ROWS)}".split()
+
+
+def test_a_short_table_with_a_header_is_one_passage_with_one_header():
+    rows = " ".join(ATTENTION_ROWS.split()[:10])
+    tables = [p for p in chunk(Section("Results", [Block("System Dev Test EM F1 EM F1", 9), Block(rows, 9)])) if p.kind == "table"]
+    assert [p.text for p in tables] == [f"System Dev Test EM F1 EM F1 {rows}"]
+
+
+def test_a_repeated_header_is_highlighted_where_it_is_on_the_page():
+    header = boxed(LORA_TABLE_2_HEADER, 50, 550, page=6)
+    rows = [boxed(row, 50, 550, page=6) for row in LORA_TABLE_2_ROWS]
+    tables = [p for p in chunk(Section("Results", [header, *rows])) if p.kind == "table"]
+    assert all(p.regions and p.exact_regions for p in tables)

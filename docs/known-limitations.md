@@ -60,10 +60,10 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
   (axis ticks, legend entries) is not table-like, so it stays in a text passage. On the Checkpoint
   2 samples about 12 of 15 text passages read cleanly; the rest contain such fragments. The goal
   (SC-003) remains 9 of 10.
-- **A table split across passages has its header row only in the first piece.** A table longer than
-  one passage is split evenly, so later pieces hold unlabelled rows (LoRA Table 2, p. 6). A header
-  block beside the table rather than above it also stays out ("Model & Method # Trainable" on the same
-  page). Header rows directly above a table in the same column do join it.
+- **Table header rows are not always found.** Rows directly above a table in the same column join it,
+  and a split table repeats them in every piece. A header block beside the table stays out ("Model &
+  Method # Trainable", LoRA Table 2), and a table's split can fall mid-row, so a piece's first row may
+  not line up with the repeated header.
 - **Figure axis labels can become table passages.** A block of axis ticks such as "5 10 20 30
   40 50 Number of Retrieved Docs" is mostly numbers, so it is classified as a table passage.
   This is harmless for search, but these passages are not real tables. A short legend or label

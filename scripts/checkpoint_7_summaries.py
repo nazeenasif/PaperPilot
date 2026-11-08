@@ -8,13 +8,15 @@ requests are fewer than their plan.
 
 Usage: python scripts/checkpoint_7_summaries.py [part ...]   (default: every part)
 Parts: states (0), summary (6, LoRA), retry (2: Results and the TL;DR of the saved LoRA summary),
-reopen (0, needs summary or a saved LoRA summary)
+reopen (0, needs summary or a saved LoRA summary), compare (3, BERT vs RAG on Method, Datasets,
+Results), not-reported (1, BERT vs RAG on Limitations)
 
 Every claim of the summary is printed with its cited passages (paper, section, page, excerpt)
 and written to docs/verification/checkpoint-7-<date>.md for the hand check (FR-027, SC-002); a
 later run on the same day adds -v2, -v3 and so on, so a filled-in hand check is never overwritten.
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -78,18 +80,24 @@ def _blocked(*args, **kwargs):
 def part_states(run: Run, client: httpx.Client | None, claims: Claims) -> None:
     """Per-part states with a scripted model: a held-back section, a not-reported section, a
     cut-off section and a rejected TL;DR, each with the rest of the summary intact (US4).
-    The malformed comparison row is added with comparisons (T033)."""
+    Then a comparison with one malformed row and the other intact."""
     sys.path.insert(0, str(ROOT / "tests"))
     import re
 
     import openai
 
-    from conftest import SUMMARY_SECTIONS, SUMMARY_TITLE, fake_vector, write_pdf
+    from conftest import SECOND_SECTIONS, SECOND_TITLE, SUMMARY_SECTIONS, SUMMARY_TITLE, fake_vector, write_pdf
     from paperpilot import llm, service, store
     from paperpilot.errors import LLMError
     from paperpilot.llm import LLMReply
 
     def scripted(system: str, prompt: str, on_retry=None, task: str = "answer") -> LLMReply:
+        if system == prompts.ROW_INSTRUCTION:
+            if "Row: Method." in prompt:
+                return LLMReply("This is not the JSON that was asked for.", 50, 20, None, 1, 0.0)
+            cells = [{"paper": label, "text": f"The results are stated here [{number}]."}
+                     for label, number in re.findall(r'Paper (P\d):[^<]*<passage id="(\d+)"', prompt)]
+            return LLMReply(json.dumps({"cells": cells}), 50, 20, None, 1, 0.0)
         if system == prompts.TLDR_INSTRUCTION:
             return LLMReply("A summary sentence without any citation.", 50, 20, None, 1, 0.0)
         facet = re.search(r"Section: (\w+)\.", prompt).group(1).lower()
@@ -132,6 +140,17 @@ def part_states(run: Run, client: httpx.Client | None, claims: Claims) -> None:
                   "rejected TL;DR: held back with the broken rule named")
         run.check(all(parts[f].state == "verified" for f in ("problem", "limitations")),
                   "the other sections stay verified and visible")
+
+        second = add_paper(write_pdf(Path(folder) / "second.pdf", sections=SECOND_SECTIONS, references=False,
+                                     title=SECOND_TITLE))
+        compared = service.compare([paper.paper_id, second.paper_id], ["method", "results"])
+        method, results = compared.rows
+        print(f"  {'method row':12} {method.state:13} {method.reason or ''}")
+        print(f"  {'results row':12} {results.state:13} {compared.verified_cells} of {compared.total_cells} cells verified")
+        run.check((method.state, method.reason, method.cells) == ("failed", "malformed", []),
+                  "malformed row: fails alone, with no cells")
+        run.check(results.state == "ok" and all(c.state == "verified" for c in results.cells),
+                  "the other row stays verified and visible")
         used = llm.request_counts() - before
         run.check(used.total == 0, f"states: {used.total} model requests")
 
@@ -274,7 +293,128 @@ def _summary_run(run: Run, client: httpx.Client, claims: Claims, body: dict, pla
             opened += 1
     run.check(opened == len(cited), f"every cited passage opens its PDF at the cited page ({opened}/{len(cited)})")
     claims.rows += claim_rows("LoRA summary", summary)
-    claims.tokens = token_rows(summary)
+    claims.tokens += token_rows(summary)
+
+
+# --- parts compare (3 requests) and not-reported (1) ---
+
+
+def foreign_citations(comparison: dict) -> list[tuple[str, int]]:
+    """(cell, number) for every shown citation pointing at another paper's passage (FR-010)."""
+    owner = {p["number"]: p["paper_id"] for p in comparison["passages"]}
+    return [(cell["part"], number) for row in comparison["rows"] for cell in row["cells"] if cell["state"] == "verified"
+            for number in cell["citations"]["valid"] if owner.get(number) != cell["part"].split(":", 1)[1]]
+
+
+def cell_rows(source: str, comparison: dict) -> list[tuple[str, str, str, list[dict]]]:
+    """Every sentence of every verified cell, with the passages it cites."""
+    passages = {p["number"]: p for p in comparison["passages"]}
+    titles = {p["paper_id"]: p["title"] for p in comparison["papers"]}
+    rows = []
+    for row in comparison["rows"]:
+        for cell in row["cells"]:
+            if cell["state"] != "verified" or not cell["text"]:
+                continue
+            paper = titles[cell["part"].split(":", 1)[1]]
+            for sentence in prompts._sentences(cell["text"]):
+                cited = [passages[n] for n in prompts.extract_citations(sentence) if n in passages]
+                rows.append((source, f"{row['aspect']} · {paper}", sentence, cited))
+    return rows
+
+
+def row_token_rows(comparison: dict) -> list[tuple]:
+    """(row, state, input, output, reasoning, visible) for every row, failed ones too."""
+    rows = []
+    for row in comparison["rows"]:
+        tokens = row["tokens"] or {}
+        output, reasoning = tokens.get("output"), tokens.get("reasoning")
+        visible = output - reasoning if output is not None and reasoning is not None else None
+        state = f"{row['state']} ({row['reason']})" if row["reason"] else row["state"]
+        rows.append((prompts.ASPECTS[row["aspect"]].label, state, tokens.get("input"), output, reasoning, visible))
+    return rows
+
+
+def _compare_run(run: Run, client: httpx.Client, claims: Claims, aspects: list[str], plan: int) -> dict | None:
+    """Regenerate BERT vs RAG on some aspects through the API; every shown citation valid and opening."""
+    papers = [find_paper(client, prefix) for prefix in ("BERT", "Retrieval-Augmented")]
+    if not all(papers):
+        run.check(False, "BERT and RAG are in the library")
+        return None
+    body = {"paper_ids": [p["paper_id"] for p in papers], "aspects": aspects, "regenerate": True}
+    start = time.monotonic()
+    with client.stream("POST", "/api/comparisons", json=body, headers=WRITE_HEADERS, timeout=SUMMARY_TIMEOUT) as response:
+        text = "".join(response.iter_text())
+    seconds = time.monotonic() - start
+    if response.status_code != 200:
+        run.check(False, f"POST /api/comparisons answered {response.status_code}: {text[:200]}")
+        return None
+    events = parse_events(text)
+    for name, data in events:
+        if name == "progress" and data["step"] == "generating":
+            print(f"  progress: {data['part']} generating")
+        elif name == "row_failed":
+            print(f"  row_failed: {data['aspect']} ({data['reason']})")
+        elif name == "retry_wait":
+            print(f"  retry_wait: {data['part']} attempt {data['attempt']} of {data['max_attempts']}, "
+                  f"{data['wait_seconds']:.0f} s ({data['reason']})")
+    final_name, comparison = events[-1] if events else ("", {})
+    if final_name != "comparison":
+        run.check(False, f"the stream ended with {final_name or 'nothing'}: {comparison}")
+        return None
+    run.add_requests(comparison["requests"])
+
+    labels = {p["paper_id"]: p["title"][:30] for p in comparison["papers"]}
+    print(f"\nComparison ({comparison['model']}, {comparison['created_at']}), "
+          f"{comparison['verified_cells']} of {comparison['total_cells']} cells verified")
+    for row in comparison["rows"]:
+        print(f"\n  [{row['aspect']}] {row['state']}" + (f" ({row['reason']})" if row["reason"] else ""))
+        for cell in row["cells"]:
+            print(f"    {labels[cell['part'].split(':', 1)[1]]}: {cell['state']}" + (f" ({cell['reason']})" if cell["reason"] else ""))
+            if cell["text"]:
+                print(f"      {cell['text']}")
+            if cell["rejected_text"]:
+                print(f"      NOT VERIFIED: {cell['rejected_text']}")
+    print(f"\n  Requests: {comparison['requests']['planned']} planned, {comparison['requests']['retries']} retries; {seconds:.1f} s")
+
+    malformed = sum(row["reason"] == "malformed" for row in comparison["rows"])
+    print(f"  Malformed rows: {malformed}")
+    run.check(comparison["requests"]["planned"] <= plan,
+              f"the comparison stayed within its plan ({comparison['requests']['planned']} of {plan})")
+    foreign = foreign_citations(comparison)
+    run.check(not foreign, "every shown citation comes from the cell's own paper"
+              + (f" (not: {foreign})" if foreign else ""))
+    shown = [cell for row in comparison["rows"] for cell in row["cells"] if cell["state"] == "verified"]
+    run.check(all(not c["citations"]["invalid"] and set(c["citations"]["valid"]) <= set(c["passages"]) for c in shown),
+              f"every shown citation is valid for its cell ({len(shown)} cells verified)")
+    passages = {p["number"]: p for p in comparison["passages"]}
+    cited = sorted({n for c in shown for n in c["citations"]["valid"]})
+    opened = 0
+    for n in cited:
+        view = client.get(f"/api/passages/{passages[n]['passage_id']}")
+        pdf = client.get(f"/api/papers/{passages[n]['paper_id']}/pdf")
+        if view.status_code == 200 and pdf.status_code == 200 and 1 <= view.json()["page"] <= view.json()["page_count"]:
+            opened += 1
+    run.check(opened == len(cited), f"every cited passage opens its PDF at the cited page ({opened}/{len(cited)})")
+    claims.rows += cell_rows("BERT vs RAG", comparison)
+    claims.tokens += row_token_rows(comparison)
+    return comparison
+
+
+def part_compare(run: Run, client: httpx.Client, claims: Claims) -> None:
+    """US3: BERT vs RAG on Method, Datasets and Results (plan 3)."""
+    _compare_run(run, client, claims, ["method", "datasets", "results"], 3)
+
+
+def part_not_reported(run: Run, client: httpx.Client, claims: Claims) -> None:
+    """US4: BERT vs RAG on Limitations (plan 1): a cell the paper does not support (SC-004)."""
+    comparison = _compare_run(run, client, claims, ["limitations"], 1)
+    if comparison is None:
+        return
+    cells = [cell for row in comparison["rows"] for cell in row["cells"]]
+    if any(cell["state"] == "not_reported" for cell in cells):
+        run.check(True, "at least one cell reads Not reported in the retrieved passages")
+    else:
+        print("INFO: no cell was not reported in this run; part states still demonstrates the state (research R11)")
 
 
 def part_reopen(run: Run, client: httpx.Client, claims: Claims) -> None:
@@ -304,6 +444,8 @@ PARTS: dict[str, Part] = {
     "summary": Part(plan=6, needs_api=True, run=part_summary),
     "retry": Part(plan=2, needs_api=True, run=part_retry),
     "reopen": Part(plan=0, needs_api=True, run=part_reopen),
+    "compare": Part(plan=3, needs_api=True, run=part_compare),
+    "not-reported": Part(plan=1, needs_api=True, run=part_not_reported),
 }
 
 

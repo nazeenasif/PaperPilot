@@ -213,7 +213,7 @@ generalised (T004).
   - `summary`: regenerates the LoRA summary through the API (plan 6); checks every shown citation is valid and opens (`GET /api/passages/{id}` and the PDF at the cited page); prints tokens per part against `MAX_OUTPUT_TOKENS`.
   - `reopen` (US2): `GET /api/summaries/{lora}` returns it in < 1 s and `GET /api/usage` is unchanged (0 requests).
   - Prints every claim (each sentence of each part) with its citations and, per citation, the paper, section, page and the first 200 characters of the passage; writes the same list to `docs/verification/checkpoint-7-<date>.md` with empty **Verdict** and **Fault (retrieval / model)** columns.
-- [ ] T033 [US3] Add parts `compare` and `not-reported` to `scripts/checkpoint_7_summaries.py`:
+- [X] T033 [US3] Add parts `compare` and `not-reported` to `scripts/checkpoint_7_summaries.py`:
   - `compare`: BERT vs RAG on Method, Datasets, Results (plan 3); every shown cell citation valid and from the cell's own paper; claims appended to the verification file.
   - `not-reported`: BERT vs RAG on Limitations (plan 1); PASS with at least one `not_reported` cell; if none, prints the cells and their citations as INFO (the `states` part still demonstrates the state, research R11).
   - Prints the malformed-row count.

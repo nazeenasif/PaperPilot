@@ -136,3 +136,43 @@ evaluation feature's faithfulness test cases (claim-level support, not citation 
   - [13]'s "matches or exceeds" is for GPT-3 175B. Table 2 (p. 6) has DeBERTa LoRA below fine-tuning on
     SST-2 (96.9±.2 against 97.2), tied on QNLI and above on the other six tasks. The Results section
     said only "comparable", for MNLI [14]. See `docs/verification/checkpoint-7-2026-11-05-v2.md`.
+- **Variant (checkpoint 7, LoRA summary v4, 2026-11-08)**: Data claim 9, inside one section rather than
+  combining sections: "Experiments evaluate LoRA on RoBERTa, DeBERTa, GPT-2, and GPT-3 175B using the GLUE
+  benchmark for NLU, and WikiSQL (NL to SQL) and SAMSum (conversation summarization) for NLG on GPT-3 [8]."
+  - [8] says "we evaluate on the GLUE benchmark for RoBERTa and DeBERTa", so the sentence extends GLUE to
+    GPT-2 and GPT-3 175B. It comes from one passage, and the scope rule was already in the instructions.
+  - See `docs/verification/checkpoint-7-2026-11-08-v4.md`, claim 9. The number of F2 cases in research R3
+    (4) does not include this variant.
+
+### F3. Wrong column (checkpoint 7, LoRA summary, 2026-11-04 to 2026-11-08)
+
+- **Sentence (v4, claim 15)**: "In attention-weight ablations, adapting both Wq and Wv achieves the best
+  validation accuracy: 73.7% on WikiSQL (±0.5%) and 91.7% on MultiNLI (±0.1%) [13]."
+- **Source**: Table 5 (p. 10). Columns Wq, Wk, Wv, Wo, then Wq, Wk, then Wq, Wv, then Wq, Wk, Wv, Wo.
+  MultiNLI reads 91.0, 90.8, 91.0, 91.3, 91.3, **91.3**, **91.7**: Wq, Wv is 91.3, and 91.7 is all four
+  weights. WikiSQL's 73.7 is right, since both columns have it.
+- **Validation result**: citation valid, verified. 91.7 appears in the passage, so no number check can
+  catch it.
+- **Disproved hypothesis**: the first two runs (2026-11-04 claim 12, v2 claim 14) read a passage that had
+  lost the table's header row, which looked like the cause. Header rows now join their tables, and in v4
+  passage [13] starts "Weight Type Wq Wk Wv Wo Wq, Wk Wq, Wv Wq, Wk, Wv, Wo Rank r ...". The error remained,
+  so the missing header was not sufficient to explain it. One thing still in the way: flattened to text,
+  the labels and values are only aligned by counting.
+- **Possible explanation, not tested**: the caption says "Adapting both Wq and Wv gives the best performance
+  overall", and the model paired that with the row's highest number. The paper's own caption and table do not
+  quite agree here, which may invite it.
+- **For the evaluation feature**: a claim-level judge would need to read the table by column.
+
+### Incomplete citations (checkpoint 7, LoRA summary v4, 2026-11-08)
+
+- **Sentence (claim 5)**: "LoRA freezes pretrained weights W0 and learns low-rank updates ΔW = BA with rank r,
+  applied to attention projection matrices (Wq, Wk, Wv, Wo) while freezing MLP modules for simplicity and
+  parameter-efficiency [3, 7]."
+- **What the cited passages hold**: [3] defines W0, ∆W, r and the matrices; [7] says the MLP modules are frozen.
+  Neither has "BA" or says the pretrained weights are frozen.
+- **What the section read**: "BA" is in [5], read by this section but not cited by this sentence. "Frozen
+  pretrained weights" is in none of the four passages Method read ([3], [5], [6], [7]); the paper says it in the
+  passage numbered [1] in that run, which only Problem read. The claim is true of the paper, so this is the F1
+  shape: correct fact, not supported by the citation.
+- **Correction**: the v4 report's flag says "[5] and [1] hold the rest", without saying that Method never read [1].
+- **Validation result**: citations valid, verified.

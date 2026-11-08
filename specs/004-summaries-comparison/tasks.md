@@ -150,7 +150,7 @@ generalised (T004).
 
 ### US5 (P2): request plan, pre-check and stop rules (ADR-0009)
 
-- [ ] T019 [US5] Create failing tests in `tests/test_runs.py` (real `llm.generate` over `fake_llm.FakeClient` where the counter matters, `ScriptedLLM` otherwise):
+- [X] T019 [US5] Create failing tests in `tests/test_runs.py` (real `llm.generate` over `fake_llm.FakeClient` where the counter matters, `ScriptedLLM` otherwise):
   - **Pre-check:** with `DAILY_REQUEST_LIMIT=10` and 6 requests counted, `summarize` raises `DailyLimitError` before any request (FakeClient calls == 0); `compare` with 5 aspects likewise.
   - **Accounting:** a summary's first attempts never exceed its plan; with a scripted 429 then success on one facet, `requests == {planned: 6, retries: 1}` and the shared usage counter rose by 7.
   - **Stop rules:** a `DailyLimitError` or `RateLimitedError` raised in the third facet → facets 1–2 kept, 3–5 and the TL;DR `not_started` with the reason, no further `generate` call, and the partial summary saved; `LLMError(reason="busy")` likewise; `cut_off` does **not** stop the run.

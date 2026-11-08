@@ -452,6 +452,15 @@ def _to_reply(response, attempts: int, seconds: float, max_tokens: int) -> LLMRe
             f"({reasoning if reasoning is not None else 'unknown'} reasoning tokens used); "
             "set LLM_REASONING_EFFORT=low or choose another LLM_MODEL.",
             reason="cut_off",
+            tokens={
+                key: value
+                for key, value in (
+                    ("input", getattr(usage, "prompt_tokens", None) if usage else None),
+                    ("output", getattr(usage, "completion_tokens", None) if usage else None),
+                    ("reasoning", reasoning),
+                )
+                if value is not None
+            },
         )
     if not text.strip():
         raise LLMError("The model returned an empty answer; try again or choose another LLM_MODEL.", reason="empty")

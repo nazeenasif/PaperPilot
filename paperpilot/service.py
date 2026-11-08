@@ -493,7 +493,7 @@ def _run_summary(
             if error.reason not in PART_FAILURES:
                 raise
             requests = {"planned": 1, "retries": llm.request_counts().retries - before}
-            return None, requests, {}, error.reason
+            return None, requests, error.tokens or {}, error.reason
         tokens: dict[str, int] = {}
         _add_tokens(tokens, reply)
         return reply, {"planned": 1, "retries": llm.request_counts().retries - before}, tokens, None
@@ -515,7 +515,7 @@ def _run_summary(
                 reply, requests, tokens, failure = generate(key, prompts.SECTION_INSTRUCTION,
                                                             prompts.build_section_prompt(key, numbered), "summary_section")
                 if failure:
-                    part = Part(key, "failed", reason=failure, passages=numbers, requests=requests)
+                    part = Part(key, "failed", reason=failure, passages=numbers, requests=requests, tokens=tokens)
                 else:
                     emit("progress", {"part": key, "step": "checking"})
                     part = _section_part(key, reply.text, set(numbers), passages=numbers, requests=requests,
@@ -541,7 +541,7 @@ def _run_summary(
         reply, requests, tokens, failure = generate(TLDR, prompts.TLDR_INSTRUCTION,
                                                     prompts.build_tldr_prompt(verified), "tldr")
         if failure:
-            tldr = Part(TLDR, "failed", reason=failure, passages=cited, requests=requests, **built)
+            tldr = Part(TLDR, "failed", reason=failure, passages=cited, requests=requests, tokens=tokens, **built)
         else:
             emit("progress", {"part": TLDR, "step": "checking"})
             tldr = _tldr_part(reply.text, verified, passages=cited, requests=requests, tokens=tokens, **built)

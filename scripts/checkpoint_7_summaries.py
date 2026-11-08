@@ -48,6 +48,7 @@ class Claims:
     """Claims collected for the hand check: (source, part, sentence, [passage dict, ...])."""
 
     rows: list[tuple[str, str, str, list[dict]]] = field(default_factory=list)
+    tokens: list[tuple] = field(default_factory=list)  # token_rows() of the summary
 
 
 @dataclass(frozen=True)
@@ -161,11 +162,38 @@ def claim_rows(source: str, summary: dict) -> list[tuple[str, str, str, list[dic
     return rows
 
 
+def _label(name: str) -> str:
+    return "TL;DR" if name == "tldr" else prompts.FACETS[name].label
+
+
+def token_rows(summary: dict) -> list[tuple]:
+    """(part, state, input, output, reasoning, visible) for every part, failed ones too. Visible is
+    output minus reasoning, since the provider's output count includes reasoning."""
+    rows = []
+    for part in [summary["tldr"], *summary["sections"]]:
+        tokens = part["tokens"] or {}
+        output, reasoning = tokens.get("output"), tokens.get("reasoning")
+        visible = output - reasoning if output is not None and reasoning is not None else None
+        state = f"{part['state']} ({part['reason']})" if part["reason"] else part["state"]
+        rows.append((_label(part["part"]), state, tokens.get("input"), output, reasoning, visible))
+    return rows
+
+
+def token_table(rows: list[tuple]) -> list[str]:
+    """The token split as Markdown table lines."""
+
+    def count(value: int | None) -> str:
+        return "not reported" if value is None else f"{value:,}"
+
+    return ["| Part | State | Input | Output | Reasoning | Visible |", "|---|---|---|---|---|---|",
+            *(f"| {name} | {state} | " + " | ".join(count(v) for v in values) + " |" for name, state, *values in rows)]
+
+
 def print_summary(summary: dict) -> None:
     passages = {p["number"]: p for p in summary["passages"]}
     print(f"\nSummary of {summary['title']} ({summary['model']}, {summary['created_at']})")
     for part in [summary["tldr"], *summary["sections"]]:
-        label = "TL;DR" if part["part"] == "tldr" else prompts.FACETS[part["part"]].label
+        label = _label(part["part"])
         tokens = part["tokens"]  # the provider's output count already includes reasoning
         print(f"\n  [{label}] {part['state']}" + (f" ({part['reason']})" if part["reason"] else "")
               + (f" · tokens {tokens.get('output')} of {PART_TOKENS}, {tokens.get('reasoning')} of them reasoning"
@@ -234,6 +262,7 @@ def part_summary(run: Run, client: httpx.Client, claims: Claims) -> None:
             opened += 1
     run.check(opened == len(cited), f"every cited passage opens its PDF at the cited page ({opened}/{len(cited)})")
     claims.rows += claim_rows("LoRA summary", summary)
+    claims.tokens = token_rows(summary)
 
 
 def part_reopen(run: Run, client: httpx.Client, claims: Claims) -> None:
@@ -276,8 +305,9 @@ def claims_path(folder: Path, day: str) -> Path:
 
 
 def write_claims(claims: Claims) -> Path | None:
-    """The hand-check record: every claim with its cited passages, Verdict and Fault left empty."""
-    if not claims.rows:
+    """The hand-check record: every claim with its cited passages, Verdict and Fault left empty,
+    then the token split for every part."""
+    if not claims.rows and not claims.tokens:
         return None
     VERIFICATION_DIR.mkdir(parents=True, exist_ok=True)
     path = claims_path(VERIFICATION_DIR, date.today().isoformat())
@@ -299,6 +329,7 @@ def write_claims(claims: Claims) -> Path | None:
         refs = "<br>".join(f"[{p['number']}] {cell(p['title'][:40])}, {cell(p['section'])}, p. {p['page']}: "
                            f"“{cell(p['text'][:EXCERPT])}…”" for p in cited)
         lines.append(f"| {i} | {source} | {part} | {cell(sentence)} | {refs} |  |  |")
+    lines += ["", f"## Tokens per part (limit {PART_TOKENS:,}, reasoning included)", "", *token_table(claims.tokens)]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 
@@ -346,8 +377,10 @@ def main() -> int:
             print(f"\n=== Part: {name} (planned model requests: {PARTS[name].plan})")
             PARTS[name].run(run, client if PARTS[name].needs_api else None, claims)
 
-    if claims.rows:
+    if claims.rows or claims.tokens:
         print_claims(claims)
+        print("\nTokens per part:")
+        print("\n".join(token_table(claims.tokens)))
         path = write_claims(claims)
         print(f"\nINFO: {len(claims.rows)} claims written to {path.relative_to(ROOT)} for the hand check")
 

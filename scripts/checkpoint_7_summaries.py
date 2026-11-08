@@ -7,7 +7,8 @@ twice the plan (scripts/request_budget.py). Real parts do not start when today's
 requests are fewer than their plan.
 
 Usage: python scripts/checkpoint_7_summaries.py [part ...]   (default: every part)
-Parts: states (0), summary (6, LoRA), reopen (0, needs summary or a saved LoRA summary)
+Parts: states (0), summary (6, LoRA), retry (2: Results and the TL;DR of the saved LoRA summary),
+reopen (0, needs summary or a saved LoRA summary)
 
 Every claim of the summary is printed with its cited passages (paper, section, page, excerpt)
 and written to docs/verification/checkpoint-7-<date>.md for the hand check (FR-027, SC-002); a
@@ -213,12 +214,22 @@ def print_summary(summary: dict) -> None:
 
 def part_summary(run: Run, client: httpx.Client, claims: Claims) -> None:
     """US1: regenerate the LoRA summary through the API (plan 6); every citation valid and opening."""
+    _summary_run(run, client, claims, {"regenerate": True}, 6)
+
+
+def part_retry(run: Run, client: httpx.Client, claims: Claims) -> None:
+    """FR-020: rerun Results and the TL;DR of the saved LoRA summary (plan 2)."""
+    _summary_run(run, client, claims, {"retry_parts": ["results", "tldr"]}, 2)
+
+
+def _summary_run(run: Run, client: httpx.Client, claims: Claims, body: dict, plan: int) -> None:
+    """Post one summary run and check it: within its plan, citations valid and opening."""
     lora = find_paper(client, "LoRA")
     if lora is None:
         run.check(False, "the LoRA paper is in the library")
         return
     start = time.monotonic()
-    with client.stream("POST", f"/api/summaries/{lora['paper_id']}", json={"regenerate": True},
+    with client.stream("POST", f"/api/summaries/{lora['paper_id']}", json=body,
                        headers=WRITE_HEADERS, timeout=SUMMARY_TIMEOUT) as response:
         text = "".join(response.iter_text())
     seconds = time.monotonic() - start
@@ -244,7 +255,8 @@ def part_summary(run: Run, client: httpx.Client, claims: Claims) -> None:
     print(f"\n  Requests for this summary: {summary['requests']['planned']} planned, "
           f"{summary['requests']['retries']} retries; {seconds:.1f} s")
 
-    run.check(summary["requests"]["planned"] <= 6, f"the summary stayed within its plan ({summary['requests']['planned']} of 6)")
+    run.check(summary["requests"]["planned"] <= plan,
+              f"the summary stayed within its plan ({summary['requests']['planned']} of {plan})")
     shown = [p for p in [summary["tldr"], *summary["sections"]] if p["state"] == "verified"]
     run.check(all(not p["citations"]["invalid"] and set(p["citations"]["valid"]) <= set(p["passages"]) for p in shown),
               f"every shown citation is valid for its part ({len(shown)} of 6 parts verified)")
@@ -290,6 +302,7 @@ def part_reopen(run: Run, client: httpx.Client, claims: Claims) -> None:
 PARTS: dict[str, Part] = {
     "states": Part(plan=0, needs_api=False, run=part_states),
     "summary": Part(plan=6, needs_api=True, run=part_summary),
+    "retry": Part(plan=2, needs_api=True, run=part_retry),
     "reopen": Part(plan=0, needs_api=True, run=part_reopen),
 }
 

@@ -271,7 +271,7 @@ generalised (T004).
   - The footer reads "8 of 10 cells verified" and "Passages were retrieved from each paper separately…".
   - A saved comparison of the same papers and aspects opens with 0 requests.
 - [X] T046 [US3] Implement `frontend/app/compare/page.tsx`, `frontend/components/compare/CompareForm.tsx`, `CompareTable.tsx`, `CompareCell.tsx` and `frontend/lib/useComparison.ts`, so T045 passes.
-- [ ] T047 [US3] Add test "F4 US3 compare" to `frontend/e2e/smoke.spec.ts`: pick BERT and RAG, run, see the table with a not-reported cell and a held-back cell; at 375 px the table scrolls inside its own container, not the page.
+- [X] T047 [US3] Add test "F4 US3 compare" to `frontend/e2e/smoke.spec.ts`: pick BERT and RAG, run, see the table with a not-reported cell and a held-back cell; at 375 px the table scrolls inside its own container, not the page.
 
 ### US5 (P2): cost and limits
 

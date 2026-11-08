@@ -554,3 +554,76 @@ test("F4 US4 part states", async ({ page }) => {
   await expect(page.getByText("4 of 6 parts verified")).toBeVisible();
   await expect(page.getByText("All citations verified")).toHaveCount(0);
 });
+
+test("F4 US3 compare", async ({ page }, testInfo) => {
+  const cards = [
+    { ...LORA_CARD, paper_id: "bert", title: "BERT: Pre-training of Deep Bidirectional Transformers", arxiv_id: "1810.04805" },
+    { ...LORA_CARD, paper_id: "rag", title: "Retrieval-Augmented Generation for NLP Tasks", arxiv_id: "2005.11401" },
+  ];
+  const passages = [1, 2].map((number) => ({
+    number, passage_id: `p-${number}`, paper_id: number === 1 ? "bert" : "rag", title: cards[number - 1]!.title,
+    section: "Methods", page: 1, score: 0.7, text: "Passage text.",
+  }));
+  const verified = summaryPart("method:bert", { text: "BERT trains a deep bidirectional encoder on unlabelled text with masked tokens and next-sentence labels [1].", passages: [1] });
+  const notReported = summaryPart("method:rag", { state: "not_reported", text: null, reason: "missing_cell", passages: [2], citations: { valid: [], invalid: [], uncited_sentences: [] } });
+  const heldBack = summaryPart("results:bert", { state: "held_back", text: null, reason: "invalid_citations", rejected_text: "A claim [2].", passages: [1], citations: { valid: [], invalid: [2], uncited_sentences: [] } });
+  const longCell = summaryPart("results:rag", { text: "RAG retrieves supporting documents and generates answers from them across several open-domain question sets [2].", passages: [2], citations: { valid: [2], invalid: [], uncited_sentences: [] } });
+  const finished = {
+    paper_ids: ["bert", "rag"],
+    papers: cards.map((card, i) => ({ paper_id: card.paper_id, title: card.title, arxiv_id: card.arxiv_id, label: `P${i + 1}` })),
+    aspects: ["method", "results"],
+    rows: [
+      { aspect: "method", state: "ok", reason: null, cells: [verified, notReported], until: null, tokens: {} },
+      { aspect: "results", state: "ok", reason: null, cells: [heldBack, longCell], until: null, tokens: {} },
+    ],
+    passages,
+    plan: { max_requests: 2, parts: ["method", "results"] },
+    requests: { planned: 2, retries: 0 },
+    model: "nvidia/x:free",
+    prompt_version: 8,
+    created_at: new Date().toISOString(),
+    status: "current",
+    stale_reason: null,
+    pending: null,
+    verified_cells: 2,
+    total_cells: 4,
+  };
+  await streamPostInPage(page, "/api/comparisons", [
+    { afterMs: 50, event: "plan", data: finished.plan },
+    { afterMs: 50, event: "progress", data: { part: "method", step: "generating" } },
+    { afterMs: 400, event: "part", data: verified },
+    { afterMs: 50, event: "part", data: notReported },
+    { afterMs: 50, event: "part", data: heldBack },
+    { afterMs: 50, event: "part", data: longCell },
+    { afterMs: 50, event: "comparison", data: finished },
+  ]);
+  await fakeBackend(page, {
+    routes: {
+      "/api/papers": async (route: import("@playwright/test").Route) =>
+        route.fulfill({ status: 200, headers: CORS, json: { papers: cards, total_passages: 80 } }),
+      "/api/comparisons": async (route: import("@playwright/test").Route) =>
+        route.fulfill({ status: 404, headers: CORS, json: { kind: "not_saved", plan: { max_requests: 2 } } }),
+    },
+  });
+
+  await page.goto("/compare");
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: cards[0]!.title }, { timeout: 30_000 });
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: cards[1]!.title });
+  for (const name of ["Problem", "Datasets", "Limitations"]) await page.getByRole("checkbox", { name }).uncheck();
+  await expect(page.getByText("uses 2 requests, 1 per aspect", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Compare papers" }).click();
+
+  const table = page.getByRole("table");
+  await expect(table.getByRole("columnheader", { name: /arXiv 1810\.04805/ })).toBeVisible();
+  await expect(table.getByText("Not reported in the retrieved passages.")).toBeVisible();
+  await expect(table.getByText(/Held back: this cell cited passage 2/)).toBeVisible();
+  await expect(page.getByText(/2 of 4 cells verified/)).toBeVisible();
+
+  // At phone width the table scrolls inside its own container, not the page.
+  const widths = await page.evaluate(() => {
+    const box = document.querySelector('[aria-label="Comparison table"]')!;
+    return { page: document.documentElement.scrollWidth, window: window.innerWidth, inner: box.scrollWidth, outer: box.clientWidth };
+  });
+  expect(widths.page).toBeLessThanOrEqual(widths.window);
+  if (testInfo.project.name === "phone") expect(widths.inner).toBeGreaterThan(widths.outer);
+});

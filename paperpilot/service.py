@@ -761,6 +761,12 @@ def _check_papers(paper_ids: list[str]) -> list[library.PaperSummary]:
     return [_paper(paper_id) for paper_id in paper_ids]
 
 
+def check_comparison(paper_ids: list[str], aspects: list[str]) -> None:
+    """Raise ValueError or UnknownPaperError for a comparison that cannot be run or looked up."""
+    _ordered_aspects(aspects)
+    _check_papers(paper_ids)
+
+
 def comparison_plan(paper_ids: list[str], aspects: list[str], retry_aspects: list[str] | None = None) -> dict:
     """The most model requests a comparison (or a retry of some rows) can make (FR-021)."""
     parts = _ordered_aspects(retry_aspects if retry_aspects is not None else aspects)

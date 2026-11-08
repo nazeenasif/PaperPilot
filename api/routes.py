@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from api.errors import ApiError, error_for
-from api.schemas import AskIn, SearchIn, StatusOut, SummarizeIn, answer_body, summary_body, usage_body
+from api.schemas import AskIn, CompareIn, SearchIn, StatusOut, SummarizeIn, answer_body, comparison_body, summary_body, usage_body
 from api.streams import run_streaming
 from paperpilot import library, llm, prompts, service, store
 from paperpilot.config import Settings
@@ -238,5 +238,65 @@ async def summarize_paper(
             yield ServerSentEvent(event=item[1], data=item[2])
         elif item[0] == "result":
             yield ServerSentEvent(event="summary", data=summary_body(item[1]))
+        else:
+            yield ServerSentEvent(event="error", data=error_for(item[1]).body())
+
+
+# --- Feature 4: comparisons (contracts/web-api.md; spec US3) ---
+
+
+def _checked_comparison(paper_ids: list[str], aspects: list[str]) -> None:
+    """Refuse a bad comparison before anything else (plain JSON errors)."""
+    try:
+        service.check_comparison(paper_ids, aspects)
+    except ValueError:
+        raise ApiError("invalid_request") from None
+    except UnknownPaperError:
+        raise ApiError("unknown_paper") from None
+
+
+@router.get("/comparisons")
+def get_comparison(papers: str, aspects: str) -> dict:
+    """The saved comparison in any paper and aspect order, current or stale, and the plan for
+    running it. 404 not_saved (with the plan) when there is none. Never sends a model request."""
+    paper_ids, wanted = papers.split(","), aspects.split(",")
+    _checked_comparison(paper_ids, wanted)
+    plan = service.comparison_plan(paper_ids, wanted)
+    saved = service.saved_comparison(paper_ids, wanted)
+    if saved is None:
+        raise ApiError("not_saved", plan=plan)
+    return {**comparison_body(saved), "plan": plan}
+
+
+def start_comparison(body: CompareIn, request: Request) -> CompareIn:
+    """Validate before the stream starts (plain JSON errors) and take the one-task lock."""
+    _checked_comparison(body.paper_ids, body.aspects)
+    if body.retry_aspects is not None:
+        if not body.retry_aspects or set(body.retry_aspects) - set(body.aspects):
+            raise ApiError("invalid_request")
+        saved = service.saved_comparison(body.paper_ids, body.aspects)
+        if saved is None:
+            raise ApiError("not_saved", plan=service.comparison_plan(body.paper_ids, body.aspects))
+        if saved.status == "stale":
+            raise ApiError("invalid_request")
+    if not request.app.state.paperpilot.question_lock.acquire(blocking=False):
+        raise ApiError("busy_question")
+    return body
+
+
+@router.post("/comparisons", response_class=EventSourceResponse)
+async def compare_papers(request: Request, body: CompareIn = Depends(start_comparison)) -> AsyncIterable[ServerSentEvent]:
+    """Stream the plan, per-aspect progress and checked cells, then the saved comparison (FR-012)."""
+    lock = request.app.state.paperpilot.question_lock
+
+    def work(emit):
+        return service.compare(body.paper_ids, body.aspects, regenerate=body.regenerate,
+                               retry_aspects=body.retry_aspects, on_event=emit)
+
+    async for item in run_streaming(work, on_finished=lock.release):
+        if item[0] == "event":
+            yield ServerSentEvent(event=item[1], data=item[2])
+        elif item[0] == "result":
+            yield ServerSentEvent(event="comparison", data=comparison_body(item[1]))
         else:
             yield ServerSentEvent(event="error", data=error_for(item[1]).body())

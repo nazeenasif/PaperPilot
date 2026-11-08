@@ -79,11 +79,29 @@ def answer_body(answer: Answer, requests: RequestCounts, usage: dict | None = No
 # --- Feature 4: summaries (contracts/web-api.md) ---
 
 
+class CompareIn(BaseModel):
+    """POST /api/comparisons body; the service checks the papers and aspects themselves."""
+
+    paper_ids: list[str] = Field(max_length=10)
+    aspects: list[str] = Field(max_length=10)
+    regenerate: bool = False
+    retry_aspects: list[str] | None = Field(default=None, max_length=10)
+
+
 class SummarizeIn(BaseModel):
     """POST /api/summaries/{paper_id} body."""
 
     regenerate: bool = False
     retry_parts: list[str] | None = Field(default=None, max_length=6)
+
+
+def comparison_body(comparison: service.Comparison) -> dict:
+    """A comparison as sent to the browser: every field of data-model.md, plus its cell counts."""
+    return {
+        **service.comparison_to_dict(comparison),
+        "verified_cells": comparison.verified_cells,
+        "total_cells": comparison.total_cells,
+    }
 
 
 def summary_body(summary: service.Summary) -> dict:

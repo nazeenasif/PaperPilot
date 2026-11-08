@@ -193,7 +193,7 @@ generalised (T004).
   - `422 invalid_request` for 1 or 5 papers, duplicates, no or unknown aspects; `404 unknown_paper`.
   - `GET /api/comparisons?papers=b,a&aspects=results,method` finds the saved comparison regardless of order; `404 not_saved` otherwise.
   - `retry_aspects` re-runs one row.
-- [ ] T028 [US3] Implement `GET`/`POST /api/comparisons` in `api/routes.py` with `CompareIn` and `comparison_body` in `api/schemas.py`, so T027 passes.
+- [X] T028 [US3] Implement `GET`/`POST /api/comparisons` in `api/routes.py` with `CompareIn` and `comparison_body` in `api/schemas.py`, so T027 passes.
 
 ### US5: plan, limits and one model task at a time
 

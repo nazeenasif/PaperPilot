@@ -212,8 +212,11 @@ def start_summary(paper_id: str, body: SummarizeIn, request: Request) -> Summari
     if body.retry_parts is not None:
         if not body.retry_parts or any(part not in SUMMARY_PARTS for part in body.retry_parts):
             raise ApiError("invalid_request")
-        if service.saved_summary(paper_id) is None:
+        saved = service.saved_summary(paper_id)
+        if saved is None:
             raise ApiError("not_saved", plan=service.summary_plan(paper_id))
+        if saved.status == "stale":
+            raise ApiError("invalid_request")
     if not request.app.state.paperpilot.question_lock.acquire(blocking=False):
         raise ApiError("busy_question")
     return body

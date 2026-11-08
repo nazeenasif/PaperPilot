@@ -314,7 +314,7 @@ def reprocess_paper(paper_id: str, on_progress: Progress | None = None) -> AddRe
         store.delete_paper_passages(paper_id)
         store.upsert_passages(passages, embeddings, source_file, paper.page_count)
     _write_layout(paper, passages, settings)
-    forget_results(paper_id)  # saved summaries cite the old passages (research R6)
+    mark_results_reprocessed(paper_id)  # saved summaries cite the old passages (research R6)
     stored = time.perf_counter()
     logger.info("Re-processed %s: %d passages in %.2fs", paper_id, len(passages), stored - start)
     report("ready", None)
@@ -439,6 +439,9 @@ def result_key(kind: str, paper_ids: list[str], aspects: list[str] | None = None
     return ResultKey(kind, tuple(sorted(paper_ids)), tuple(sorted(aspects or ())))
 
 
+REPROCESSED = "reprocessed"  # in place of a fingerprint: never matches one
+
+
 def passage_fingerprint(paper_id: str) -> str:
     """SHA-256 of a paper's stored passage ids and texts, in order: changes when it is re-chunked."""
     digest = hashlib.sha256()
@@ -496,7 +499,8 @@ def save_result(key: ResultKey, result: dict, model: str, prompt_version: int) -
 def load_result(key: ResultKey, model: str, prompt_version: int) -> tuple[dict, str | None] | None:
     """The saved result and why it is stale (None when current), or None if nothing is saved.
 
-    Stale reasons: "passages_changed", "instructions_changed", "model_changed" (FR-017).
+    Stale reasons: "passages_changed" (the paper was re-processed), "instructions_changed",
+    "model_changed" (FR-017).
     """
     db = _results_connection()
     try:
@@ -516,6 +520,22 @@ def load_result(key: ResultKey, model: str, prompt_version: int) -> tuple[dict, 
     return result, None
 
 
+def mark_results_reprocessed(paper_id: str) -> int:
+    """Mark every saved result that includes the paper as made before it was re-processed, even if
+    its passages came out the same (FR-017). The results stay readable. Returns how many."""
+    db = _results_connection()
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        rows = [(key, json.loads(prints)) for key, ids, prints
+                in db.execute("SELECT key, paper_ids, fingerprints FROM results") if paper_id in ids.split(",")]
+        db.executemany("UPDATE results SET fingerprints = ? WHERE key = ?",
+                       [(json.dumps({**prints, paper_id: REPROCESSED}), key) for key, prints in rows])
+        db.execute("COMMIT")
+    finally:
+        db.close()
+    return len(rows)
+
+
 def delete_result(key: ResultKey) -> None:
     """Delete one saved result, if there is one."""
     db = _results_connection()
@@ -526,7 +546,7 @@ def delete_result(key: ResultKey) -> None:
 
 
 def forget_results(paper_id: str) -> int:
-    """Delete every saved result that includes the paper; return how many (delete, re-process)."""
+    """Delete every saved result that includes the paper; return how many (when it is deleted)."""
     db = _results_connection()
     try:
         db.execute("BEGIN IMMEDIATE")

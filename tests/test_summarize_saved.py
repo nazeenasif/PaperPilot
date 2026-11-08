@@ -5,7 +5,7 @@ import dataclasses
 
 import pytest
 
-from paperpilot import library, llm, prompts, service
+from paperpilot import library, llm, prompts, service, store
 from test_summarize import PromptReadingLLM
 
 
@@ -246,3 +246,61 @@ def test_re_processing_forgets_the_unfinished_run_too(summary_env, model, monkey
     regenerate_with_cut_off(summary_env.paper_id, monkeypatch, "Results")
     assert library.forget_results(summary_env.paper_id) == 2
     assert service.saved_summary(summary_env.paper_id) is None
+
+
+# --- a re-processed paper keeps its summary, marked earlier (FR-017) ---
+
+
+def test_re_processing_keeps_the_summary_marked_earlier(summary_env, model):
+    first = service.summarize(summary_env.paper_id)
+    library.reprocess_paper(summary_env.paper_id)
+    saved = service.saved_summary(summary_env.paper_id)
+    assert (saved.status, saved.stale_reason) == ("stale", "passages_changed")
+    assert saved.sections == first.sections
+
+
+def test_a_passage_that_changed_is_marked_on_the_earlier_summary(summary_env, model, monkeypatch):
+    first = service.summarize(summary_env.paper_id)
+    moved_id = first.passages[0].passage_id
+    library.reprocess_paper(summary_env.paper_id)
+    real = store.get_passage
+
+    def edited(passage_id):
+        found = real(passage_id)
+        return (found[0] + " edited", found[1]) if found and passage_id == moved_id else found
+
+    monkeypatch.setattr(store, "get_passage", edited)
+    saved = service.saved_summary(summary_env.paper_id)
+    assert saved.passages[0].moved is True and saved.passages[0].text == first.passages[0].text
+    assert all(p.moved is False for p in saved.passages[1:])
+
+
+def test_a_passage_that_is_gone_is_marked_on_the_earlier_summary(summary_env, model, monkeypatch):
+    first = service.summarize(summary_env.paper_id)
+    library.reprocess_paper(summary_env.paper_id)
+    monkeypatch.setattr(store, "get_passage", lambda passage_id: None)
+    assert all(p.moved for p in service.saved_summary(summary_env.paper_id).passages)
+    assert first.passages[0].moved is False
+
+
+def test_a_current_summary_marks_no_passage_and_does_not_look_them_up(summary_env, model, monkeypatch):
+    service.summarize(summary_env.paper_id)
+    monkeypatch.setattr(store, "get_passage", lambda passage_id: pytest.fail("looked up a passage"))
+    assert not any(p.moved for p in service.saved_summary(summary_env.paper_id).passages)
+
+
+def test_an_earlier_summary_cannot_be_retried(summary_env, model):
+    """A retry would save old and new parts together as if current; only a full run may replace it."""
+    service.summarize(summary_env.paper_id)
+    library.reprocess_paper(summary_env.paper_id)
+    calls = len(model.calls)
+    with pytest.raises(ValueError, match="earlier"):
+        service.summarize(summary_env.paper_id, retry_parts=["results"])
+    assert len(model.calls) == calls
+
+
+def test_regenerating_after_re_processing_makes_it_current(summary_env, model):
+    service.summarize(summary_env.paper_id)
+    library.reprocess_paper(summary_env.paper_id)
+    new = service.summarize(summary_env.paper_id, regenerate=True)
+    assert new.status == "current" and service.saved_summary(summary_env.paper_id).status == "current"

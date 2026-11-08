@@ -24,6 +24,9 @@ One summary section, the TL;DR, or one comparison cell.
 | requests | {planned, retries} | requests this part used (0 for not reported without a request) |
 | tokens | {input?, output?, reasoning?} | as reported by the provider, for cut-off parts too |
 
+Numbered passages also carry `moved` (bool): on a summary from before a re-process, the passage id no
+longer holds the cited text (research R6).
+
 Rules (FR-011):
 - `verified` ⇔ text has ≥ 1 citation, all in `passages` (cells: that paper's passages for that
   row), and is not the not-found / not-reported sentence. TL;DR: also research R3 steps 2–4.

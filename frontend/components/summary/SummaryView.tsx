@@ -67,7 +67,8 @@ export function SummaryView({ paperId }: { paperId: string }) {
   const tldrPart = partOf("tldr");
   const without = SECTIONS.filter(({ key }) => tldrPart?.built_without?.includes(key)).map(({ label }) => label);
   const showResult = running || done !== null;
-  const retry = (key: string) => () => void summary.start({ retry_parts: [key] });
+  // An earlier summary is only replaced whole: a retry would mix old and new parts as if current.
+  const retry = (key: string) => (stale ? undefined : () => void summary.start({ retry_parts: [key] }));
   const pending = done?.pending;
   const pendingNames = (pending?.failed_parts ?? []).map((key) => SECTIONS.find((s) => s.key === key)?.label ?? key);
 
@@ -139,8 +140,8 @@ export function SummaryView({ paperId }: { paperId: string }) {
               without.length > 0 && (
                 <div className="space-y-3">
                   <p className="text-sm text-amber">{builtWithout(without)}</p>
-                  {!running && tldrPart?.state !== "failed" && tldrPart?.state !== "not_started" && (
-                    <CostButton label="Rewrite the TL;DR" cost={1} onClick={retry("tldr")} primary={false} />
+                  {!running && !stale && tldrPart?.state !== "failed" && tldrPart?.state !== "not_started" && (
+                    <CostButton label="Rewrite the TL;DR" cost={1} onClick={() => void summary.start({ retry_parts: ["tldr"] })} primary={false} />
                   )}
                 </div>
               )

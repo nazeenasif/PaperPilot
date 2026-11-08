@@ -186,3 +186,16 @@ def test_part_states_arrive_as_part_events_and_the_stream_still_ends_with_the_su
         assert (part["rejected_text"] is not None) == (part["state"] == "held_back"), name
         assert (part["text"] is not None) == (part["state"] == "verified"), name
     assert events[-1][0] == "summary" and events[-1][1]["verified_parts"] == 2
+
+
+def test_retrying_parts_of_an_earlier_summary_is_refused_before_the_stream(summary_client):
+    from paperpilot import library
+
+    paper_id = summary_client.paper.paper_id
+    assert summarize_stream(summary_client, paper_id)[0] == 200
+    library.reprocess_paper(paper_id)
+    response = summary_client.post(f"/api/summaries/{paper_id}", json={"retry_parts": ["results"]}, headers=HEADER)
+    assert response.status_code == 422 and response.json()["kind"] == "invalid_request"
+    body = summary_client.get(f"/api/summaries/{paper_id}").json()
+    assert (body["status"], body["stale_reason"]) == ("stale", "passages_changed")
+    assert all("moved" in p for p in body["passages"])

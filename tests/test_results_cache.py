@@ -83,13 +83,25 @@ def test_deleting_a_paper_forgets_every_result_that_includes_it(two_papers):
     assert library.load_result(library.result_key("summary", [b]), MODEL, 1) is not None
 
 
-def test_reprocessing_a_paper_forgets_its_results(two_papers):
+def test_reprocessing_a_paper_keeps_its_results_and_marks_them_earlier(two_papers):
+    """FR-017: even when the passages come out identical, the saved result is no longer current."""
     a, b = two_papers
     library.save_result(library.result_key("summary", [a]), {"s": "a"}, MODEL, 1)
+    library.save_result(library.result_key("comparison", [a, b], ["method"]), {"c": 1}, MODEL, 1)
     library.save_result(library.result_key("summary", [b]), {"s": "b"}, MODEL, 1)
     library.reprocess_paper(a)
-    assert library.load_result(library.result_key("summary", [a]), MODEL, 1) is None
-    assert library.load_result(library.result_key("summary", [b]), MODEL, 1) is not None
+    assert library.load_result(library.result_key("summary", [a]), MODEL, 1) == ({"s": "a"}, "passages_changed")
+    assert library.load_result(library.result_key("comparison", [a, b], ["method"]), MODEL, 1) == ({"c": 1}, "passages_changed")
+    assert library.load_result(library.result_key("summary", [b]), MODEL, 1) == ({"s": "b"}, None)
+
+
+def test_saving_again_after_reprocessing_makes_a_result_current(two_papers):
+    a, _ = two_papers
+    key = library.result_key("summary", [a])
+    library.save_result(key, {"s": "old"}, MODEL, 1)
+    library.reprocess_paper(a)
+    library.save_result(key, {"s": "new"}, MODEL, 1)
+    assert library.load_result(key, MODEL, 1) == ({"s": "new"}, None)
 
 
 def test_forget_results_returns_the_count(two_papers):

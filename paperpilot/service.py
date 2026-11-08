@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 
-from paperpilot import library, llm, prompts
+from paperpilot import library, llm, prompts, store
 from paperpilot.config import load_settings
 from paperpilot.errors import EmptyQueryError, LLMError, UnknownPaperError
 from paperpilot.prompts import CitationReport, NumberedPassage, Turn, VerifiedSection
@@ -374,6 +374,12 @@ def _unfinished_run(paper_id: str) -> Summary | None:
     return summary_from_dict(found[0]) if found and found[1] is None else None
 
 
+def _passage_moved(passage: NumberedPassage) -> bool:
+    """True if a citation's passage id no longer holds the text the summary was written from."""
+    found = store.get_passage(passage.passage_id)
+    return found is None or found[0] != passage.text
+
+
 def _save(key: library.ResultKey, summary: Summary) -> None:
     library.save_result(key, summary_to_dict(replace(summary, pending=None)), summary.model, summary.prompt_version)
 
@@ -387,6 +393,8 @@ def saved_summary(paper_id: str) -> Summary | None:
         return None
     data, stale_reason = found
     summary = summary_from_dict(data)
+    if stale_reason == "passages_changed":
+        summary = replace(summary, passages=[replace(p, moved=_passage_moved(p)) for p in summary.passages])
     unfinished = _unfinished_run(paper_id)
     pending = {
         "created_at": unfinished.created_at,
@@ -485,6 +493,8 @@ def summarize(
         base = unfinished or saved_summary(paper_id)
         if base is None:
             raise ValueError(f"No saved summary of {paper_id} to retry parts of")
+        if base.status == "stale":
+            raise ValueError(f"The saved summary of {paper_id} is an earlier one; regenerate it in full")
     else:
         facets = list(prompts.FACETS)
         saved = saved_summary(paper_id)

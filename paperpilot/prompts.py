@@ -61,6 +61,7 @@ class NumberedPassage:
     page: int
     score: float
     text: str
+    moved: bool = False  # on an earlier summary: this id no longer holds this text (research R6)
 
 
 @dataclass(frozen=True)

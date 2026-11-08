@@ -130,6 +130,21 @@ describe("A saved summary", () => {
     await waitFor(() => expect(screen.queryByText(/last regeneration did not finish/i)).toBeNull());
   });
 
+  it("offers no retry on an earlier summary, only a full regeneration", async () => {
+    const earlier = summary({
+      status: "stale",
+      stale_reason: "passages_changed",
+      verified_parts: 5,
+      sections: [part("problem"), part("method", { state: "failed", text: null, reason: "cut_off" }),
+        part("data"), part("results"), part("limitations")],
+    });
+    backend({ saved: earlier });
+    inProviders(<SummaryView paperId="lora" />);
+    expect(await screen.findByText(/before this paper was re-processed/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Regenerate summary" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+  });
+
   it("offers to retry a failed section with its cost", async () => {
     const failed = summary({
       verified_parts: 5,

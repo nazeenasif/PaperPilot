@@ -40,6 +40,7 @@ export function SourceViewer({
   const [reprocess, setReprocess] = useState<Reprocess>("idle");
 
   useEffect(() => {
+    if (citation.moved) return; // the id may now hold other text; show the passage as cited
     let cancelled = false;
     setLoad({ state: "loading" });
     setPage(citation.page);
@@ -51,7 +52,7 @@ export function SourceViewer({
     return () => {
       cancelled = true;
     };
-  }, [citation.passage_id, citation.page]);
+  }, [citation.passage_id, citation.page, citation.moved]);
 
   const view = load.state === "loaded" ? load.view : null;
   const layout = view?.layout ?? null;
@@ -85,7 +86,18 @@ export function SourceViewer({
           </SheetDescription>
         </SheetHeader>
 
-        {load.state === "loading" && <p className="text-sm text-muted-foreground">Loading the source…</p>}
+        {citation.moved && (
+          <div className="space-y-3">
+            <p className="text-sm text-amber">
+              This passage changed when this paper was re-processed, so it can&apos;t be marked in the PDF. This is the text
+              as cited.
+            </p>
+            <blockquote className="rounded-lg bg-page px-4 py-3 font-serif text-sm leading-relaxed text-passage-text">
+              {citation.text}
+            </blockquote>
+          </div>
+        )}
+        {!citation.moved && load.state === "loading" && <p className="text-sm text-muted-foreground">Loading the source…</p>}
 
         {load.state === "failed" && load.kind === "unknown_passage" && <PassageGone />}
         {load.state === "failed" && load.kind !== "unknown_passage" && (

@@ -290,10 +290,12 @@ instructions or the TL;DR rule change) and `LLM_MODEL`.
 
 Invalidation is double:
 
-1. **Explicitly**: `library.delete_paper` and `library.reprocess_paper` call
-   `library.forget_results(paper_id)`, deleting every row that includes the paper. (The paper ID
-   is the hash of the PDF bytes, so re-processing the same PDF keeps the same ID — the key alone
-   would not change when only the chunk settings did.)
+1. **Explicitly**: `library.delete_paper` calls `library.forget_results(paper_id)`, deleting every
+   row that includes the paper. `library.reprocess_paper` calls `library.mark_results_reprocessed`
+   (amended 2026-11-08; it deleted them before, which left nothing to tell the researcher about and
+   lost work): the row stays readable and returns `passages_changed`, shown as "Generated before this
+   paper was re-processed", even if the passages came out the same. (The paper ID is the hash of the
+   PDF bytes, so re-processing the same PDF keeps the same ID.)
 2. **By key**: a lookup recomputes the fingerprint, version and model; a row saved under another
    model or version is returned as **stale** with its reason (`model_changed`,
    `instructions_changed`, `passages_changed`), readable but never shown as current (FR-017).
@@ -314,8 +316,12 @@ changes).
 **A run with failed parts beside a complete summary** (added 2026-11-08, FR-019, FR-020). It is saved
 under its own key (`summary_unfinished`) and reported as `pending`; retries run on it, and it replaces
 the summary once complete, then is deleted. A complete summary is kept even when stale, because it is
-still the last one the researcher can read in full. Re-processing a paper forgets both: their citations
-point at passages that may have changed.
+still the last one the researcher can read in full.
+
+**An earlier summary after a re-process** (added 2026-11-08). Passage ids can then hold other text, so a
+citation whose text no longer matches is marked `moved`: the viewer shows the text as cited rather than
+open that id. Part retries are refused on any earlier summary, because saving would present old and new
+parts as current; only a full regeneration replaces it. An unfinished run left beside it is ignored.
 
 ## R7. Module placement under Principle II
 

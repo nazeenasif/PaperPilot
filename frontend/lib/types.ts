@@ -80,6 +80,8 @@ export interface NumberedPassage {
   page: number;
   score: number;
   text: string;
+  /** On a summary from before a re-process: the id no longer holds this text. */
+  moved?: boolean;
 }
 
 export interface SearchResult extends Omit<NumberedPassage, "number"> {

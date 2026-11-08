@@ -28,7 +28,7 @@ was kept; posting `retry_parts` finishes it). `404 not_saved` (body also carries
 
 ### `POST /api/summaries/{paper_id}` (response: text/event-stream)
 Body `{"regenerate": bool, "retry_parts": [str] | null}`. Before the stream: `422
-invalid_request`, `404 unknown_paper`, `409 busy_task`, `429 daily_limit` (with `needed`).
+invalid_request` (also for `retry_parts` on a stale summary, which only a full regeneration replaces), `404 unknown_paper`, `409 busy_task`, `429 daily_limit` (with `needed`).
 
 | event | data |
 |---|---|

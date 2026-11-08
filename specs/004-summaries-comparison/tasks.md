@@ -197,7 +197,7 @@ generalised (T004).
 
 ### US5: plan, limits and one model task at a time
 
-- [ ] T029 [US5] Create failing tests in `tests/api/test_runs_api.py`, and update `tests/api/test_ask.py` for the rename:
+- [X] T029 [US5] Create failing tests in `tests/api/test_runs_api.py`, and update `tests/api/test_ask.py` for the rename:
   - While a scripted summary is held mid-run, `POST /api/ask` and `POST /api/comparisons` get `409 busy_task`; while a question runs, `POST /api/summaries/{id}` gets `409 busy_task`. In `tests/api/test_ask.py`, the one-question-at-a-time test now expects `busy_task` (the only change allowed there).
   - With fewer requests remaining than the plan, `POST` returns `429 daily_limit` with `needed`, `used`, `limit`, `resets_at` before the stream and sends no request.
   - A run stopped by `DailyLimitError` mid-way ends with `summary` whose remaining parts are `not_started`.

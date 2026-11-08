@@ -1,4 +1,4 @@
-# Facet retrieval probe (2026-11-05)
+# Facet retrieval probe (2026-11-08)
 
 `python scripts/probe_facets.py`; 0 model requests. Each facet's retrieval as summaries use it, k = 4,
 within one paper, on the 5 papers in `papers/`. Queries not changed. In **Mark**: `n/4` is how many

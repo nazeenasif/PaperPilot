@@ -1,6 +1,6 @@
 # Relevance threshold calibration
 
-Date: 2026-11-05. Library: 6 papers in `data\library`. Embedding model: `BAAI/bge-small-en-v1.5`. Chunking: 220/40.
+Date: 2026-11-08. Library: 6 papers in `data\library`. Embedding model: `BAAI/bge-small-en-v1.5`. Chunking: 220/40.
 
 Calibrated **for bge-small-en-v1.5 on this library**; recalibrate when the embedding model, chunking or papers change. Score = top-1 similarity (0–1).
 

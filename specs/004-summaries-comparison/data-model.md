@@ -23,6 +23,7 @@ One summary section, the TL;DR, or one comparison cell.
 | passages | [int] | numbers of the passages given for this part |
 | requests | {planned, retries} | requests this part used (0 for not reported without a request) |
 | tokens | {input?, output?, reasoning?} | as reported by the provider, for cut-off parts too |
+| until | str \| null | `not_started`: when requests resume (daily limit, long wait) |
 
 Numbered passages also carry `moved` (bool): on a summary from before a re-process, the passage id no
 longer holds the cited text (research R6).
@@ -66,7 +67,8 @@ marked `built_without` that section until the TL;DR is retried too.
 | paper_ids | [str] | 2–4, distinct, in the researcher's order for display; sorted in the key |
 | papers | [{paper_id, title, arxiv_id, label}] | label `P1…P4` used in the prompt |
 | aspects | [str] | subset of `problem, method, datasets, results, limitations`, in fixed order |
-| rows | [{aspect, state: ok \| failed \| not_started, reason?, cells: [Part]}] | one row per aspect; a failed row (e.g. `malformed`) has no cells |
+| rows | [{aspect, state: ok \| failed \| not_started, reason?, cells: [Part], requests, tokens, until?}] | one row per aspect; a failed row (e.g. `malformed`) has no cells; `until` says when requests resume on a stopped row |
+| pending | null \| {created_at, failed_aspects, retry_aspects, verified_cells} | a later run with failed rows, kept beside this complete comparison |
 | passages | [NumberedPassage] | |
 | plan, requests, model, prompt_version, created_at, status | as Summary | plan = number of aspects |
 | verified_cells, total_cells | int | "8 of 10 cells verified" |
@@ -75,8 +77,8 @@ marked `built_without` that section until the TL;DR is retried too.
 
 `kind, key, paper_ids, result (JSON of Summary or Comparison), model, prompt_version,
 created_at`. Key = SHA-256 of `kind`, sorted paper IDs, each paper's passage fingerprint, sorted
-aspects, prompt version and `LLM_MODEL`. Rows are deleted by `forget_results(paper_id)` on delete
-and re-process.
+aspects, prompt version and `LLM_MODEL`. Rows are deleted by `forget_results(paper_id)` when a paper
+is deleted, and marked earlier by `mark_results_reprocessed(paper_id)` when it is re-processed.
 
 ## RequestPlan
 

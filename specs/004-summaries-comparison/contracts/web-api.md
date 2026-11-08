@@ -56,4 +56,6 @@ malformed row; ends with `comparison`.
 ## Changes to existing endpoints
 
 - `POST /api/ask`: `409 busy_task` instead of `busy_question` (same meaning, now shared).
-- `DELETE /api/papers/{id}` and re-process jobs also remove that paper's saved results.
+- `DELETE /api/papers/{id}` also removes that paper's saved results. Re-process jobs keep them, marked
+  `stale` with `passages_changed`.
+- A stale summary or comparison refuses `retry_parts` or `retry_aspects` with `422 invalid_request`.

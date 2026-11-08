@@ -171,7 +171,10 @@ they are built (T016).
 ## R4. Comparison rows as structured JSON
 
 **Decision**: one request per aspect (clarification). For aspect `a`, each paper `p` gets its
-own retrieval of **3 passages** (`paper_ids=[p]`, query from the aspect's fixed query). Passages
+own retrieval of **3 passages** through `facet_retrieval(facet, p, k=3)`, so comparisons share the facet
+table's query, preferred sections, Related Work exclusion and whole-paper gate with summaries (R2;
+settled 2026-11-08). A Limitations row reads up to 2 passages from its sections and 1 more from the
+whole paper; a Problem row prefers the Abstract and Introduction. Passages
 are de-duplicated by passage id and numbered once per comparison (a passage seen in an earlier
 row keeps its number). The prompt groups passages by paper under labels `P1…P4` and asks for
 **JSON only**:

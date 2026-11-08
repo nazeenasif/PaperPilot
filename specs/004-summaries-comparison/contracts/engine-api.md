@@ -49,7 +49,7 @@ def compare(
 
 - Validates 2–4 distinct known papers (`ValueError` → API `invalid_request`; `UnknownPaperError`)
   and a non-empty subset of `prompts.ASPECTS` in fixed order.
-- Per aspect: per paper `library.search(aspect_query, k=3, paper_ids=[p])`; de-duplicated,
+- Per aspect: per paper `facet_retrieval(facet, p, k=3)` (research R2, R4); de-duplicated,
   numbered once per comparison; one `llm.generate` call with `prompts.build_row_prompt`;
   `prompts.parse_row` → malformed → row `failed` (`malformed`); else each cell through
   `review_reply(cell_text, allowed=<that paper's numbers in this row>)`.

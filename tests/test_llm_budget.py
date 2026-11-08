@@ -1,5 +1,5 @@
 """Output budgets per task kind (research R5, ADR-0008): answers stay at 2048; summary sections,
-the TL;DR and comparison rows get 4096, because reasoning counts against the limit. Fake client
+the TL;DR and comparison rows get 8192, because reasoning counts against the limit. Fake client
 only; no network."""
 
 import pytest
@@ -32,16 +32,16 @@ def test_answers_keep_2048_by_default(client):
 
 
 @pytest.mark.parametrize("task", ["summary_section", "tldr", "comparison"])
-def test_summary_and_comparison_calls_get_4096(client, task):
+def test_summary_and_comparison_calls_get_8192(client, task):
     fake = client(f.ok("A part [1]."))
     llm.generate("system", "prompt", task=task)
-    assert fake.calls[0]["max_tokens"] == 4096
+    assert fake.calls[0]["max_tokens"] == 8192
 
 
 def test_retries_keep_the_tasks_limit(client):
     fake = client(f.rate_limited(retry_after="1"), f.ok("A part [1]."))
     llm.generate("system", "prompt", task="tldr")
-    assert [c["max_tokens"] for c in fake.calls] == [4096, 4096]
+    assert [c["max_tokens"] for c in fake.calls] == [8192, 8192]
 
 
 def test_an_unknown_task_sends_nothing(client):
@@ -57,7 +57,7 @@ def test_every_budget_is_within_the_models_listed_maximum():
     assert all(limit <= MODEL_MAX_COMPLETION_TOKENS for limit in llm.OUTPUT_TOKENS.values())
 
 
-@pytest.mark.parametrize(("task", "limit"), [("answer", "2048"), ("summary_section", "4096")])
+@pytest.mark.parametrize(("task", "limit"), [("answer", "2048"), ("summary_section", "8192")])
 def test_a_cut_off_message_names_the_limit_that_applied(client, task, limit):
     client(f.length())
     with pytest.raises(LLMError, match=limit) as raised:

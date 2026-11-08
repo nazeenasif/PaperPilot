@@ -206,26 +206,25 @@ without contract changes); one retrieval across all selected papers (rejected: F
 
 ## R5. Output budget and cut-off
 
-**Decision** (amended 2026-11-04 after the measurement below): the output limit is set per task
+**Decision** (amended 2026-11-04 and 2026-11-08 after the measurements below): the output limit is set per task
 kind in `llm.OUTPUT_TOKENS`, passed as `llm.generate(..., task=...)`:
 
 | Task kind | `max_tokens` | Requested length | Note |
 |---|---|---|---|
 | `answer` | 2048 | ≤ 150 words | unchanged, so `ask()` behaves as before |
-| `summary_section` | 4096 | ≤ 80 words | |
-| `tldr` | 4096 | ≤ 60 words, ≤ 3 sentences | |
-| `comparison` | 4096 | ≤ 50 words per cell | one call writes a row of up to four cells |
+| `summary_section` | 8192 | ≤ 80 words | |
+| `tldr` | 8192 | ≤ 60 words, ≤ 3 sentences | |
+| `comparison` | 8192 | ≤ 50 words per cell | one call writes a row of up to four cells |
 
 Reasoning effort stays as configured; that experiment belongs to the evaluation feature.
 OpenRouter's model list (2026-11-04) gives `nvidia/nemotron-3-ultra-550b-a55b:free` a
-`max_completion_tokens` of 65,536, so 4096 is well within it. **4096 is not yet verified by a real
-run.** The call that hit the old limit (Method) was cut off, so its true need is unknown, and a
-comparison row has not been measured at all.
+`max_completion_tokens` of 65,536, so 8192 is well within it. A comparison row has not been measured
+at all.
 
 A `finish_reason == "length"` already raises `LLMError(reason="cut_off")` in `llm.generate`; the
 orchestrator catches it **per part**, marks that part *failed (cut_off)* and continues. Truncated
-text is never stored or shown. The checkpoint prints input, output and reasoning tokens per part
-so the headroom is measured, not assumed.
+text is never stored or shown. Token counts are kept for cut-off parts too, and the checkpoint report
+shows input, output, reasoning and visible tokens per part, so the headroom is measured, not assumed.
 
 **Rationale**: the existing boundary already distinguishes cut-off from other failures; only the
 handling changes from "fail the answer" to "fail this part".
@@ -253,6 +252,23 @@ three times the assumption, while visible text was only 75-246 tokens. Output us
 Word limits do not create headroom on this model, because reasoning dominates. The per-part
 failure handling worked as designed (no truncated text; the other parts stayed), but one part in
 six being cut off is too often, which led to the per-task limits above.
+
+**Measured 2026-11-05 (checkpoint 7, v2 and v3): 4096 was not enough.** Results used 2,607 tokens in v2
+and went over 4,096 in v3, so the same part differs by more than 1,489 tokens. Each run's passages and
+instructions differed: v3 added the scope rule and table header rows. Failed parts kept no counts then,
+so v3's Results need is unknown and the cause is not separated from ordinary variation in reasoning:
+
+| Part | v2 output of 4,096 | v2 reasoning | v3 output of 4,096 | v3 reasoning |
+|---|---|---|---|---|
+| Problem | 543 | 476 | 1,141 | 1,065 |
+| Method | 1,504 | 1,384 | 1,079 | 972 |
+| Data | 1,582 | 1,440 | 1,709 | 1,559 |
+| Results | 2,607 | 2,434 | over 4,096 (cut off) | unknown |
+| Limitations | 1,031 | 967 | 849 | 786 |
+| TL;DR | 2,782 | 2,692 | 1,474 | 1,382 |
+
+Hence 8192 for these calls, 2048 unchanged for answers. A higher limit lets a runaway call take longer,
+but no text is shown until it passes its check, and one cut-off wastes a request and a retry.
 
 ## R6. Saved results: SQLite cache, keys and invalidation
 

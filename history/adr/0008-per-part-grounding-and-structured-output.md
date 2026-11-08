@@ -58,11 +58,16 @@
     - A missing cell → not reported. Extra cells and keys → ignored.
   - Each cell then goes through `review_reply` with its own allowed set.
   - No provider-specific JSON mode, so any OpenAI-compatible model works.
-- **Output budget per task kind** (amended 2026-11-04): `llm.OUTPUT_TOKENS` sets `max_tokens` per
-  call, reasoning included: answers 2048; summary sections, the TL;DR and comparison rows 4096.
+- **Output budget per task kind** (amended 2026-11-04 and 2026-11-08): `llm.OUTPUT_TOKENS` sets
+  `max_tokens` per call, reasoning included: answers 2048; summary sections, the TL;DR and comparison
+  rows 8192.
   - The first decision kept every call at 2048, relying on word limits (sections 80, TL;DR 60,
     cells 50). Checkpoint 7 disproved it: reasoning was 943-1,679 tokens per summary part, against
     220-510 assumed, visible text only 75-246, and Method was cut off.
+  - The second decision set these calls to 4096. Checkpoint 7 disproved that too: Results used 2,607
+    tokens in v2 and went over 4,096 in v3 (research R5). Passages and instructions differed between
+    the runs, and failed parts kept no counts then, so the cause is unmeasured. Failed parts now
+    keep their counts.
   - The configured free model allows 65,536 completion tokens (OpenRouter's model list,
     2026-11-04). Reasoning effort is unchanged; that experiment belongs to the evaluation feature.
   - A cut-off (`LLMError(reason="cut_off")`) fails that part only; truncated text is never

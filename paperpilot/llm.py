@@ -33,7 +33,7 @@ KEY_INFO_TIMEOUT_SECONDS = 10.0
 # max_tokens per task kind; reasoning counts against it (research R5, ADR-0008). A comparison
 # call writes one row, up to four cells. The configured free model allows 65,536 (OpenRouter's
 # model list, 2026-11-04).
-OUTPUT_TOKENS = {"answer": 2048, "summary_section": 4096, "tldr": 4096, "comparison": 4096}
+OUTPUT_TOKENS = {"answer": 2048, "summary_section": 8192, "tldr": 8192, "comparison": 8192}
 RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
 _MAX_MESSAGE_CHARS = 300
 

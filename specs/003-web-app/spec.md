@@ -4,8 +4,8 @@
 **Created**: 2026-10-24
 **Status**: Draft
 **Input**: User description: "Feature 3: PaperPilot web app — FastAPI backend + Next.js frontend for
-the library and question answering. Visual reference: docs/design/ask.png, library.png,
-states.png (dark cinematic: ink background #07090D, panels #10141B, teal #5EEAD4 for
+the library and question answering. Visual reference: the PaperPilot UI canvas, with
+docs/design/ask.png and states.png (dark cinematic: ink background #07090D, panels #10141B, teal #5EEAD4 for
 verified/grounded, amber #F5B454 for citations and highlights; Sora headings, Inter body,
 JetBrains Mono for system details). User stories: drag-and-drop PDFs with Parsing → Chunking →
 Embedding → Ready progress and duplicate detection; answers with numbered citation chips and an
@@ -65,7 +65,7 @@ summaries, comparison, user accounts, deployment."
 The researcher runs PaperPilot on their own machine and uses it in a browser. Feature 1 (the
 paper library and search) and Feature 2 (grounded answers with checked citations) already work
 from scripts; this feature makes them usable through a web interface that follows the visual
-reference in `docs/design/` (Ask, Library and Designed States screens).
+reference in the PaperPilot UI canvas (Ask, Library and Designed States screens).
 
 ### User Story 1 - Ask a question and get a verified, cited answer (Priority: P1)
 
@@ -405,7 +405,7 @@ designed presentation, with no raw error text anywhere.
 
 **Presentation and accessibility**
 
-- **FR-028**: The app MUST follow the visual reference in `docs/design/`: dark ink background and
+- **FR-028**: The app MUST follow the visual reference in the PaperPilot UI canvas: dark ink background and
   panels, teal for verified and grounded elements, amber for citations and highlights, and
   separate typefaces for headings, body text and system details (palette and fonts as in the
   feature description).

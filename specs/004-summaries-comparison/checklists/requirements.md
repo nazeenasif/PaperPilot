@@ -33,11 +33,11 @@
 
 - Clarified 2026-10-25: FR-007 fixed list of aspects (Q1: A); FR-009 one request per aspect
   (Q2: A). All items pass; ready for `/sp.plan`.
-- Aligned with the new designs (summary.png, compare.png, library.png), 2026-10-25: five summary
+- Aligned with the new designs (Summary, Compare and Library, then exported images), 2026-10-25: five summary
   sections (the sixth card was a state example), "uses 5 requests, 1 per aspect" on Compare, four
   header tabs (Ask, Library, Summarize, Compare; FR-001 and Placement), 4 passages per summary
   section. Re-checked: all items still pass.
-- Named settings and paths (`TOP_K`, `docs/design/`) appear only to tie defaults to the existing
+- Named settings (`TOP_K`) appear only to tie defaults to the existing
   product, as in Features 1–3; no technology choice is made in the spec.
 - Expected checkpoint plan (FR-009, one request per aspect): 6 (LoRA summary) + 3 (BERT–RAG on
   Method, Datasets, Results) + 1 (a "Not reported" demonstration row) = 10 requests at most.

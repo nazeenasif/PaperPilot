@@ -5,7 +5,7 @@
 **Status**: Draft
 **Input**: User description: "Feature 4: Paper summaries and cross-paper comparison for PaperPilot
 (see docs/paperpilot-guide.pdf, Phase 6), built into the existing web app. Visual style:
-docs/design/ (dark cinematic). Every grounding rule from Features 2–3 applies: citations validated
+the PaperPilot UI canvas (dark cinematic). Every grounding rule from Features 2–3 applies: citations validated
 in code, not-found instead of guessing, nothing unverified shown as verified." The full description,
 with its five user stories, functional requirements, out-of-scope list and acceptance criteria
 (guide Checkpoints 6–7), is recorded in `history/prompts/004-summaries-comparison/`.
@@ -270,8 +270,8 @@ completes when the retry succeeds.
   MUST be treated as failed for that part, shown with a designed "cut off" state and a retry
   option; truncated text MUST NOT be shown. Prompts and requested output lengths MUST be sized so
   that a normal part fits the model's output budget.
-- **FR-015**: Summary and comparison screens MUST follow the visual reference in `docs/design/`
-  (dark cinematic; teal for verified elements, amber for citations), MUST work at 375 px width
+- **FR-015**: Summary and comparison screens MUST follow the visual reference in the PaperPilot UI
+  canvas (dark cinematic; teal for verified elements, amber for citations), MUST work at 375 px width
   without horizontal scrolling and MUST be usable with the keyboard alone, as Feature 3's screens.
 
 **Saving and reuse (User Story 2)**
@@ -385,13 +385,15 @@ completes when the retry succeeds.
   → A: No; one request per aspect stands, and the design now reads "uses 5 requests, 1 per
   aspect".
 - Q: Navigation: four header tabs (Ask, Library, Summarize, Compare) as in the summary and
-  compare designs? → A: Yes; library.png is updated to match.
+  compare designs? → A: Yes; the Library design is updated to match.
 - Q: The design shows "4 passages read" per section; use 4 instead of the question default (6)?
   → A: Yes, 4 passages per summary section.
 
 ## Assumptions
 
-- **Placement**: the header has four tabs: Ask, Library, Summarize and Compare (`docs/design/`).
+- **Designs and screenshots** (2026-11-08): designs live in the PaperPilot UI canvas; screenshots of the
+  running app go in the README. The exported Library, Summary and Compare images were removed.
+- **Placement**: the header has four tabs: Ask, Library, Summarize and Compare (UI canvas).
   Summarize opens a paper picker with the saved summaries; the Summarize button on a paper's card
   in the Library opens that paper's summary directly. Compare opens the comparison screen.
 - **Retrieval sizes**: each summary section uses 4 passages from that paper (as shown in the

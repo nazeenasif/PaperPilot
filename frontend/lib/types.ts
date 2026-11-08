@@ -147,7 +147,7 @@ export type ErrorKind =
   | "unknown_passage"
   | "pdf_missing"
   | "not_found"
-  | "busy_question"
+  | "busy_task"
   | "busy_task"
   | "not_saved"
   | "busy_job"

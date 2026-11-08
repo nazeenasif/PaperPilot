@@ -33,7 +33,7 @@ Every non-2xx response and every SSE `error` event has the body `{"kind": <kind>
 | `pdf_missing` | 404 | `paper_id` | paper has no stored PDF |
 | `not_found` | 404 | — | no such `/api` path |
 | `invalid_request` | 422 | — | the request body or parameters failed validation |
-| `busy_question` | 409 | — | another question is still being answered (FR-010) |
+| `busy_task` | 409 | — | another question, summary or comparison is still running; was `busy_question` until Feature 4 (FR-010) |
 | `busy_job` | 409 | `paper_id` | a job for this paper is already queued or running |
 | `daily_limit` | 429 | `used`, `limit`, `resets_at` | daily free requests used up (no model request made) |
 | `rate_limited` | 429 | `until`, `daily` | provider asked for a wait > 60 s; `daily: true` → daily-limit screen |
@@ -116,7 +116,7 @@ Body:
 ```
 Validation errors (`empty_question`, `no_papers_selected`, `unknown_paper`, `not_ready`) are
 returned as a normal JSON error response before the stream starts. Only one question is
-processed at a time; a second concurrent request gets `409 {"kind": "busy_question"}`.
+processed at a time; a second concurrent request gets `409 {"kind": "busy_task"}`.
 
 Stream events (in order; `progress` and `retry_wait` may repeat):
 

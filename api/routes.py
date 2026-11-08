@@ -12,7 +12,7 @@ from api.schemas import AskIn, CompareIn, SearchIn, StatusOut, SummarizeIn, answ
 from api.streams import run_streaming
 from paperpilot import library, llm, prompts, service, store
 from paperpilot.config import Settings
-from paperpilot.errors import PdfMissingError, UnknownPaperError, UnknownPassageError
+from paperpilot.errors import DailyLimitError, PdfMissingError, UnknownPaperError, UnknownPassageError
 from paperpilot.service import Turn
 
 router = APIRouter(prefix="/api")
@@ -61,15 +61,15 @@ def start_question(body: AskIn, request: Request) -> AskIn:
     if not body.question.strip():
         raise ApiError("empty_question")
     check_scope(body.paper_ids)
-    if not request.app.state.paperpilot.question_lock.acquire(blocking=False):
-        raise ApiError("busy_question")
+    if not request.app.state.paperpilot.model_lock.acquire(blocking=False):
+        raise ApiError("busy_task")
     return body
 
 
 @router.post("/ask", response_class=EventSourceResponse)
 async def ask_question(request: Request, body: AskIn = Depends(start_question)) -> AsyncIterable[ServerSentEvent]:
     """Stream progress and retry waits, then the checked answer (or an error) (FR-006, FR-011)."""
-    lock = request.app.state.paperpilot.question_lock
+    lock = request.app.state.paperpilot.model_lock
     usage = request.app.state.usage
     history = [Turn(turn.role, turn.text) for turn in body.history]
 
@@ -174,6 +174,14 @@ def get_pdf(paper_id: str) -> FileResponse:
 SUMMARY_PARTS = {*prompts.FACETS, service.TLDR}
 
 
+def _check_budget(needed: int) -> None:
+    """Refuse a run before its stream when fewer requests remain than its plan (FR-023)."""
+    try:
+        service.check_request_budget(needed)
+    except DailyLimitError as error:
+        raise error_for(error) from None
+
+
 @router.get("/summaries")
 def list_summaries() -> dict:
     """Every paper with its saved summary's status, for the Summarize tab (FR-001). No model request."""
@@ -217,8 +225,12 @@ def start_summary(paper_id: str, body: SummarizeIn, request: Request) -> Summari
             raise ApiError("not_saved", plan=service.summary_plan(paper_id))
         if saved.status == "stale":
             raise ApiError("invalid_request")
-    if not request.app.state.paperpilot.question_lock.acquire(blocking=False):
-        raise ApiError("busy_question")
+    if body.retry_parts is not None:
+        _check_budget(service.summary_plan(paper_id, body.retry_parts)["max_requests"])
+    elif body.regenerate or service.saved_summary(paper_id) is None:
+        _check_budget(service.summary_plan(paper_id)["max_requests"])
+    if not request.app.state.paperpilot.model_lock.acquire(blocking=False):
+        raise ApiError("busy_task")
     return body
 
 
@@ -227,7 +239,7 @@ async def summarize_paper(
     paper_id: str, request: Request, body: SummarizeIn = Depends(start_summary)
 ) -> AsyncIterable[ServerSentEvent]:
     """Stream the plan, per-part progress and checked parts, then the saved summary (FR-012)."""
-    lock = request.app.state.paperpilot.question_lock
+    lock = request.app.state.paperpilot.model_lock
 
     def work(emit):
         return service.summarize(paper_id, regenerate=body.regenerate, retry_parts=body.retry_parts,
@@ -279,15 +291,19 @@ def start_comparison(body: CompareIn, request: Request) -> CompareIn:
             raise ApiError("not_saved", plan=service.comparison_plan(body.paper_ids, body.aspects))
         if saved.status == "stale":
             raise ApiError("invalid_request")
-    if not request.app.state.paperpilot.question_lock.acquire(blocking=False):
-        raise ApiError("busy_question")
+    if body.retry_aspects is not None:
+        _check_budget(len(body.retry_aspects))
+    elif body.regenerate or service.saved_comparison(body.paper_ids, body.aspects) is None:
+        _check_budget(len(body.aspects))
+    if not request.app.state.paperpilot.model_lock.acquire(blocking=False):
+        raise ApiError("busy_task")
     return body
 
 
 @router.post("/comparisons", response_class=EventSourceResponse)
 async def compare_papers(request: Request, body: CompareIn = Depends(start_comparison)) -> AsyncIterable[ServerSentEvent]:
     """Stream the plan, per-aspect progress and checked cells, then the saved comparison (FR-012)."""
-    lock = request.app.state.paperpilot.question_lock
+    lock = request.app.state.paperpilot.model_lock
 
     def work(emit):
         return service.compare(body.paper_ids, body.aspects, regenerate=body.regenerate,

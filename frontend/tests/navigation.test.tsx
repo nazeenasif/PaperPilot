@@ -35,7 +35,7 @@ describe("Header navigation (Feature 4)", () => {
 });
 
 describe("One model task at a time", () => {
-  it.each(["busy_task", "busy_question"])("explains %s as another task still running", (kind) => {
+  it.each(["busy_task"])("explains %s as another task still running", (kind) => {
     render(<TurnFailure kind={kind} fields={{}} question="What is LoRA?" onRetry={() => undefined} />);
     expect(screen.getByText("PaperPilot is still working on another answer, summary or comparison.")).toBeInTheDocument();
   });

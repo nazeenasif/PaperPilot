@@ -29,7 +29,7 @@ STATUS = {
     "pdf_missing": 404,
     "not_found": 404,
     "not_saved": 404,
-    "busy_question": 409,
+    "busy_task": 409,
     "busy_job": 409,
     "daily_limit": 429,
     "rate_limited": 429,

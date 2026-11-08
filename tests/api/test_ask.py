@@ -174,13 +174,13 @@ def test_a_malformed_body_is_an_invalid_request(client_with_paper):
 
 
 def test_only_one_question_at_a_time(client_with_paper, scripted):
-    lock = client_with_paper.app.state.paperpilot.question_lock
+    lock = client_with_paper.app.state.paperpilot.model_lock
     assert lock.acquire(blocking=False)
     try:
         busy = client_with_paper.post("/api/ask", json={"question": QUESTION}, headers=HEADER)
     finally:
         lock.release()
-    assert busy.status_code == 409 and busy.json() == {"kind": "busy_question"}
+    assert busy.status_code == 409 and busy.json() == {"kind": "busy_task"}
     scripted.add(REPLY, REPLY)
     assert ask_stream(client_with_paper, {"question": QUESTION})[2][-1][0] == "answer"
     assert ask_stream(client_with_paper, {"question": QUESTION})[2][-1][0] == "answer"
@@ -190,12 +190,12 @@ def test_only_one_question_at_a_time(client_with_paper, scripted):
 def test_the_lock_is_released_after_a_failed_question(client_with_paper, scripted):
     scripted.add(RuntimeError("boom"))
     ask_stream(client_with_paper, {"question": QUESTION})
-    assert not client_with_paper.app.state.paperpilot.question_lock.locked()
+    assert not client_with_paper.app.state.paperpilot.model_lock.locked()
 
 
 def test_the_lock_is_free_as_soon_as_the_answer_event_arrives(client_with_paper, scripted):
     """The worker releases the lock before sending the final event (no race with a quick follow-up)."""
-    lock = client_with_paper.app.state.paperpilot.question_lock
+    lock = client_with_paper.app.state.paperpilot.model_lock
     for _ in range(5):
         scripted.add(REPLY)
         with client_with_paper.stream("POST", "/api/ask", json={"question": QUESTION}, headers=HEADER) as response:

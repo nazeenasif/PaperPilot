@@ -90,9 +90,8 @@ export const GENERIC_FAILURES: Record<string, FailureCopy> = {
     next: "Start the API with python -m api. Your question is kept; try again once it's running.",
   },
   not_ready: { message: "PaperPilot is still getting ready.", next: "Try again in a few seconds." },
-  // One model task at a time (ADR-0009); the API's busy_question becomes busy_task in US5.
+  // One model task at a time (ADR-0009).
   busy_task: BUSY_TASK,
-  busy_question: BUSY_TASK,
   unknown_paper: {
     message: "One of the selected papers is no longer in your library.",
     next: "Check the selection, then try again.",

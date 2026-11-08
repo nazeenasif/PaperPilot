@@ -95,7 +95,7 @@ describe("postEventStream", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ kind: "busy_question" }), {
+        new Response(JSON.stringify({ kind: "busy_task" }), {
           status: 409,
           headers: { "Content-Type": "application/json" },
         }),
@@ -103,7 +103,7 @@ describe("postEventStream", () => {
     );
     const error = await postEventStream("/api/ask", { question: "x" }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
-    expect(error).toMatchObject({ kind: "busy_question", status: 409 });
+    expect(error).toMatchObject({ kind: "busy_task", status: 409 });
   });
 
   it("reports a network failure as kind unreachable", async () => {

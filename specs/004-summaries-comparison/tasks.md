@@ -201,7 +201,7 @@ generalised (T004).
   - While a scripted summary is held mid-run, `POST /api/ask` and `POST /api/comparisons` get `409 busy_task`; while a question runs, `POST /api/summaries/{id}` gets `409 busy_task`. In `tests/api/test_ask.py`, the one-question-at-a-time test now expects `busy_task` (the only change allowed there).
   - With fewer requests remaining than the plan, `POST` returns `429 daily_limit` with `needed`, `used`, `limit`, `resets_at` before the stream and sends no request.
   - A run stopped by `DailyLimitError` mid-way ends with `summary` whose remaining parts are `not_started`.
-- [ ] T030 [US5] Implement `model_lock` in `api/state.py` (replacing `question_lock`), the `busy_task` kind and `daily_limit.needed` in `api/errors.py`, and update `specs/003-web-app/contracts/web-api.md` (`busy_question` → `busy_task`), so T029 passes.
+- [X] T030 [US5] Implement `model_lock` in `api/state.py` (replacing `question_lock`), the `busy_task` kind and `daily_limit.needed` in `api/errors.py`, and update `specs/003-web-app/contracts/web-api.md` (`busy_question` → `busy_task`), so T029 passes.
 
 ### Checkpoint 7 (real; plan 10 requests, cap 20)
 

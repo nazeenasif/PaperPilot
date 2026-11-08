@@ -321,7 +321,9 @@ def test_a_split_table_loses_no_row_words_and_repeats_none():
 
 
 def test_a_split_table_stays_within_the_budget_and_counts_the_repeated_words():
-    assert all(p.word_count == len(p.text.split()) <= SETTINGS.chunk_words for p in table_2())
+    """Only a merged short tail can pass the budget, by fewer than the minimum's words."""
+    limit = SETTINGS.chunk_words + SETTINGS.min_chunk_words
+    assert all(p.word_count == len(p.text.split()) < limit for p in table_2())
 
 
 def test_a_repeated_header_comes_after_the_caption_only_in_the_first_piece():
@@ -360,3 +362,65 @@ def test_a_repeated_header_is_highlighted_where_it_is_on_the_page():
     rows = [boxed(row, 50, 550, page=6) for row in LORA_TABLE_2_ROWS]
     tables = [p for p in chunk(Section("Results", [header, *rows])) if p.kind == "table"]
     assert all(p.regions and p.exact_regions for p in tables)
+
+
+# --- a short tail joins the previous piece (real case: LoRA Table 2's caption end, p. 6) ---
+
+LORA_TABLE_2_CAPTION_END = "Table 2: Higher is better for all metrics."
+TAIL_SETTINGS = Settings(chunk_words=30, chunk_overlap=5, min_chunk_words=10)
+
+
+def rows_of(count):
+    """Numeric row words filling exactly `count` words, so the caption end falls where a test needs."""
+    return Block(" ".join(f"9{i}.{i % 10}" for i in range(count)), 6)
+
+
+def table_with_tail(row_words, tail=LORA_TABLE_2_CAPTION_END):
+    section = Section("Empirical Experiments", [Block(LORA_TABLE_2_HEADER, 6), rows_of(row_words), Block(tail, 6)])
+    return [p for p in chunk_sections([section], PID, TITLE, TAIL_SETTINGS) if p.kind == "table"]
+
+
+def test_lora_table_2s_caption_end_joins_the_rows_instead_of_standing_alone():
+    """The header takes 10 words of the first 30 and 10 of each later piece, so 20 rows fill the first
+    piece and the 8 words of caption would be a piece of their own, under the minimum of 10."""
+    tables = table_with_tail(20)
+    assert len(tables) == 1
+    assert tables[0].text.startswith(LORA_TABLE_2_HEADER) and tables[0].text.endswith(LORA_TABLE_2_CAPTION_END)
+
+
+def test_a_merged_tail_does_not_repeat_the_header():
+    assert table_with_tail(20)[0].text.count("MNLI") == 1
+
+
+def test_a_merged_tail_loses_no_words_and_counts_them():
+    [table] = table_with_tail(20)
+    assert table.word_count == len(table.text.split()) == len(HEADER_WORDS) + 20 + 8
+
+
+def test_a_tail_of_at_least_the_minimum_stays_its_own_piece():
+    tail = "Table 2: Higher is better for all metrics, as reported in prior works."
+    tables = table_with_tail(20, tail)
+    assert len(tables) == 2 and tables[1].text == f"{LORA_TABLE_2_HEADER} {tail}"
+
+
+def test_the_repeated_header_does_not_count_towards_the_minimum():
+    """8 tail words plus the 10 repeated header words are 18, over the minimum, but only 8 are new."""
+    assert len(table_with_tail(20)) == 1
+
+
+def test_only_the_last_piece_of_a_long_table_can_merge():
+    tables = table_with_tail(20 + 20 + 20)
+    assert len(tables) == 3
+    assert all(p.text.startswith(LORA_TABLE_2_HEADER) for p in tables)
+    assert tables[-1].text.endswith(LORA_TABLE_2_CAPTION_END)
+
+
+def test_a_table_without_a_header_merges_its_short_tail_too():
+    section = Section("Results", [rows_of(61)])
+    tables = [p for p in chunk_sections([section], PID, TITLE, Settings(chunk_words=30, chunk_overlap=5, min_chunk_words=10)) if p.kind == "table"]
+    assert all(p.word_count >= 10 for p in tables) and sum(p.word_count for p in tables) == 61
+
+
+def test_a_table_that_is_all_one_short_piece_stays():
+    tables = table_with_tail(1, tail="Table 9: A note.")
+    assert len(tables) <= 1

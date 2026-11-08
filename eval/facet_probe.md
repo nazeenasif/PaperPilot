@@ -24,7 +24,7 @@ the best score among the passages actually read.
 | LoRA | Problem | 0.642 | ok | 0.573 | Introduction (4) | 0 | 4/4 |
 | LoRA | Method | 0.715 | ok | 0.715 | Introduction (1), Our Method (2), Aren’t Existing Solutions Good Enough? (1) | 0 |  |
 | LoRA | Data | 0.736 | ok | 0.736 | Empirical Experiments (2), Problem Statement (1), Understanding the Low-Rank Updates (1) | 0 |  |
-| LoRA | Results | 0.707 | ok | 0.707 | Empirical Experiments (3), Understanding the Low-Rank Updates (1) | 0 |  |
+| LoRA | Results | 0.707 | ok | 0.707 | Empirical Experiments (2), Understanding the Low-Rank Updates (2) | 0 |  |
 | LoRA | Limitations | 0.608 | ok | 0.608 | Understanding the Low-Rank Updates (1), Our Method (1), Empirical Experiments (1), Conclusion and Future Work (1) | 0 | 1/4 |
 | Lost in the Middle | Problem | 0.695 | ok | 0.673 | Introduction (4) | 0 | 4/4 |
 | Lost in the Middle | Method | 0.722 | ok | 0.722 | Why Are Language Models Not Robust (1), Conclusion (1), Introduction (2) | 0 |  |
@@ -41,6 +41,6 @@ the best score among the passages actually read.
 
 - **Attention**: Front Matter (1), Abstract (2), Introduction (2), Background (2), Model Architecture (10), Why Self-Attention (3), Training (5), Results (7), Conclusion (1)
 - **BERT**: Abstract (1), Introduction (3), Related Work (4), BERT (10), Experiments (12), Ablation Studies (10), Conclusion (1)
-- **LoRA**: Front Matter (1), Abstract (1), Introduction (5), Problem Statement (2), Aren’t Existing Solutions Good Enough? (5), Our Method (7), Empirical Experiments (14), Related Works (5), Understanding the Low-Rank Updates (15), Conclusion and Future Work (1)
+- **LoRA**: Front Matter (1), Abstract (1), Introduction (5), Problem Statement (2), Aren’t Existing Solutions Good Enough? (5), Our Method (7), Empirical Experiments (13), Related Works (5), Understanding the Low-Rank Updates (15), Conclusion and Future Work (1)
 - **Lost in the Middle**: Front Matter (1), Abstract (1), Introduction (9), Multi-Document Question Answering (14), How Well Can Language Models (5), Why Are Language Models Not Robust (10), Is More Context Is Always Better? (3), Related Work (3), Conclusion (2)
 - **RAG**: Front Matter (1), Abstract (1), Introduction (5), Methods (6), Experiments (6), Results (16), Related Work (4), Discussion (4)

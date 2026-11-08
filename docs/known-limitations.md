@@ -63,7 +63,8 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
 - **Table header rows are not always found.** Rows directly above a table in the same column join it,
   and a split table repeats them in every piece. A header block beside the table stays out ("Model &
   Method # Trainable", LoRA Table 2), and a table's split can fall mid-row, so a piece's first row may
-  not line up with the repeated header.
+  not line up with the repeated header. A last piece under `MIN_CHUNK_WORDS` joins the one before, so a
+  table passage can pass the word budget by up to that much.
 - **Figure axis labels can become table passages.** A block of axis ticks such as "5 10 20 30
   40 50 Number of Retrieved Docs" is mostly numbers, so it is classified as a table passage.
   This is harmless for search, but these passages are not real tables. A short legend or label

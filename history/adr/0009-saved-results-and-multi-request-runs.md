@@ -30,12 +30,14 @@
   JSON, model, prompt_version, created_at)`.
   - WAL with `BEGIN IMMEDIATE` writes, set up once per process, as `usage.sqlite3` (ADR-0007).
   - Owned by `library` (`save_result`, `load_result`, `forget_results`,
-    `passage_fingerprint`).
+    `mark_results_reprocessed`, `passage_fingerprint`).
 - **Key**: SHA-256 of `kind`, the sorted paper content IDs, each paper's **passage fingerprint**
   (hash of its stored passage ids and texts), the sorted aspects, `SUMMARY_PROMPT_VERSION`, and
   `LLM_MODEL`.
 - **Invalidation, two ways**:
-  1. **Explicit:** `delete_paper` and `reprocess_paper` call `forget_results(paper_id)`.
+  1. **Explicit:** `delete_paper` calls `forget_results(paper_id)`; `reprocess_paper` calls
+     `mark_results_reprocessed(paper_id)`, keeping the result readable but no longer current
+     (amended 2026-11-08; it deleted them before).
   2. **On lookup:** a row saved under another model, version or fingerprint is returned as
      **stale** with its reason. It is readable but never presented as current, and nothing is
      regenerated automatically.

@@ -542,12 +542,13 @@ def _units(blocks: list[Block]) -> list[tuple[str, list[Block]]]:
     return units
 
 
-def _split_table(blocks: list[Block], budget: int) -> list[list[tuple[str, tuple[Block, int]]]]:
+def _split_table(blocks: list[Block], budget: int, min_words: int) -> list[list[tuple[str, tuple[Block, int]]]]:
     """Split a table's blocks into pieces of at most `budget` (word, source) pairs.
 
     Every piece after the first starts with the nearest header row above it, so its numbers keep
     their column names; a header of more than half the budget is not repeated. A table with no
-    header is split evenly.
+    header is split evenly. A last piece with fewer than `min_words` new words joins the piece
+    before it, even past the budget, so a stray caption end is not a passage of its own.
     """
     words: list[tuple[str, tuple[Block, int]]] = []
     headers: list[list[tuple[str, tuple[Block, int]]]] = []  # per word: the header above it
@@ -561,17 +562,25 @@ def _split_table(blocks: list[Block], budget: int) -> list[list[tuple[str, tuple
         words += split
         headers += [[] if is_header else header] * len(split)
         previous_was_header = is_header
+    result: list[list[tuple[str, tuple[Block, int]]]] = []
+    tail: list[tuple[str, tuple[Block, int]]] = []  # the last piece's new words
     if not any(headers):
         pieces = math.ceil(len(words) / budget)
         size = math.ceil(len(words) / pieces)
-        return [words[start : start + size] for start in range(0, len(words), size)]
-    result = []
-    start = 0
-    while start < len(words):
-        repeated = headers[start] if start and len(headers[start]) <= budget // 2 else []
-        room = budget - len(repeated)
-        result.append(repeated + words[start : start + room])
-        start += room
+        for start in range(0, len(words), size):
+            tail = words[start : start + size]
+            result.append(tail)
+    else:
+        start = 0
+        while start < len(words):
+            repeated = headers[start] if start and len(headers[start]) <= budget // 2 else []
+            room = budget - len(repeated)
+            tail = words[start : start + room]
+            result.append(repeated + tail)
+            start += room
+    if len(result) > 1 and len(tail) < min_words:
+        result[-2] = result[-2] + tail
+        result.pop()
     return result
 
 
@@ -583,7 +592,7 @@ def chunk_sections(sections: list[Section], paper_id: str, title: str, settings:
     are split. Prose with fewer than `min_chunk_words` new words is dropped at the end of a
     section or before a table. Table-like blocks (with their captions and header rows) become
     their own "table" passages, split if longer than the budget, each piece repeating the header
-    row (`_split_table`); overlap never crosses them.
+    row and a short last piece joining the one before (`_split_table`); overlap never crosses them.
     Each passage records the page of its first new (non-overlap) word, and the regions of
     every word it contains, overlap included (research R4, ADR-0006).
     """
@@ -616,7 +625,7 @@ def chunk_sections(sections: list[Section], paper_id: str, title: str, settings:
                 if new_words >= settings.min_chunk_words:
                     emit(current, current_src, first_page, section.name)
                 current, current_src, new_words = [], [], 0
-                for piece in _split_table(blocks, budget):
+                for piece in _split_table(blocks, budget, settings.min_chunk_words):
                     emit([word for word, _ in piece], [source for _, source in piece], blocks[0].page,
                          section.name, "table")
                 continue

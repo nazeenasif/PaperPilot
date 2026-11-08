@@ -142,12 +142,18 @@ const PART_FAILED: Record<string, string> = {
 const PART_NOT_STARTED: Record<string, string> = {
   daily_limit: "Not started: today's free requests ran out.",
   rate_limited: "Not started: the free model asked PaperPilot to wait.",
+  busy: "Not started: the free model was busy.",
+  timeout: "Not started: the free model was busy.",
   model_busy: "Not started: the free model was busy.",
-  model_unavailable: "Not started: the configured model couldn't be used.",
+  unreachable: "Not started: the free model couldn't be reached.",
 };
+const NOT_STARTED_MODEL = "Not started: the configured model couldn't be used.";
 
 /** The line shown for a failed or not-started part. */
-export function partProblem(state: "failed" | "not_started", reason: string | null, _until: string | null = null): string {
+export function partProblem(state: "failed" | "not_started", reason: string | null, until: string | null = null): string {
   if (state === "failed") return (reason && PART_FAILED[reason]) || "This part couldn't be written.";
-  return (reason && PART_NOT_STARTED[reason]) || "Not started.";
+  const line = reason ? PART_NOT_STARTED[reason] ?? NOT_STARTED_MODEL : "Not started.";
+  if (until && reason === "daily_limit") return `${line} They resume at ${localTime(until)}.`;
+  if (until && reason === "rate_limited") return `${line} Try again at ${localTime(until)}.`;
+  return line;
 }

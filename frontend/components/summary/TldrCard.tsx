@@ -1,14 +1,16 @@
 import { LoaderCircle } from "lucide-react";
 
+import { Busy } from "@/components/states/Busy";
 import { CitedText } from "@/components/summary/CitedText";
 import { progressText } from "@/components/summary/SectionCard";
-import type { NumberedPassage, Part } from "@/lib/types";
+import type { NumberedPassage, Part, RetryWaitEvent } from "@/lib/types";
 import type { PartProgress } from "@/lib/useSummary";
 
 /** The TL;DR, written only from the verified sections and checked in code (FR-005). */
 export function TldrCard({
   part,
   progress,
+  wait,
   passages,
   onOpen,
   note,
@@ -16,6 +18,8 @@ export function TldrCard({
 }: {
   part: Part | undefined;
   progress: PartProgress | undefined;
+  /** A retry wait for this part: its own countdown (FR-024). */
+  wait?: { event: RetryWaitEvent; since: number };
   passages: Map<number, NumberedPassage>;
   onOpen: (passage: NumberedPassage) => void;
   /** Shown whatever the part's state, e.g. the sections it was built without. */
@@ -25,7 +29,8 @@ export function TldrCard({
   return (
     <section aria-label="TL;DR" className="space-y-3 rounded-2xl border border-teal/30 bg-panel p-6">
       <p className="font-mono text-xs tracking-[0.15em] text-teal">TL;DR</p>
-      {!part && (
+      {!part && wait && <Busy retry={wait.event} since={wait.since} safe="Finished parts are safe." />}
+      {!part && !wait && (
         <p role="status" className="flex items-center gap-2 font-mono text-sm text-teal">
           {progress && <LoaderCircle aria-hidden className="size-4 motion-safe:animate-spin" />}
           {progress ? progressText("TL;DR", progress) : "Written after the sections"}

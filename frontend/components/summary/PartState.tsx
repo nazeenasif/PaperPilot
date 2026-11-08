@@ -94,7 +94,7 @@ export function PartState({
       <div className="space-y-3">
         <p className="flex gap-2 text-sm text-amber">
           <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-          <span>{partProblem(part.state, part.reason)}</span>
+          <span>{partProblem(part.state, part.reason, part.until ?? null)}</span>
         </p>
         {onRetry && <CostButton label={label} cost={retryCost} onClick={onRetry} primary={false} />}
       </div>

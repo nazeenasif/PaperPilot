@@ -1,8 +1,9 @@
 import { LoaderCircle } from "lucide-react";
 
 import { UncitedFlag } from "@/components/states/UncitedFlag";
+import { Busy } from "@/components/states/Busy";
 import { CitedText } from "@/components/summary/CitedText";
-import type { NumberedPassage, Part } from "@/lib/types";
+import type { NumberedPassage, Part, RetryWaitEvent } from "@/lib/types";
 import type { PartProgress } from "@/lib/useSummary";
 
 /** Progress wording for a part while it runs. */
@@ -27,6 +28,7 @@ export function SectionCard({
   label,
   part,
   progress,
+  wait,
   passages,
   onOpen,
   children,
@@ -34,6 +36,8 @@ export function SectionCard({
   label: string;
   part: Part | undefined;
   progress: PartProgress | undefined;
+  /** A retry wait for this part: its own countdown (FR-024). */
+  wait?: { event: RetryWaitEvent; since: number };
   passages: Map<number, NumberedPassage>;
   onOpen: (passage: NumberedPassage) => void;
   /** The designed state for a part that is not verified. */
@@ -47,7 +51,8 @@ export function SectionCard({
           <span className="font-mono text-xs text-muted-foreground">{part.passages.length} passages read</span>
         )}
       </div>
-      {!part && (
+      {!part && wait && <Busy retry={wait.event} since={wait.since} safe="Finished parts are safe." />}
+      {!part && !wait && (
         <p role="status" className="flex items-center gap-2 font-mono text-sm text-teal">
           {progress && <LoaderCircle aria-hidden className="size-4 motion-safe:animate-spin" />}
           {progressText(label, progress)}

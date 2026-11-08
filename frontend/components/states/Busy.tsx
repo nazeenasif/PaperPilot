@@ -13,7 +13,16 @@ function clock(seconds: number): string {
 
 /** The free model is rate-limited or slow: a live countdown to the next attempt (FR-023).
  *  `since` is when the wait began, so re-renders never restart the count. */
-export function Busy({ retry, since }: { retry: RetryWaitEvent; since: number }) {
+export function Busy({
+  retry,
+  since,
+  safe = "Your question is safe.",
+}: {
+  retry: RetryWaitEvent;
+  since: number;
+  /** What is not lost while waiting. */
+  safe?: string;
+}) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);
@@ -34,7 +43,7 @@ export function Busy({ retry, since }: { retry: RetryWaitEvent; since: number })
       </p>
       <p className="font-heading text-lg font-semibold text-text">The free model is busy right now</p>
       <p className="text-muted-foreground">
-        Your question is safe. PaperPilot will retry automatically when the provider says it&apos;s ready.
+        {safe} PaperPilot will retry automatically when the provider says it&apos;s ready.
       </p>
       <div aria-hidden className="h-1.5 overflow-hidden rounded-full bg-panel-2">
         <div className="h-full rounded-full bg-amber" style={{ width: `${done * 100}%` }} />

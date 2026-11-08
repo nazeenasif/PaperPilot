@@ -281,7 +281,7 @@ generalised (T004).
   - `retry_wait` for a part shows the Feature 3 countdown inside that part's card.
   - `409 busy_task` shows the busy copy.
   - The usage meter updates after a run from the result's request totals or `/api/usage`.
-- [ ] T049 [US5] Wire limits into `frontend/components/summary/CostButton.tsx`, `useSummary.ts` and `useComparison.ts` (reusing `DailyLimit`, `Busy` and `useUsage`), so T048 passes.
+- [X] T049 [US5] Wire limits into `frontend/components/summary/CostButton.tsx`, `useSummary.ts` and `useComparison.ts` (reusing `DailyLimit`, `Busy` and `useUsage`), so T048 passes.
 - [ ] T050 [US5] Add test "F4 US5 cost and limits" to `frontend/e2e/smoke.spec.ts`: at 50/50 the Summarize button is disabled with the daily-limit state, and a saved summary still opens.
 
 ---

@@ -11,6 +11,7 @@ import { SectionCard } from "@/components/summary/SectionCard";
 import { TldrCard } from "@/components/summary/TldrCard";
 import { TurnFailure } from "@/components/states/TurnFailure";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DailyLimit } from "@/components/states/DailyLimit";
 import { apiGet } from "@/lib/api";
 import { builtWithout } from "@/lib/errorKinds";
 import { timeAgo } from "@/lib/time";
@@ -109,8 +110,12 @@ export function SummaryView({ paperId }: { paperId: string }) {
         )}
       </header>
 
+      {summary.phase === "none" && usage?.usage && usage.usage.remaining < summary.plan.max_requests && (
+        <DailyLimit used={usage.usage.used} limit={usage.usage.limit} resetsAt={usage.usage.resets_at} question={title} what="Summaries" onOpenPassage={setOpen} />
+      )}
+
       {summary.phase === "failed" && summary.error && (
-        <TurnFailure kind={summary.error.kind} fields={summary.error.fields} question={title} onRetry={() => void summary.start()} />
+        <TurnFailure what="Summaries" kind={summary.error.kind} fields={summary.error.fields} question={title} onRetry={() => void summary.start()} />
       )}
 
       {pending && !running && (
@@ -134,6 +139,7 @@ export function SummaryView({ paperId }: { paperId: string }) {
           <TldrCard
             part={tldrPart}
             progress={summary.progress.tldr}
+            wait={running ? summary.retry.tldr : undefined}
             passages={passages}
             onOpen={setOpen}
             note={
@@ -153,7 +159,7 @@ export function SummaryView({ paperId }: { paperId: string }) {
             {SECTIONS.map(({ key, label }) => {
               const part = partOf(key);
               return (
-                <SectionCard key={key} label={label} part={part} progress={summary.progress[key]} passages={passages} onOpen={setOpen}>
+                <SectionCard key={key} label={label} part={part} progress={summary.progress[key]} wait={running ? summary.retry[key] : undefined} passages={passages} onOpen={setOpen}>
                   {part && <PartState part={part} noun="section" onRetry={running ? undefined : retry(key)} />}
                 </SectionCard>
               );

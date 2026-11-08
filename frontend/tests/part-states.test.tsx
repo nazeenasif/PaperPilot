@@ -56,7 +56,7 @@ describe("PartState", () => {
     ["empty", "failed", "The model returned an empty answer."],
     ["daily_limit", "not_started", "Not started: today's free requests ran out."],
     ["rate_limited", "not_started", "Not started: the free model asked PaperPilot to wait."],
-    ["model_busy", "not_started", "Not started: the free model was busy."],
+    ["busy", "not_started", "Not started: the free model was busy."],
   ] as const)("explains %s", (reason, state, copy) => {
     render(<PartState part={part("method", { state, text: null, reason })} noun="section" />);
     expect(screen.getByText(copy)).toBeInTheDocument();

@@ -17,7 +17,10 @@ export function DailyLimit({
   resetsAt,
   question,
   onOpenPassage,
+  what = "Answers",
 }: {
+  /** What stops until the reset: "Answers", "Summaries" or "Comparisons". */
+  what?: string;
   used?: number;
   limit?: number;
   resetsAt: string;
@@ -50,7 +53,7 @@ export function DailyLimit({
         </div>
       </div>
       <p className="text-text">
-        Answers resume at {localTime(resetsAt)} your time. Search and the PDF viewer keep working.
+        {what} resume at {localTime(resetsAt)} your time. Search and the PDF viewer keep working.
       </p>
       {question === undefined && (
         <form onSubmit={search} className="flex gap-2">

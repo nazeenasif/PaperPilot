@@ -6,6 +6,7 @@ import { useUsage } from "@/components/app/UsageMeter";
 import { ASPECTS, CompareForm, selectionProblem } from "@/components/compare/CompareForm";
 import { CompareTable } from "@/components/compare/CompareTable";
 import { SourceViewer } from "@/components/source/SourceViewer";
+import { DailyLimit } from "@/components/states/DailyLimit";
 import { TurnFailure } from "@/components/states/TurnFailure";
 import { CostButton } from "@/components/summary/CostButton";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -92,8 +93,13 @@ export function CompareView() {
         busy={compare.phase === "loading"}
       />
 
+      {compare.phase === "none" && usage?.usage && usage.usage.remaining < aspects.length && (
+        <DailyLimit used={usage.usage.used} limit={usage.usage.limit} resetsAt={usage.usage.resets_at} question="Compare papers" what="Comparisons" onOpenPassage={setOpen} />
+      )}
+
       {compare.phase === "failed" && compare.error && (
         <TurnFailure
+          what="Comparisons"
           kind={compare.error.kind}
           fields={compare.error.fields}
           question="Compare papers"

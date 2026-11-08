@@ -88,7 +88,7 @@ export function CompareTable({
                 ) : live && !started ? (
                   <td colSpan={papers.length} className="p-4 align-top">
                     {wait ? (
-                      <Busy retry={wait.event} since={wait.since} />
+                      <Busy retry={wait.event} since={wait.since} safe="Finished rows are safe." />
                     ) : (
                       <p role="status" className="flex items-center gap-2 font-mono text-sm text-teal">
                         {step && <LoaderCircle aria-hidden className="size-4 motion-safe:animate-spin" />}

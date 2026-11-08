@@ -275,7 +275,7 @@ generalised (T004).
 
 ### US5 (P2): cost and limits
 
-- [ ] T048 [P] [US5] Create failing tests in `frontend/tests/cost-limits.test.tsx`:
+- [X] T048 [P] [US5] Create failing tests in `frontend/tests/cost-limits.test.tsx`:
   - With fewer remaining requests than the cost, the start button is disabled and the daily-limit state explains when requests resume; saved results still open.
   - A `429 daily_limit` with `needed` before the stream shows the daily-limit state, not a generic error.
   - `retry_wait` for a part shows the Feature 3 countdown inside that part's card.

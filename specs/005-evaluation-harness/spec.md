@@ -248,18 +248,20 @@ scripted run midway and confirm the next one continues without repeating finishe
   effort low against default; and the second model `google/gemma-4-31b-it:free`.
 - **FR-024a**: Experiments MUST run in this priority: first the retrieval experiments (reranking, hybrid search,
   prefix), at no model cost; then answer evaluation for only the baseline and the best retrieval configuration.
-  Reasoning effort and the second model MUST be optional rows, run only if the budget allows and the developer
-  starts them; a row not run MUST NOT block acceptance.
+  Reasoning effort, the second model and the scope rule MUST be optional rows, run only if the budget allows and
+  the developer starts them; a row not run MUST NOT block acceptance.
 - **FR-024b**: The best retrieval configuration MUST be the retrieval experiment with the highest hit@6, ties broken
   by MRR, and only if it beats the baseline; otherwise answer evaluation runs for the baseline alone. The choice and
   its figures MUST be shown, and the developer MAY override it.
-- **FR-025**: The scope-rule experiment MUST be measured on a fixed set, with the rule on and off: the LoRA
-  and BERT summaries and the BERT–RAG comparison. It runs there because the rule is in the summary-section, TL;DR
+- **FR-025**: The scope-rule experiment, if run, MUST use at least 3 runs per condition (rule on and off) on a
+  fixed set: the LoRA and BERT summaries and the BERT–RAG comparison. Repeated runs MUST be stored as separate
+  runs and not answered from the cache. It runs on that set because the rule is in the summary-section, TL;DR
   and comparison-cell instructions and answers to the golden questions never use it.
-- **FR-025a**: The rule-on condition MUST reuse an existing saved summary or comparison when its stored
-  configuration matches the run's exactly, and MUST generate it otherwise; the row MUST say which outputs were reused.
-- **FR-025b**: The scope-rule row and its takeaway MUST state that one run per condition gives an indicative
-  result only, because F2 does not occur in every run.
+- **FR-025a**: The rule-on condition MUST reuse an existing saved summary or comparison as one of its runs when
+  its stored configuration matches exactly, and MUST generate the rest; the row MUST say which outputs were reused.
+- **FR-025b**: The scope-rule row MUST report F2-type verdicts per run for each condition, not a single average,
+  because F2 does not occur in every run; its takeaway MUST state the number of runs. Until it has been run, the rule
+  stays enabled and is recorded as unmeasured.
 - **FR-026**: Experiment settings MUST apply only to the evaluation: PaperPilot's defaults MUST NOT change unless
   a later change adopts a result.
 - **FR-027**: Results MUST be stored per experiment with the exact configuration: model, judge model, prompt
@@ -299,6 +301,7 @@ scripted run midway and confirm the next one continues without repeating finishe
 ### Session 2026-11-11
 
 - Q: One judge request per claim, or one per answer? → A: One per claim for calibration; one per answer for experiments (FR-012).
+- Q: Should the scope-rule experiment be required? → A: No, optional. If run, at least 3 runs per condition, with F2-type verdicts per run and no single average (FR-024a, FR-025, FR-025b). This replaces one run per condition, below.
 - Q: Which experiments come first, given the free tier? → A: Retrieval experiments first; answer evaluation only for the baseline and the best retrieval configuration; reasoning effort and the second model optional, if budget allows. Each session uses a configurable slice, keeping a reserve (default 10) (FR-018, FR-024a, FR-024b).
 - Q: What should the scope-rule experiment run on? → A: The LoRA and BERT summaries and the BERT–RAG comparison, rule on and off, reusing saved rule-on outputs whose stored configuration matches exactly; one run per condition is indicative only (FR-025, FR-025a, FR-025b).
 
@@ -307,7 +310,7 @@ scripted run midway and confirm the next one continues without repeating finishe
 - **Saved outputs and "exact" configuration**: saved summaries and comparisons record their model, instruction version and passages, but not reasoning effort or output limit. Reuse compares what is recorded and requires the run to use today's default reasoning effort and output limit; the row states that those two were not recorded.
 - **Default judge**: `google/gemma-4-31b-it:free` judges the default answering model, and the default model judges when the second model answers, so neither grades itself.
 - **Retrieval experiments**: reranking, hybrid search and the prefix are measured for retrieval at no cost. Only the best of them gets answer evaluation (FR-024b); the others' answer columns read "not measured". A retrieval row with a written takeaway counts towards the two experiments the acceptance criteria need.
-- **The scope-rule experiment** stays in scope and follows the baseline and best-retrieval answer runs, because it is not an answer evaluation of the golden questions and has its own small fixed set.
+- **The scope-rule experiment** is optional. With at least 3 runs per condition on the fixed set it costs about 190 requests, so it may wait for spare budget. The current evidence is in Feature 4's research R3.
 - **Hand verdicts**: the Verdict columns of the verification reports are still empty, and `eval/probe_notes.md` records only failures. Calibration needs the developer to fill in hand verdicts, including supported claims, to reach FR-022.
 - **Golden authorship**: the developer owns the golden set; drafts are reviewed by the developer before they count.
 - **Honest limits**: a self-written set of about 40 questions is small and may favour easy phrasing; the README states this, as the guide asks.

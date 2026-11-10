@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from checkpoint_7_summaries import PARTS, cell_rows, foreign_citations, row_token_rows  # noqa: E402
+from checkpoint_7_summaries import DEFAULT_PARTS, PARTS, cell_rows, foreign_citations, row_token_rows  # noqa: E402
 
 
 def cell(name, state="verified", text="A claim [1].", valid=(1,), invalid=()):
@@ -62,6 +62,11 @@ def test_token_rows_cover_every_row_including_failed_ones():
         ("Results", "failed (malformed)", 900, 500, 480, 20),
         ("Limitations", "not_started (daily_limit)", None, None, None, None),
     ]
+
+
+def test_all_parts_by_default_plan_ten_requests_and_leave_out_the_retry():
+    """The retry reruns parts of a saved summary, so it is only run when named (quickstart)."""
+    assert "retry" not in DEFAULT_PARTS and sum(PARTS[name].plan for name in DEFAULT_PARTS) == 10
 
 
 def test_the_plan_for_the_comparison_parts():

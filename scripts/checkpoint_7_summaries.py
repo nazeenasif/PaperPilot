@@ -6,7 +6,7 @@ requests; the run fails on unplanned requests or when all requests, retries incl
 twice the plan (scripts/request_budget.py). Real parts do not start when today's remaining
 requests are fewer than their plan.
 
-Usage: python scripts/checkpoint_7_summaries.py [part ...]   (default: every part)
+Usage: python scripts/checkpoint_7_summaries.py [part ...]   (default: every part but retry)
 Parts: states (0), summary (6, LoRA), retry (2: Results and the TL;DR of the saved LoRA summary),
 reopen (0, needs summary or a saved LoRA summary), compare (3, BERT vs RAG on Method, Datasets,
 Results), not-reported (1, BERT vs RAG on Limitations)
@@ -459,6 +459,9 @@ def claims_path(folder: Path, day: str) -> Path:
     return path
 
 
+DEFAULT_PARTS = [name for name in PARTS if name != "retry"]  # plan 10; retry is run by name
+
+
 def write_claims(claims: Claims) -> Path | None:
     """The hand-check record: every claim with its cited passages, Verdict and Fault left empty,
     then the token split for every part."""
@@ -500,7 +503,7 @@ def print_claims(claims: Claims) -> None:
 
 def main() -> int:
     """Run the selected parts; return 0 if every check passes."""
-    names = [a.lower() for a in sys.argv[1:]] or list(PARTS)
+    names = [a.lower() for a in sys.argv[1:]] or DEFAULT_PARTS
     unknown = [n for n in names if n not in PARTS]
     if unknown:
         print(f"Unknown part(s) {unknown}; choose from {', '.join(PARTS)} (default: all)")

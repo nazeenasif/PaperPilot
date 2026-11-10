@@ -162,6 +162,28 @@ evaluation feature's faithfulness test cases (claim-level support, not citation 
   overall", and the model paired that with the row's highest number. The paper's own caption and table do not
   quite agree here, which may invite it.
 - **For the evaluation feature**: a claim-level judge would need to read the table by column.
+- **Second occurrence (checkpoint 7, BERT vs RAG comparison, 2026-11-10), in prose**: claim 11, BERT's
+  Results cell: "On SWAG, BERTBASE 81.6, BERTLARGE 86.6 accuracy, +5.1 F1 over prior best [7]."
+  - Passage [7] (p. 7) ends the SQuAD 2.0 paragraph with "We observe a +5.1 F1 improvement over the
+    previous best system", then begins SWAG. SWAG's own margins, in [8], are "+27.1%" over ESIM+ELMo and
+    "8.3%" over OpenAI GPT. The cell attached the SQuAD 2.0 figure to SWAG.
+  - Citations valid, verified: +5.1 is in the cited passage.
+  - So F3 is not specific to tables. The general shape is a real number from the passage, placed against
+    the wrong item (a column, or a neighbouring result). The judge needs to check which item each number
+    belongs to, not only that it appears.
+
+### Off-aspect but grounded (checkpoint 7, BERT vs RAG comparison, 2026-11-10)
+
+- **Cell (claim 17)**: RAG's Limitations cell: "Authors note potential downsides: external knowledge sources
+  like Wikipedia may contain bias and inaccuracies; RAG could be misused to generate abuse, misleading
+  content, impersonation, or spam/phishing; advanced language models may automate jobs. [6]"
+- **What the passage is**: [6] is the Discussion's broader-impact paragraph (p. 10), and it does say all of
+  this. These are societal risks of the technology, not limitations of the method or its evaluation.
+- **Validation result**: citation valid, verified. Grounded, but it answers a different question from the
+  aspect's.
+- **For the evaluation feature**: a judge should score relevance to the aspect separately from support by
+  the passage. Retrieval chose the passage: the Limitations query matched "downsides", and the paper has no
+  Limitations section.
 
 ### Incomplete citations (checkpoint 7, LoRA summary v4, 2026-11-08)
 

@@ -291,7 +291,7 @@ generalised (T004).
 - [X] T051 [P] Extend `frontend/e2e/smoke.spec.ts`: no sideways scrolling at 375 px on the Summarize picker, a summary, the Compare form and table; a keyboard-only pass that starts a summary, opens a citation, closes it with Escape and runs a comparison (SC-010).
 - [X] T052 [P] Extend `scripts/checkpoint_6_web.py` part `boundary`: `POST /api/summaries/{id}` and `POST /api/comparisons` are refused without `X-PaperPilot: 1` and from a foreign origin, with no model request; part `secrets` checks `git check-ignore data/library/results.sqlite3`.
 - [X] T053 [P] Update `docs/known-limitations.md`: rename the section to "Summaries and comparison", and add free-model JSON rows that may need a retry, TL;DR number-check false positives (e.g. paraphrased units), stale results kept for reading until replaced, and the plan's maximum refusing runs that would have needed fewer requests.
-- [ ] T054 Run the full quickstart (`specs/004-summaries-comparison/quickstart.md`) and fix any drift:
+- [X] T054 Run the full quickstart (`specs/004-summaries-comparison/quickstart.md`) and fix any drift:
   - `pytest`, `npm --prefix frontend run typecheck`, `npm --prefix frontend test`, `npm --prefix frontend run test:e2e`.
   - `python scripts/usage.py` (≥ 10 requests left), then `python scripts/checkpoint_7_summaries.py` with all parts (plan 10, cap 20); show its printed counts.
   - Commit the generated `docs/verification/checkpoint-7-<date>.md` with its claims list; the **Verdict** and **Fault** columns are left for the researcher's hand check (SC-002).

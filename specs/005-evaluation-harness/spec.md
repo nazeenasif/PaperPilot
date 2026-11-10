@@ -155,11 +155,13 @@ scripted run midway and confirm the next one continues without repeating finishe
 
 1. **Given** a run, **Then** before any request it shows the requests planned in total, those already done,
    and those for this session.
-2. **Given** fewer requests remain today than this session plans, **Then** it does not start and says when
-   requests resume.
+2. **Given** today's remaining requests, less the reserve, are fewer than this session plans, **Then** it does
+   not start and says when requests resume.
 3. **Given** a run stopped by the daily limit or a long wait, **When** it is started again later, **Then** it
    continues and repeats no finished answer or verdict.
 4. **Given** a retrieval-only run, **Then** it needs no remaining requests and makes none.
+5. **Given** no session size is set, **Then** a session uses what remains today after the reserve (default 10),
+   and never spends the reserve.
 
 ---
 
@@ -222,8 +224,10 @@ scripted run midway and confirm the next one continues without repeating finishe
 **Request budget (User Story 6)**
 
 - **FR-017**: Before any request, a run MUST show the requests planned in total, already done and for this session.
-- **FR-018**: A session MUST NOT start when today's remaining requests are fewer than it plans; it MUST say when
-  requests resume, and its size MUST be settable so that a run spans days and a reserve can be left for normal use.
+- **FR-018**: Each session MUST use a configurable slice of the daily quota and MUST keep a reserve for normal
+  use (default 10 requests). With no slice set, a session MUST plan what remains today after the reserve, up to the
+  work left. A session MUST NOT start when today's remaining requests, less the reserve, are fewer than it plans,
+  and MUST say when requests resume.
 - **FR-019**: A run stopped by the daily limit, a long wait or the session size MUST resume without repeating
   finished work. All requests MUST count in the shared daily counter, with retries reported separately.
 
@@ -242,6 +246,13 @@ scripted run midway and confirm the next one continues without repeating finishe
 - **FR-024**: These experiments MUST be supported: baseline; cross-encoder reranking of the top 20; hybrid
   keyword and vector search; title and section prefix before embedding; the scope rule on and off; reasoning
   effort low against default; and the second model `google/gemma-4-31b-it:free`.
+- **FR-024a**: Experiments MUST run in this priority: first the retrieval experiments (reranking, hybrid search,
+  prefix), at no model cost; then answer evaluation for only the baseline and the best retrieval configuration.
+  Reasoning effort and the second model MUST be optional rows, run only if the budget allows and the developer
+  starts them; a row not run MUST NOT block acceptance.
+- **FR-024b**: The best retrieval configuration MUST be the retrieval experiment with the highest hit@6, ties broken
+  by MRR, and only if it beats the baseline; otherwise answer evaluation runs for the baseline alone. The choice and
+  its figures MUST be shown, and the developer MAY override it.
 - **FR-025**: The scope-rule experiment MUST be measured on a fixed set, with the rule on and off: the LoRA
   and BERT summaries and the BERT–RAG comparison. It runs there because the rule is in the summary-section, TL;DR
   and comparison-cell instructions and answers to the golden questions never use it.
@@ -278,7 +289,7 @@ scripted run midway and confirm the next one continues without repeating finishe
 - **SC-004**: The results table has a baseline row and at least two experiments with written conclusions, each changing exactly one setting.
 - **SC-005**: Judge agreement with at least 20 hand verdicts is reported, for supported and not-supported claims separately, with 100% of disagreements listed.
 - **SC-006**: The judge flags at least the recorded F2 and F3 cases as partly or unsupported; a case it misses appears as a listed disagreement.
-- **SC-007**: With fewer requests remaining than a session plans, starting it sends 0 requests; a run stopped midway repeats 0 finished answers or verdicts when resumed.
+- **SC-007**: With fewer requests remaining after the reserve than a session plans, starting it sends 0 requests; no session spends the reserve; a run stopped midway repeats 0 finished answers or verdicts when resumed.
 - **SC-008**: Every figure in the README results table can be traced to a stored result; regenerating it without new results changes nothing.
 - **SC-009**: After any experiment, the library's passages, saved summaries and comparisons and PaperPilot's defaults are unchanged.
 - **SC-010**: In 100% of scripted tests, a claim that could not be judged is reported as not judged and never counts as supported.
@@ -288,13 +299,15 @@ scripted run midway and confirm the next one continues without repeating finishe
 ### Session 2026-11-11
 
 - Q: One judge request per claim, or one per answer? → A: One per claim for calibration; one per answer for experiments (FR-012).
+- Q: Which experiments come first, given the free tier? → A: Retrieval experiments first; answer evaluation only for the baseline and the best retrieval configuration; reasoning effort and the second model optional, if budget allows. Each session uses a configurable slice, keeping a reserve (default 10) (FR-018, FR-024a, FR-024b).
 - Q: What should the scope-rule experiment run on? → A: The LoRA and BERT summaries and the BERT–RAG comparison, rule on and off, reusing saved rule-on outputs whose stored configuration matches exactly; one run per condition is indicative only (FR-025, FR-025a, FR-025b).
 
 ## Assumptions
 
 - **Saved outputs and "exact" configuration**: saved summaries and comparisons record their model, instruction version and passages, but not reasoning effort or output limit. Reuse compares what is recorded and requires the run to use today's default reasoning effort and output limit; the row states that those two were not recorded.
 - **Default judge**: `google/gemma-4-31b-it:free` judges the default answering model, and the default model judges when the second model answers, so neither grades itself.
-- **Retrieval experiments**: reranking, hybrid search and the prefix are measured for retrieval at no cost. Their answer columns are filled only if the developer also runs answer evaluation for them, at its stated cost.
+- **Retrieval experiments**: reranking, hybrid search and the prefix are measured for retrieval at no cost. Only the best of them gets answer evaluation (FR-024b); the others' answer columns read "not measured". A retrieval row with a written takeaway counts towards the two experiments the acceptance criteria need.
+- **The scope-rule experiment** stays in scope and follows the baseline and best-retrieval answer runs, because it is not an answer evaluation of the golden questions and has its own small fixed set.
 - **Hand verdicts**: the Verdict columns of the verification reports are still empty, and `eval/probe_notes.md` records only failures. Calibration needs the developer to fill in hand verdicts, including supported claims, to reach FR-022.
 - **Golden authorship**: the developer owns the golden set; drafts are reviewed by the developer before they count.
 - **Honest limits**: a self-written set of about 40 questions is small and may favour easy phrasing; the README states this, as the guide asks.

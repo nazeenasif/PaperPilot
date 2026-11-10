@@ -643,3 +643,99 @@ test("F4 US5 a saved summary opens at the daily limit", async ({ page }) => {
   await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("button", { name: "Regenerate summary" })).toBeDisabled();
 });
+
+// --- Polish (T051, SC-010): 375 px without sideways scrolling, and a keyboard-only pass ---
+
+async function noSidewaysScroll(page: Page, where: string) {
+  const widths = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, window: window.innerWidth }));
+  expect(widths.page, `${where} scrolls sideways`).toBeLessThanOrEqual(widths.window);
+}
+
+const BERT_RAG = [
+  { ...LORA_CARD, paper_id: "bert", title: "BERT: Pre-training of Deep Bidirectional Transformers", arxiv_id: "1810.04805" },
+  { ...LORA_CARD, paper_id: "rag", title: "Retrieval-Augmented Generation for NLP Tasks", arxiv_id: "2005.11401" },
+];
+
+function compareRoutes() {
+  return {
+    "/api/papers": async (route: import("@playwright/test").Route) =>
+      route.fulfill({ status: 200, headers: CORS, json: { papers: BERT_RAG, total_passages: 80 } }),
+    "/api/comparisons": async (route: import("@playwright/test").Route) =>
+      route.fulfill({ status: 404, headers: CORS, json: { kind: "not_saved", plan: { max_requests: 5 } } }),
+  };
+}
+
+test("F4 polish: the Summarize picker, a summary and the Compare form fit 375 px", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "phone", "a phone-width check");
+  await fakeBackend(page, { routes: summaryRoutes(true) });
+  await page.goto("/summarize");
+  await expect(page.getByRole("link", { name: /LoRA/ })).toBeVisible({ timeout: 30_000 });
+  await noSidewaysScroll(page, "the Summarize picker");
+  await page.goto("/summarize/lora");
+  await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible({ timeout: 30_000 });
+  await noSidewaysScroll(page, "a summary");
+
+  await fakeBackend(page, { routes: compareRoutes() });
+  await page.goto("/compare");
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: BERT_RAG[0]!.title }, { timeout: 30_000 });
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: BERT_RAG[1]!.title });
+  await expect(page.getByRole("button", { name: "Compare papers" })).toBeEnabled();
+  await noSidewaysScroll(page, "the Compare form");
+});
+
+test("F4 polish: keyboard only, a summary, a citation and a comparison", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "one keyboard pass is enough");
+  await streamPostInPage(page, "/api/summaries/lora", SUMMARY_STEPS);
+  await fakeBackend(page, { routes: summaryRoutes(false) });
+  await page.goto("/summarize/lora");
+  const summarize = page.getByRole("button", { name: "Summarize this paper" });
+  await expect(summarize).toBeEnabled({ timeout: 30_000 });
+  await tabTo(page, summarize);
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("All citations verified")).toBeVisible();
+
+  const chip = page.getByRole("region", { name: "Method" }).getByRole("button", { name: /^Citation 1:/ });
+  await tabTo(page, chip);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(chip).toBeFocused();
+
+  const steps = [
+    { afterMs: 50, event: "plan", data: { max_requests: 1, parts: ["method"] } },
+    { afterMs: 50, event: "comparison", data: {
+      paper_ids: ["bert", "rag"],
+      papers: BERT_RAG.map((card, i) => ({ paper_id: card.paper_id, title: card.title, arxiv_id: card.arxiv_id, label: `P${i + 1}` })),
+      aspects: ["method"],
+      rows: [{ aspect: "method", state: "ok", reason: null, until: null, tokens: {}, cells: [
+        summaryPart("method:bert", { text: "BERT pre-trains a bidirectional encoder [1].", passages: [1] }),
+        summaryPart("method:rag", { text: "RAG retrieves passages before it generates [2].", passages: [2], citations: { valid: [2], invalid: [], uncited_sentences: [] } }),
+      ] }],
+      passages: [1, 2].map((number) => ({ number, passage_id: `p-${number}`, paper_id: number === 1 ? "bert" : "rag",
+        title: BERT_RAG[number - 1]!.title, section: "Methods", page: 1, score: 0.7, text: "Passage text." })),
+      plan: { max_requests: 1, parts: ["method"] }, requests: { planned: 1, retries: 0 }, model: "nvidia/x:free",
+      prompt_version: 8, created_at: new Date().toISOString(), status: "current", stale_reason: null, pending: null,
+      verified_cells: 2, total_cells: 2,
+    } },
+  ];
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await streamPostInPage(page, "/api/comparisons", steps);
+  await fakeBackend(page, { routes: compareRoutes() });
+  await page.goto("/compare");
+  const add = page.getByRole("combobox", { name: "Add paper" });
+  await expect(add).toBeVisible({ timeout: 30_000 });
+  for (let i = 0; i < 2; i++) {
+    await tabTo(page, add);
+    await page.keyboard.press("ArrowDown"); // the first paper still available
+  }
+  for (const name of ["Problem", "Datasets", "Results", "Limitations"]) {
+    await tabTo(page, page.getByRole("checkbox", { name }));
+    await page.keyboard.press("Space");
+  }
+  const compare = page.getByRole("button", { name: "Compare papers" });
+  await expect(compare).toBeEnabled();
+  await tabTo(page, compare);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("table").getByText(/RAG retrieves passages/)).toBeVisible();
+});

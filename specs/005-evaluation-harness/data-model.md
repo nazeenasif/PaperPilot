@@ -22,7 +22,9 @@ The file's SHA-256 is recorded with each result beside `version` (research R1).
 | evidence | [Evidence] | ≥ 1 when answerable; none for not-found |
 | turns | [{role, text}] | follow-up only: the earlier turns |
 | standalone | str | follow-up only: used by retrieval-only runs (FR-003) |
+| table | bool | the answer is in a table; at least one per paper (FR-001) |
 | known_case | `F1` \| `F2` \| `Q2` \| `Q4` \| null | FR-005 |
+| confirmed | bool | set by the researcher once the evidence is checked against the PDF |
 | note | str \| null | |
 
 Validation (research R2): composition per FR-001; every evidence phrase matches a stored passage of its

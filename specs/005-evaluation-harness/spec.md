@@ -182,9 +182,10 @@ scripted run midway and confirm the next one continues without repeating finishe
 
 **Golden set (User Story 1)**
 
-- **FR-001**: The golden set MUST hold 30–50 questions over the 5 papers, with at least 25 answerable
-  single-paper questions (at least 5 per paper), 4 cross-paper questions, 6 expected-not-found questions
-  (near-miss and off-topic) and 3 multi-turn follow-ups.
+- **FR-001**: The golden set MUST hold 30–50 questions over the 5 papers, with at least 20 answerable
+  single-paper questions (at least 1 per paper whose answer is in a table), 5 cross-paper questions, 4
+  near-miss and 3 off-topic questions (expected not-found) and 4 multi-turn follow-ups (amended 2026-11-11:
+  the researcher's target counts; the researcher writes the questions).
 - **FR-002**: Each answerable question MUST record an expected answer and at least one evidence phrase, with
   paper and page; a golden item MUST NOT contain a passage ID.
 - **FR-003**: Each multi-turn item MUST record its earlier turns and a standalone wording of the follow-up.

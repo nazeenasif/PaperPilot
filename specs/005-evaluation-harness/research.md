@@ -15,6 +15,9 @@ question has `id`, `kind` (`single`, `cross`, `near_miss`, `off_topic`, `follow_
 Papers are named by arXiv ID (`1810.04805`), which the library already records, and resolved to the
 library's paper ID at run time. A missing paper fails the check and names the question.
 
+**Comments**: full-line `//` comments are allowed and removed before parsing, so the file can hold a
+commented example for the researcher, who writes the questions (amended 2026-11-11).
+
 **Versioning**: `version` is bumped by hand when a question changes meaning; the file's SHA-256 is
 recorded with every result as well, so an edit without a bump is still detected. A row produced on
 another version or hash is shown as measured on an earlier golden set (spec US5 scenario 4).

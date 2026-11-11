@@ -5,6 +5,7 @@ model needs no code. Retries follow the server's wait hints; cut-off output and 
 failures become one readable LLMError line with the API key scrubbed out.
 """
 
+import dataclasses
 import logging
 import sqlite3
 import threading
@@ -33,7 +34,8 @@ KEY_INFO_TIMEOUT_SECONDS = 10.0
 # max_tokens per task kind; reasoning counts against it (research R5, ADR-0008). A comparison
 # call writes one row, up to four cells. The configured free model allows 65,536 (OpenRouter's
 # model list, 2026-11-04).
-OUTPUT_TOKENS = {"answer": 2048, "summary_section": 8192, "tldr": 8192, "comparison": 8192}
+# The evaluation harness's judge reads claims and passages and may reason at length (Feature 5).
+OUTPUT_TOKENS = {"answer": 2048, "summary_section": 8192, "tldr": 8192, "comparison": 8192, "judge": 8192}
 RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
 _MAX_MESSAGE_CHARS = 300
 
@@ -489,12 +491,17 @@ def model_is_listed() -> bool:
 
 
 def generate(
-    system: str, prompt: str, on_retry: Callable[[RetryNotice], None] | None = None, task: str = "answer"
+    system: str,
+    prompt: str,
+    on_retry: Callable[[RetryNotice], None] | None = None,
+    task: str = "answer",
+    model: str | None = None,
 ) -> LLMReply:
     """Send one system + user message to the configured model and return its reply.
 
     `task` selects the output limit from OUTPUT_TOKENS; an unknown one raises ValueError before
-    anything is sent.
+    anything is sent. `model` replaces LLM_MODEL for this request only (the evaluation harness's
+    judge); it is counted, retried and limited like any other request.
     Raises SettingsError for missing settings and LLMError for provider failures, cut-off or
     empty output. Retries rate limits and transient errors (research R3); `on_retry`, if given,
     is told about each wait before it starts. Raises DailyLimitError, without sending anything,
@@ -505,7 +512,11 @@ def generate(
     if task not in OUTPUT_TOKENS:
         raise ValueError(f"Unknown task kind for the output limit: {task}")
     max_tokens = OUTPUT_TOKENS[task]
+    if model is not None and not model.strip():
+        raise ValueError("The model for this request is empty")
     settings = load_settings()
+    if model is not None:
+        settings = dataclasses.replace(settings, llm_model=model.strip())
     _check_settings(settings)
     today = usage()
     if today.used >= today.limit:

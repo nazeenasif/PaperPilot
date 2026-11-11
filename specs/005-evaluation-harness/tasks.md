@@ -71,7 +71,7 @@ never marks them done.
   - `answer_hash()` covers only answer-relevant fields;
   - `one_change(baseline, other)` ignores the derived fields (`paper_fingerprints`, `commit`) and names each difference, and two or more differences are refused;
   - `eval/experiments.json` loads, and a malformed entry fails with its name.
-- [ ] T012 Implement `evaluation/experiments.py` so that T011 passes.
+- [X] T012 Implement `evaluation/experiments.py` so that T011 passes.
 
 **Checkpoint**: full `pytest` passes; the engine behaves as before when no new argument or setting is used.
 

@@ -82,7 +82,7 @@ never marks them done.
 **Goal**: a validated golden set of 30–50 questions over the 5 papers.
 **Independent test**: `python -m evaluation check` reports counts per kind and fails for a wrong page, an unmatched phrase or a passage ID, with 0 requests.
 
-- [ ] T013 [US1] Write failing tests in `tests/evaluation/test_golden.py`:
+- [X] T013 [US1] Write failing tests in `tests/evaluation/test_golden.py`:
   - **Normalisation**: `normalise` unfolds `ﬁ`/`ﬂ`, joins line-break hyphens, removes hyphens so that "pre-training" matches "pretraining", and keeps `%`, `±`, `.` and `×` (research R2).
   - **Loading**: the schema of data-model.md loads, and full-line `//` comments are ignored.
   - **The check fails**, naming the question, for each of:

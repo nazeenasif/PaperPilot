@@ -36,7 +36,7 @@ never marks them done.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add `rank-bm25==0.2.2` to `requirements.txt`, install it into `.venv`, and create the package skeleton: `evaluation/__init__.py`, `evaluation/__main__.py` (argparse with the subcommands of contracts/cli.md, each printing "not implemented" and exiting 2), `tests/evaluation/__init__.py`, and `tests/evaluation/conftest.py` re-using the root fixtures. Confirm that `git check-ignore data/eval/eval.sqlite3` passes. 0 requests.
+- [X] T001 Add `rank-bm25==0.2.2` to `requirements.txt`, install it into `.venv`, and create the package skeleton: `evaluation/__init__.py`, `evaluation/__main__.py` (argparse with the subcommands of contracts/cli.md, each printing "not implemented" and exiting 2), `tests/evaluation/__init__.py`, and `tests/evaluation/conftest.py` re-using the root fixtures. Confirm that `git check-ignore data/eval/eval.sqlite3` passes. 0 requests.
 - [ ] T002 [P] Create `eval/experiments.json` with the experiments of data-model.md (`baseline`, `rerank-minilm-l6`, `rerank-tinybert`, `hybrid-rrf60`, `prefix`, `reasoning-low`, `gemma`, `scope-rule-off`): each has its `changes`, `answers` (true only for the baseline), `optional` (true for the last three), `set`, `runs` and `takeaway: null`. 0 requests.
 
 ---

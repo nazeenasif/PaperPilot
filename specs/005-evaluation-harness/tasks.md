@@ -66,7 +66,7 @@ never marks them done.
   - two processes writing at once lose nothing (WAL, `BEGIN IMMEDIATE`);
   - the file lives under `data/eval/` of the given root.
 - [X] T010 Implement `evaluation/store.py` (SQLite at `data/eval/eval.sqlite3`) so that T009 passes.
-- [ ] T011 [P] Write failing tests in `tests/evaluation/test_experiments.py` for `evaluation/experiments.py`:
+- [X] T011 [P] Write failing tests in `tests/evaluation/test_experiments.py` for `evaluation/experiments.py`:
   - `configuration()` records every field of data-model.md's Configuration, with instruction hashes taken from `prompts`;
   - `answer_hash()` covers only answer-relevant fields;
   - `one_change(baseline, other)` ignores the derived fields (`paper_fingerprints`, `commit`) and names each difference, and two or more differences are refused;

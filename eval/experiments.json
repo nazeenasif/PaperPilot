@@ -1,0 +1,76 @@
+{
+  "experiments": [
+    {
+      "name": "baseline",
+      "changes": {},
+      "answers": true,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": null
+    },
+    {
+      "name": "rerank-minilm-l6",
+      "changes": {"retrieval": {"method": "rerank", "shortlist": 20, "reranker": "cross-encoder/ms-marco-MiniLM-L6-v2", "revision": "233902d25c44"}},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": null
+    },
+    {
+      "name": "rerank-tinybert",
+      "changes": {"retrieval": {"method": "rerank", "shortlist": 20, "reranker": "cross-encoder/ms-marco-TinyBERT-L2-v2", "revision": "81d1926f67cb"}},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": null
+    },
+    {
+      "name": "hybrid-rrf60",
+      "changes": {"retrieval": {"method": "hybrid", "shortlist": 20, "rrf_k": 60, "bm25": {"k1": 1.5, "b": 0.75}}},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": null
+    },
+    {
+      "name": "prefix",
+      "changes": {"embed_prefix": true},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": null
+    },
+    {
+      "name": "reasoning-low",
+      "changes": {"reasoning_effort": "low"},
+      "answers": true,
+      "optional": true,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": null
+    },
+    {
+      "name": "gemma",
+      "changes": {"answer_model": "google/gemma-4-31b-it:free"},
+      "answers": true,
+      "optional": true,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": null
+    },
+    {
+      "name": "scope-rule-off",
+      "changes": {"scope_rule": false},
+      "answers": true,
+      "optional": true,
+      "set": "scope_set",
+      "runs": 3,
+      "takeaway": null
+    }
+  ]
+}

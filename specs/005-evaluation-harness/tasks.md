@@ -1,0 +1,330 @@
+---
+description: "Task list for Feature 5, the evaluation harness"
+---
+
+# Tasks: Evaluation Harness
+
+**Input**: Design documents from `specs/005-evaluation-harness/` (plan.md, spec.md, research.md,
+data-model.md, contracts/cli.md, contracts/engine-api.md, quickstart.md); ADR-0010, ADR-0011, ADR-0012.
+
+**Tests**: required. Every implementation task is preceded by a failing-test task. Tests run offline
+with the scripted LLM (`tests/conftest.py` `ScriptedLLM`, `fake_answers`), the fake embedder and a fake
+cross-encoder. No test may call the real model, the provider's key endpoint or download a model.
+
+**Commits**: one commit per task; messages name the files and end with
+`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+
+**Requests**: every task that sends real model requests states its planned count in **bold** and runs
+in sessions (a slice of today's quota, keeping the reserve of 10). Every other task makes 0 requests.
+
+**Human tasks** are marked **HUMAN** and are done by the researcher; Claude Code may prepare drafts but
+never marks them done.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: can run in parallel (different files, no dependency on an unfinished task)
+- **[Story]**: US1 golden set, US2 retrieval, US3 answers, US4 judge, US5 experiments and results,
+  US6 sessions (spec.md)
+
+## Path Conventions
+
+- Harness: `evaluation/` (sibling package, ADR-0010); its tests: `tests/evaluation/`
+- Engine seams: `paperpilot/`; their tests: `tests/`
+- Committed data: `eval/`; gitignored cache and libraries: `data/eval/`
+
+---
+
+## Phase 1: Setup
+
+- [ ] T001 Add `rank-bm25==0.2.2` to `requirements.txt`, install it into `.venv`, and create the package skeleton: `evaluation/__init__.py`, `evaluation/__main__.py` (argparse with the subcommands of contracts/cli.md, each printing "not implemented" and exiting 2), `tests/evaluation/__init__.py`, and `tests/evaluation/conftest.py` re-using the root fixtures. Confirm that `git check-ignore data/eval/eval.sqlite3` passes. 0 requests.
+- [ ] T002 [P] Create `eval/experiments.json` with the experiments of data-model.md (`baseline`, `rerank-minilm-l6`, `rerank-tinybert`, `hybrid-rrf60`, `prefix`, `reasoning-low`, `gemma`, `scope-rule-off`): each has its `changes`, `answers` (true only for the baseline), `optional` (true for the last three), `set`, `runs` and `takeaway: null`. 0 requests.
+
+---
+
+## Phase 2: Foundational (blocks every story)
+
+**Purpose**: the engine seams of contracts/engine-api.md, the harness cache and the configuration record. Each seam defaults to today's behaviour.
+
+- [ ] T003 [P] Write failing tests in `tests/test_config_eval.py` for the settings `USAGE_DIR` (default `LIBRARY_DIR`), `EMBED_PREFIX` (default false), `SCOPE_RULE` (default true), `EVAL_JUDGE_MODEL` (default `google/gemma-4-31b-it:free`) and `EVAL_RESERVE` (default 10, must be ≥ 0). Bad values raise `SettingsError`, and `usage.sqlite3` is opened under `USAGE_DIR`.
+- [ ] T004 Implement the settings in `paperpilot/config.py`, and open the usage database under `USAGE_DIR` in `paperpilot/llm.py`, so that T003 passes and the existing tests are unchanged.
+- [ ] T005 [P] Write failing tests in `tests/test_llm_model_arg.py`, using `fake_llm.FakeClient`:
+  - `llm.generate(..., model="x/y:free")` sends that model;
+  - with no `model`, it sends `LLM_MODEL` as today;
+  - the request is counted and retried as any other;
+  - `OUTPUT_TOKENS["judge"] == 8192`;
+  - a cut-off judge reply raises `LLMError(reason="cut_off")` with tokens.
+- [ ] T006 Implement the `model` argument and task kind `judge` in `paperpilot/llm.py` so that T005 passes.
+- [ ] T007 [P] Write failing tests in `tests/test_ask_retrieve.py`:
+  - with no `retrieve`, `service.ask` calls `library.search` exactly as before (spy), and the existing `tests/test_ask*.py` stay green;
+  - a custom `retrieve` returning `Retrieval(passages, gate_score)` is used for the passages, and the gate compares `gate_score` with the threshold even when the passages' own scores are lower;
+  - `gate_score=None` with no passages gives not-found with 0 requests.
+- [ ] T008 Implement `Retrieval` and the `retrieve` argument of `ask` in `paperpilot/service.py` so that T007 passes.
+- [ ] T009 [P] Write failing tests in `tests/evaluation/test_store.py` for `evaluation/store.py`:
+  - answers are stored and loaded by configuration hash, question id and run index;
+  - verdicts are stored by key, and a `not_judged` verdict is never returned as final;
+  - run progress (planned, done, requests, sessions) survives reopening;
+  - two processes writing at once lose nothing (WAL, `BEGIN IMMEDIATE`);
+  - the file lives under `data/eval/` of the given root.
+- [ ] T010 Implement `evaluation/store.py` (SQLite at `data/eval/eval.sqlite3`) so that T009 passes.
+- [ ] T011 [P] Write failing tests in `tests/evaluation/test_experiments.py` for `evaluation/experiments.py`:
+  - `configuration()` records every field of data-model.md's Configuration, with instruction hashes taken from `prompts`;
+  - `answer_hash()` covers only answer-relevant fields;
+  - `one_change(baseline, other)` ignores the derived fields (`paper_fingerprints`, `commit`) and names each difference, and two or more differences are refused;
+  - `eval/experiments.json` loads, and a malformed entry fails with its name.
+- [ ] T012 Implement `evaluation/experiments.py` so that T011 passes.
+
+**Checkpoint**: full `pytest` passes; the engine behaves as before when no new argument or setting is used.
+
+---
+
+## Phase 3: User Story 1 — golden set (P1) 🎯 MVP
+
+**Goal**: a validated golden set of 30–50 questions over the 5 papers.
+**Independent test**: `python -m evaluation check` reports counts per kind and fails for a wrong page, an unmatched phrase or a passage ID, with 0 requests.
+
+- [ ] T013 [US1] Write failing tests in `tests/evaluation/test_golden.py`:
+  - **Normalisation**: `normalise` unfolds `ﬁ`/`ﬂ`, joins line-break hyphens, removes hyphens so that "pre-training" matches "pretraining", and keeps `%`, `±`, `.` and `×` (research R2).
+  - **Loading**: the schema of data-model.md loads.
+  - **The check fails**, naming the question, for each of:
+    - a phrase that matches no stored passage of its paper (fixture PDF in the temporary library, fake embedder);
+    - a phrase that is not on its stated page;
+    - an unknown arXiv ID;
+    - a field holding `<12 hex>-<n>`;
+    - a composition outside FR-001;
+    - any item with `"confirmed": false` (unless `--drafts`).
+  - **Re-chunking**: the check passes again after the library is rebuilt with other chunk settings.
+- [ ] T014 [US1] Implement `evaluation/golden.py` and the `check` command in `evaluation/__main__.py` so that T013 passes.
+- [ ] T015 [US1] Draft `eval/golden.json` (0 requests; Claude Code):
+  - **Composition**: about 40 questions meeting FR-001 (≥ 5 single per paper, 4 cross, 3 near-miss, 3 off-topic, 3 follow-ups with `turns` and `standalone`).
+  - **Known cases**: the F1 and F2 questions and Q2 and Q4 (FR-005), with `known_case` set.
+  - **Evidence**: candidate phrases copied from the PDFs with page numbers, each checked by `check --drafts` to match a stored passage and its page.
+  - **Status**: every item is `"confirmed": false`.
+  - **Do not** use the five probe phrasings verbatim where that would make retrieval easy; note the source of each question in `note`.
+- [ ] T016 [US1] **HUMAN**: review `eval/golden.json`:
+  - rewrite or replace any question as wanted;
+  - confirm each evidence phrase and page against the PDF;
+  - set `"confirmed": true` per item;
+  - bump `version` to 1.
+- [ ] T017 [US1] Run `python -m evaluation check` (0 requests); it must pass with no `--drafts`. Commit `eval/golden.json`.
+
+---
+
+## Phase 4: User Story 2 — retrieval rows (P1), 0 requests
+
+**Goal**: hit@k, MRR and gated not-founds for the baseline, the two rerankers, hybrid search and the prefix, without touching the library.
+**Independent test**: `python -m evaluation retrieval` writes five rows with 0 model requests, identical on a repeat run, and the library's fingerprints are unchanged.
+
+- [ ] T018 [P] [US2] Write failing tests in `tests/evaluation/test_retrieval_metrics.py`:
+  - **Rank**: for a single-paper question, the rank is the first relevant passage. For a cross-paper question, it is the position by which every required paper is covered, and it is none if one paper is missing within 20.
+  - **Metrics**: hit@1/3/6/10, MRR (0 when not found), and both per kind.
+  - **Follow-ups**: they use `standalone`.
+  - **Gating**: near-miss and off-topic questions count as gated when the top vector score is under the threshold.
+  - **Scope**: searches are restricted to the golden papers, or the one paper for `scope: paper`.
+- [ ] T019 [US2] Implement the metrics and the vector retriever (shortlist 20, then the top k; the gate score is the top vector score) in `evaluation/retrieval.py` so that T018 passes.
+- [ ] T020 [P] [US2] Write failing tests in `tests/evaluation/test_retrieval_run.py`: `retrieval baseline` writes `eval/results/baseline.json` with the configuration, the golden version and hash, metrics overall and per kind, per-question ranks and no passage text. A second run gives the same numbers, the library's passage fingerprints and `results.sqlite3` are unchanged, and the request counter does not move.
+- [ ] T021 [US2] Implement the `retrieval` command and the result writer in `evaluation/retrieval.py` and `evaluation/__main__.py` so that T020 passes.
+- [ ] T022 [US2] Run `python -m evaluation retrieval baseline` (0 requests); show hit@6, MRR and per-kind figures; commit `eval/results/baseline.json`.
+- [ ] T023 [P] [US2] Write failing tests in `tests/evaluation/test_rerank.py`, with a fake cross-encoder:
+  - it reorders the vector top 20 and keeps the top k;
+  - the gate score stays the vector top score;
+  - the model is loaded with its pinned name and revision;
+  - a load failure stops the experiment before any question;
+  - the configuration records the reranker and revision.
+- [ ] T024 [US2] Implement reranking in `evaluation/retrieval.py` with `sentence_transformers.CrossEncoder(name, revision=..., device="cpu")`, for `cross-encoder/ms-marco-MiniLM-L6-v2@233902d25c44` and `cross-encoder/ms-marco-TinyBERT-L2-v2@81d1926f67cb`, so that T023 passes.
+- [ ] T025 [P] [US2] Write failing tests in `tests/evaluation/test_hybrid.py`:
+  - **Tokens**: `gpt-3`, `sst-2` and `v1.1` stay whole, and NFKC and lower case apply.
+  - **BM25**: it runs over exactly the scoped passages, with `BM25Okapi` k1 1.5 and b 0.75.
+  - **Fusion**: RRF with k = 60 on two known lists gives the expected order and ties.
+  - **Gate**: it stays the vector top score.
+  - **Configuration**: it records `rrf_k`, `bm25` and the rank-bm25 version.
+- [ ] T026 [US2] Implement hybrid search in `evaluation/retrieval.py` so that T025 passes.
+- [ ] T027 [P] [US2] Write failing tests:
+  - `tests/test_embed_prefix.py`: with `EMBED_PREFIX` on, `library.add_paper` embeds `"{title}. {section}. {text}"` (spy on the embedder) while the stored text, passage IDs and fingerprint equal the unprefixed ones; it is off by default.
+  - `tests/evaluation/test_libraries.py`: `build_prefix_library(root)` ingests the papers into `data/eval/libraries/prefix/` under its own `LIBRARY_DIR` with `USAGE_DIR` at the main library, is reused when already built for the same settings, and leaves the main library unchanged.
+- [ ] T028 [US2] Implement the prefix in `paperpilot/library.py` and `evaluation/libraries.py`, and the `prefix` experiment in `evaluation/retrieval.py`, so that T027 passes.
+- [ ] T029 [US2] Run `python -m evaluation retrieval rerank-minilm-l6 rerank-tinybert hybrid-rrf60 prefix` (0 requests; the first run downloads 91 MB and 18 MB of reranker weights and builds the prefix library). Show the five rows side by side, confirm that the main library's fingerprints are unchanged, and commit `eval/results/*.json`.
+
+---
+
+## Phase 5: User Story 5 — the best-configuration rule (P2), 0 requests
+
+**Goal**: one documented choice of what gets answer evaluation (FR-024b).
+**Independent test**: `python -m evaluation best` prints the winner and its figures from stored rows.
+
+- [ ] T030 [US5] Write failing tests in `tests/evaluation/test_best.py`:
+  - the winner is the highest hit@6, with ties broken by MRR;
+  - a row that does not beat the baseline cannot win, so the result is "baseline";
+  - optional rows are ignored;
+  - `best --choose NAME` overrides the rule and records why;
+  - the choice is written to `eval/experiments.json` (`answers: true`).
+- [ ] T031 [US5] Implement the `best` command in `evaluation/experiments.py` and `evaluation/__main__.py` so that T030 passes; run it (0 requests) and commit `eval/experiments.json`.
+
+---
+
+## Phase 6: User Story 6 — sessions that fit the free tier (P2)
+
+**Goal**: runs planned in units, sliced per day, keeping the reserve, resumable.
+**Independent test**: with scripted usage near the limit, a run refuses with 0 requests; a scripted run stopped midway resumes without repeating finished units.
+
+- [ ] T032 [US6] Write failing tests in `tests/evaluation/test_runs.py`, with a fake `llm.usage` and the scripted LLM:
+  - **Planning**: the plan counts units (an answer is 1, a follow-up 2, a judge request 1) and subtracts cached units.
+  - **Default slice**: today's remaining less `EVAL_RESERVE`, up to the work left; `--slice N` sets it.
+  - **Refusal**: a session refuses with 0 requests when the remaining less the reserve is below its plan, and says when requests resume.
+  - **Per unit**: each unit starts only if both the slice and the remaining less the reserve cover it, so retries cannot spend the reserve.
+  - **Stopping**: `DailyLimitError`, `RateLimitedError` and a busy model end the session with its reason recorded; a later session resumes, repeating no finished unit.
+  - **Counting**: retries are counted apart from planned requests.
+- [ ] T033 [US6] Implement `evaluation/runs.py` and the `status` command so that T032 passes.
+
+---
+
+## Phase 7: User Story 4 — judge and calibration (P2)
+
+**Goal**: a judge whose agreement with hand verdicts is known before its numbers are used.
+**Independent test**: `calibrate` on stored items reports agreement, kappa and per-label agreement, lists every disagreement, and repeats as 0 requests from the cache.
+
+- [ ] T034 [US4] Write failing tests in `tests/evaluation/test_judge.py`, with the scripted LLM:
+  - **Request content**: it holds only the claims and their own cited passages, with tags escaped; never the question, the expected answer, other claims' passages or the answering model.
+  - **Modes**: single mode sends one claim; batch mode lists each claim beside its own passages.
+  - **Rules**: the instruction names scope, wrong-item numbers and "passages only".
+  - **Parsing**: plain JSON, fenced JSON and surrounding text all parse.
+  - **Not judged**: a missing claim, an unreadable reply or a cut-off gives `not_judged`, which is never supported.
+  - **Cache key**: it changes with each of the claim, the passages, the judge model, `JUDGE_PROMPT_VERSION` and the mode.
+  - **Self-grading**: it is flagged when the judge model equals the answerer.
+- [ ] T035 [US4] Implement `evaluation/judge.py` (`JUDGE_INSTRUCTION`, `JUDGE_PROMPT_VERSION = 1`, `build_judge_prompt`, `parse_verdicts`, `judge_claims` calling `llm.generate(model=EVAL_JUDGE_MODEL, task="judge")`) so that T034 passes.
+- [ ] T036 [US4] Write failing tests in `tests/evaluation/test_calibration.py`:
+  - **Import**: `calibrate import` parses a verification report's table and maps the Verdict column (`correct`, `partly`, `wrong`), skipping empty verdicts. Each cited excerpt is matched by normalised prefix to a stored passage and its full text snapshotted; an unmatched excerpt is listed and its item skipped, never guessed.
+  - **Metrics**: agreement on three labels and on two, Cohen's kappa against hand-computed values, and agreement per hand label.
+  - **Disagreements**: `eval/calibration.md` lists every disagreement with the claim, passages, both verdicts and the reason.
+  - **Minimum**: below 20 items, or fewer than 8 supported or 8 not supported, the report says "not calibrated".
+  - **Requests**: calibration sends one request per item through `runs`, and a repeat costs 0.
+- [ ] T037 [US4] Implement `evaluation/calibration.py` and the `calibrate import` and `calibrate` commands so that T036 passes.
+- [ ] T038 [P] [US4] Write the known-case items into `eval/calibration.json` (0 requests; Claude Code), with passage text snapshotted from the store or quoted in `eval/probe_notes.md`, and the hand verdict that the notes already record:
+  - F1;
+  - F2 (the four occurrences and the v4 Data claim 9 variant);
+  - F3 (LoRA claims 12, 14 and 15, and comparison claim 11);
+  - the off-aspect RAG Limitations cell;
+  - claim 5's incomplete citations.
+
+  Include each item's `source`.
+- [ ] T039 [US4] **HUMAN**: fill the **Verdict** column of the verification reports in `docs/verification/` (at least 5 claims from each of the LoRA summary and the BERT–RAG comparison, per Feature 4's SC-002), so that with T038's items there are at least 20, including at least 8 supported and 8 not supported. Fill **Fault** for wrong claims.
+- [ ] T040 [US4] Run `python -m evaluation calibrate import` on each filled report (0 requests); report unmatched excerpts; commit `eval/calibration.json`.
+- [ ] T041 [US4] Run `python -m evaluation calibrate` in sessions. **Planned requests: one per calibration item**, at least 20; the exact figure is the item count printed by the plan, expected 25–35. Show agreement, kappa, per-label agreement and the disagreements; commit `eval/calibration.md`.
+
+---
+
+## Phase 8: User Story 3 — answer evaluation for the baseline and the winner (P1)
+
+**Goal**: citation validity, refusals and judged faithfulness for the baseline and the best retrieval configuration.
+**Independent test**: with the scripted LLM, a run over a few questions stores answers and verdicts, and a repeat costs 0 requests with identical numbers.
+
+- [ ] T042 [US3] Write failing tests in `tests/evaluation/test_answers.py`, with the scripted LLM:
+  - **Pipeline**: answers come from `service.ask` with the experiment's `retrieve` and settings; a follow-up passes `turns` as history.
+  - **Claims**: they follow the validator's sentence rule; uncited sentences are not judged and count as uncited.
+  - **Scoring**: citation validity, correct refusal, false not-found, and the faithfulness counts (supported, partly, unsupported, uncited, not judged).
+  - **Judging**: one judge request per answer with at least one cited claim, and none for a correct refusal.
+  - **Caching**: a repeat costs 0 and gives the same numbers; an answer under another configuration is not reused; a new judge version re-judges only.
+  - **Results**: `eval/results/<name>.json` gains its `answers` block, with no passage text.
+- [ ] T043 [US3] Implement `evaluation/answers.py` and the `answers` and `judge` commands (both run through `runs`) so that T042 passes.
+- [ ] T044 [US3] Run `python -m evaluation answers baseline` then `judge baseline` in sessions over days. **Planned requests: about 75** (one per question, two per follow-up, so about 43, plus one judge request per answer with a cited claim, about 32). The exact figure is printed before any request. Show the answer metrics and commit `eval/results/baseline.json`.
+- [ ] T045 [US3] If `best` chose an experiment other than the baseline, run `answers` and `judge` for it. **Planned requests: about 75**, as T044. If the baseline won, record "no winner over the baseline" in `eval/experiments.json` and send 0 requests. Commit.
+
+---
+
+## Phase 9: User Story 5 — report and README (P2), 0 requests
+
+**Goal**: the results table generated from stored results, in `eval/results.md` and the README.
+**Independent test**: `report` twice produces identical files from `eval/results/` and `eval/experiments.json` alone.
+
+- [ ] T046 [US5] Write failing tests in `tests/evaluation/test_report.py`:
+  - **Rows**: one per experiment, from result files only (no cache, no PDFs). Unmeasured answer columns read "not measured", a row without a takeaway says so, a row from another golden version or hash is marked "earlier golden set", and a self-graded row is marked.
+  - **Content**: per-kind tables, the calibration summary or "not calibrated", and the set's size and limits.
+  - **README**: the block between `<!-- eval-results:start -->` and `<!-- eval-results:end -->` is replaced, or appended when absent, and a second run changes nothing.
+- [ ] T047 [US5] Implement `evaluation/report.py` and the `report` command so that T046 passes.
+- [ ] T048 [US5] **HUMAN**: write the `takeaway` of the baseline and of at least two experiments in `eval/experiments.json`.
+- [ ] T049 [US5] Run `python -m evaluation report` (0 requests); commit `eval/results.md` and `README.md`.
+
+**Checkpoint 11**: a golden set, a baseline row and at least two experiments with written conclusions; judge agreement reported with disagreements listed; the README table generated from stored results.
+
+---
+
+## Phase 10: Optional rows (run only if the budget allows; FR-024a)
+
+- [ ] T050 [P] [US5] Write failing tests in `tests/test_scope_rule_setting.py`:
+  - with `SCOPE_RULE` off, the section, TL;DR and row instructions omit `SCOPE_RULE`, and with it on (the default) they are unchanged;
+  - `service.summarize(..., save=False)` and `service.compare(..., save=False)` neither read nor write saved results or unfinished runs;
+  - the default `save=True` behaves as before.
+- [ ] T051 [US5] Implement the `SCOPE_RULE` setting in `paperpilot/prompts.py` and `save` in `paperpilot/service.py` so that T050 passes.
+- [ ] T052 [US5] Write failing tests in `tests/evaluation/test_scope.py`:
+  - `scope --runs 3` stores each run separately (run index in the key) and never answers a repeat from the cache;
+  - a saved rule-on summary or comparison whose recorded configuration matches is reused as one run, and the row says so;
+  - claims are judged in batch per part or row;
+  - the row reports F2-type verdicts (partly or unsupported on scope) per run and per condition, with no single average, and states the number of runs.
+- [ ] T053 [US5] Implement the `scope` command in `evaluation/answers.py` and `evaluation/__main__.py` so that T052 passes.
+- [ ] T054 [US5] Optional: `answers reasoning-low` then `judge reasoning-low` (`LLM_REASONING_EFFORT=low`). **Planned requests: about 75.** Commit the row.
+- [ ] T055 [US5] Optional: `answers gemma` then `judge gemma` (answered by `google/gemma-4-31b-it:free`, judged by `nvidia/nemotron-3-ultra-550b-a55b:free`). **Planned requests: about 75.** Commit the row.
+- [ ] T056 [US5] Optional: `scope --runs 3` on the LoRA and BERT summaries and the BERT–RAG comparison, rule on and off. **Planned requests: up to about 190**: 3 runs × 2 conditions × 16 parts or rows to generate (96), plus as many to judge (96), less up to 10 reused rule-on outputs. Commit the row.
+- [ ] T057 [US5] After any optional row: `python -m evaluation report` (0 requests); **HUMAN** writes its takeaway; commit.
+
+---
+
+## Phase 11: Polish
+
+- [ ] T058 [P] Add an "Evaluation" section to `docs/known-limitations.md`, and update research R3 of Feature 4 if the scope rule was measured. The section covers:
+  - the self-written set of about 40 questions;
+  - the judge's limits and batching;
+  - the calibration size and its uncertainty;
+  - the untested larger rerankers;
+  - the gate left on vector scores.
+- [ ] T059 Run the quickstart offline steps (`check`, `retrieval`, `best`, `report`, `pytest`); fix any drift; record Checkpoint 11's results and every real request total in the PHR.
+
+---
+
+## Dependencies & Execution Order
+
+- **Setup (T001–T002)** comes first.
+- **Foundational (T003–T012)** blocks every story; T003/T005/T007/T009/T011 are parallel test tasks, each followed by its implementation.
+- **US1 (T013–T017)** blocks every run, because all metrics need the golden set. **T016 (HUMAN)** gates T017.
+- **US2 (T018–T029)** needs US1; the reranker, hybrid and prefix pairs (T023–T028) are independent of each other.
+- **Best rule (T030–T031)** needs every retrieval row (T029).
+- **US6 (T032–T033)** needs only the foundation, so it can be built during US1 and US2; it must be done before any real request (T041, T044).
+- **US4 (T034–T041)** needs US6. **T039 (HUMAN)** gates T040 and T041.
+- **US3 (T042–T045)** needs US4's judge (T035) and US6; T045 needs T031's choice.
+- **Report (T046–T049)** can be built any time after T021; **T048 (HUMAN)** gates T049.
+- **Optional (T050–T057)** comes after Checkpoint 11.
+
+## Parallel Example: Foundational and retrieval tests
+
+```text
+T003 tests/test_config_eval.py   T005 tests/test_llm_model_arg.py   T007 tests/test_ask_retrieve.py
+T009 tests/evaluation/test_store.py   T011 tests/evaluation/test_experiments.py
+T023 tests/evaluation/test_rerank.py   T025 tests/evaluation/test_hybrid.py   T027 tests/test_embed_prefix.py
+```
+
+## Request plan (real model requests only)
+
+| Task | Planned | Days at 40 a day |
+|---|---|---|
+| T041 calibration | one per item, at least 20 (expected 25–35) | 1 |
+| T044 baseline answers and judge | about 75 | 2 |
+| T045 winner answers and judge | about 75, or 0 if the baseline wins | 2 |
+| **Required** | **about 125–185** | **3–5** |
+| T054 reasoning effort (optional) | about 75 | 2 |
+| T055 second model (optional) | about 75 | 2 |
+| T056 scope rule (optional) | up to about 190 | 5 |
+
+Every other task makes 0 requests. Each real task prints its exact plan before sending anything.
+
+## Implementation Strategy
+
+1. **MVP**: Setup, Foundational and US1, giving a validated golden set.
+2. **Free results**: US2 and the best rule, giving five retrieval rows at no cost, enough for two
+   experiments with conclusions once T048's takeaways are written.
+3. **Spending**: US6, then US4's calibration (once T039's hand verdicts exist), then US3 for the baseline
+   and the winner.
+4. **Report**, then the optional rows as budget allows.
+
+## Notes
+
+- Tasks marked HUMAN are not marked [X] by Claude Code.
+- A test task's commit may hold failing tests; its implementation task's commit must pass them.
+- Never commit `data/eval/`, PDFs or paper text in `eval/results/`.

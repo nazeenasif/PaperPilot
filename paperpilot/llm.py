@@ -151,9 +151,11 @@ def _prepare_usage_file(db: sqlite3.Connection, path: Path) -> None:
 
 
 def _usage_connection(settings: Settings) -> sqlite3.Connection:
-    """The usage database under LIBRARY_DIR; WAL and a busy timeout let the app and scripts share it."""
-    settings.library_dir.mkdir(parents=True, exist_ok=True)
-    path = Path(settings.library_dir) / USAGE_FILE
+    """The usage database under USAGE_DIR (LIBRARY_DIR by default); WAL and a busy timeout let the
+    app and scripts share it."""
+    folder = Path(settings.usage_dir or settings.library_dir)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / USAGE_FILE
     db = sqlite3.connect(path, timeout=10.0, isolation_level=None)
     try:
         _prepare_usage_file(db, path)

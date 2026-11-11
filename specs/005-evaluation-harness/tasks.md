@@ -54,7 +54,7 @@ never marks them done.
   - `OUTPUT_TOKENS["judge"] == 8192`;
   - a cut-off judge reply raises `LLMError(reason="cut_off")` with tokens.
 - [X] T006 Implement the `model` argument and task kind `judge` in `paperpilot/llm.py` so that T005 passes.
-- [ ] T007 [P] Write failing tests in `tests/test_ask_retrieve.py`:
+- [X] T007 [P] Write failing tests in `tests/test_ask_retrieve.py`:
   - with no `retrieve`, `service.ask` calls `library.search` exactly as before (spy), and the existing `tests/test_ask*.py` stay green;
   - a custom `retrieve` returning `Retrieval(passages, gate_score)` is used for the passages, and the gate compares `gate_score` with the threshold even when the passages' own scores are lower;
   - `gate_score=None` with no passages gives not-found with 0 requests.

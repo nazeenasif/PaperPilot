@@ -97,7 +97,7 @@ never marks them done.
   - **Empty file**: the check reports 0 of each target and fails, with 0 requests.
   - **Re-chunking**: the check passes again after the library is rebuilt with other chunk settings.
 - [X] T014 [US1] Implement `evaluation/golden.py` and the `check` command in `evaluation/__main__.py` so that T013 passes.
-- [ ] T015 [US1] Create the empty golden set and its guide (0 requests; Claude Code):
+- [X] T015 [US1] Create the empty golden set and its guide (0 requests; Claude Code):
   - `eval/golden.json`: `"version": 0` and `"questions": []`, with a commented example item of every kind above the list, as `//` lines that the loader ignores.
   - `eval/GOLDEN_GUIDE.md`, in short:
     - the question kinds and the target counts;

@@ -59,7 +59,7 @@ never marks them done.
   - a custom `retrieve` returning `Retrieval(passages, gate_score)` is used for the passages, and the gate compares `gate_score` with the threshold even when the passages' own scores are lower;
   - `gate_score=None` with no passages gives not-found with 0 requests.
 - [X] T008 Implement `Retrieval` and the `retrieve` argument of `ask` in `paperpilot/service.py` so that T007 passes.
-- [X] T009 [P] Write failing tests in `tests/evaluation/test_store.py` for `evaluation/store.py`:
+- [X] T009 [P] Write failing tests in `tests/evaluation/test_eval_store.py` for `evaluation/store.py`:
   - answers are stored and loaded by configuration hash, question id and run index;
   - verdicts are stored by key, and a `not_judged` verdict is never returned as final;
   - run progress (planned, done, requests, sessions) survives reopening;
@@ -307,7 +307,7 @@ never marks them done.
 
 ```text
 T003 tests/test_config_eval.py   T005 tests/test_llm_model_arg.py   T007 tests/test_ask_retrieve.py
-T009 tests/evaluation/test_store.py   T011 tests/evaluation/test_experiments.py
+T009 tests/evaluation/test_eval_store.py   T011 tests/evaluation/test_experiments.py
 T025 tests/evaluation/test_rerank.py   T027 tests/evaluation/test_hybrid.py   T029 tests/test_embed_prefix.py
 ```
 

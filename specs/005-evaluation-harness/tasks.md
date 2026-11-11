@@ -47,7 +47,7 @@ never marks them done.
 
 - [X] T003 [P] Write failing tests in `tests/test_config_eval.py` for the settings `USAGE_DIR` (default `LIBRARY_DIR`), `EMBED_PREFIX` (default false), `SCOPE_RULE` (default true), `EVAL_JUDGE_MODEL` (default `google/gemma-4-31b-it:free`) and `EVAL_RESERVE` (default 10, must be ≥ 0). Bad values raise `SettingsError`, and `usage.sqlite3` is opened under `USAGE_DIR`.
 - [X] T004 Implement the settings in `paperpilot/config.py`, and open the usage database under `USAGE_DIR` in `paperpilot/llm.py`, so that T003 passes and the existing tests are unchanged.
-- [ ] T005 [P] Write failing tests in `tests/test_llm_model_arg.py`, using `fake_llm.FakeClient`:
+- [X] T005 [P] Write failing tests in `tests/test_llm_model_arg.py`, using `fake_llm.FakeClient`:
   - `llm.generate(..., model="x/y:free")` sends that model;
   - with no `model`, it sends `LLM_MODEL` as today;
   - the request is counted and retried as any other;

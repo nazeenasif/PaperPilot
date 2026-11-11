@@ -11,7 +11,8 @@ from paperpilot import library
 ARXIV = "2401.00001"
 METHOD = (
     "We propose a retrieval method for scientific papers. arXiv:2401.00001 The pre-training stage "
-    "uses a large corpus of abstracts, and the fine-tuning stage adapts the encoder to questions."
+    "uses a large corpus of abstracts, and the fine-tuning stage adapts the encoder to questions "
+    "written by readers of each paper."
 )
 RESULTS_TEXT = (
     "Our method reaches the best accuracy on every benchmark we tried, and it is faster to train "

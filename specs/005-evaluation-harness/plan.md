@@ -148,3 +148,7 @@ records, so the golden set and results sit beside them.
 
 The golden-set format and session slicing are reversible, local choices covered by research R1 and
 R10, and do not need ADRs.
+
+Recorded 2026-11-11: [ADR-0010](../../history/adr/0010-evaluation-harness-architecture.md),
+[ADR-0011](../../history/adr/0011-llm-judge-and-calibration.md),
+[ADR-0012](../../history/adr/0012-retrieval-experiments-and-gate.md) (all Proposed).

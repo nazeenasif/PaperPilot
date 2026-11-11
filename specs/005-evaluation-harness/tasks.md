@@ -58,7 +58,7 @@ never marks them done.
   - with no `retrieve`, `service.ask` calls `library.search` exactly as before (spy), and the existing `tests/test_ask*.py` stay green;
   - a custom `retrieve` returning `Retrieval(passages, gate_score)` is used for the passages, and the gate compares `gate_score` with the threshold even when the passages' own scores are lower;
   - `gate_score=None` with no passages gives not-found with 0 requests.
-- [ ] T008 Implement `Retrieval` and the `retrieve` argument of `ask` in `paperpilot/service.py` so that T007 passes.
+- [X] T008 Implement `Retrieval` and the `retrieve` argument of `ask` in `paperpilot/service.py` so that T007 passes.
 - [ ] T009 [P] Write failing tests in `tests/evaluation/test_store.py` for `evaluation/store.py`:
   - answers are stored and loaded by configuration hash, question id and run index;
   - verdicts are stored by key, and a `not_judged` verdict is never returned as final;

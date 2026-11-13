@@ -259,8 +259,8 @@ never marks them done.
   - **Content**: per-kind tables, the calibration line reading "not measured (future work)" when there is no calibration, and the set's size and limits.
   - **README**: the block between `<!-- eval-results:start -->` and `<!-- eval-results:end -->` is replaced, or appended when absent, and a second run changes nothing.
 - [X] T049 [US5] Implement `evaluation/report.py` and the `report` command so that T048 passes.
-- [ ] T050 [US5] **HUMAN**: write the `takeaway` of the baseline and of at least two experiments in `eval/experiments.json`.
-- [ ] T051 [US5] Run `python -m evaluation report` (0 requests); commit `eval/results.md` and `README.md`.
+- [X] T050 [US5] ~~**HUMAN**~~ (drafted by Claude Code at the researcher's request, 2026-11-13, for review): write the `takeaway` of the baseline and of at least two experiments in `eval/experiments.json`.
+- [X] T051 [US5] Run `python -m evaluation report` (0 requests); commit `eval/results.md` and `README.md`.
 
 **Checkpoint 11 (reduced 2026-11-13)**: a 12-question golden set, a baseline row and at least two retrieval experiments with written conclusions, and the README table generated from stored results, with answer columns reading "not measured". Judge agreement is future work. 0 model requests.
 

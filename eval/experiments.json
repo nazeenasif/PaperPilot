@@ -7,7 +7,7 @@
       "optional": false,
       "set": "golden",
       "runs": 1,
-      "takeaway": null
+      "takeaway": "Reference row: evidence in the top 6 for 4 of 10 questions; Q2 (bert-01) and Q4 (lora-01) rank 12 and 19, and no row finds rag-02's evidence within 20."
     },
     {
       "name": "rerank-minilm-l6",
@@ -16,7 +16,7 @@
       "optional": false,
       "set": "golden",
       "runs": 1,
-      "takeaway": null
+      "takeaway": "Pulls 9 of 10 into the top 10 (baseline 5) but seldom to the top: hit@6 +1 question, MRR falls to 0.246, and it is 20 times slower (3.9 s a question)."
     },
     {
       "name": "rerank-tinybert",
@@ -25,7 +25,7 @@
       "optional": false,
       "set": "golden",
       "runs": 1,
-      "takeaway": null
+      "takeaway": "Same hit@6 as MiniLM (+1 question) at an eighth of its time (0.46 s), but MRR falls to 0.260 and only 7 of 10 reach the top 10."
     },
     {
       "name": "hybrid-rrf60",
@@ -34,7 +34,7 @@
       "optional": false,
       "set": "golden",
       "runs": 1,
-      "takeaway": null
+      "takeaway": "Best hit@6 (0.6, +2 questions) at no extra cost: keywords lift the RAG and Transformer questions, though MRR stays level (0.315) and Q2 drops to 17."
     },
     {
       "name": "prefix",
@@ -43,7 +43,7 @@
       "optional": false,
       "set": "golden",
       "runs": 1,
-      "takeaway": null
+      "takeaway": "Best MRR (0.407) and hit@1 (0.3), +1 question at hit@6 and 9 of 10 in the top 10, including Q2 at 7; it needs the library re-embedded."
     },
     {
       "name": "reasoning-low",

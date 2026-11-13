@@ -132,8 +132,8 @@ never marks them done.
   - **Gating**: near-miss and off-topic questions count as gated when the top vector score is under the threshold.
   - **Scope**: searches are restricted to the golden papers, or the one paper for `scope: paper`.
 - [X] T021 [US2] Implement the metrics and the vector retriever (shortlist 20, then the top k; the gate score is the top vector score) in `evaluation/retrieval.py` so that T020 passes.
-- [ ] T022 [P] [US2] Write failing tests in `tests/evaluation/test_retrieval_run.py`: `retrieval baseline` writes `eval/results/baseline.json` with the configuration, the golden version and hash, metrics overall and per kind, per-question ranks and no passage text. A second run gives the same numbers, the library's passage fingerprints and `results.sqlite3` are unchanged, and the request counter does not move.
-- [ ] T023 [US2] Implement the `retrieval` command and the result writer in `evaluation/retrieval.py` and `evaluation/__main__.py` so that T022 passes.
+- [X] T022 [P] [US2] Write failing tests in `tests/evaluation/test_retrieval_run.py`: `retrieval baseline` writes `eval/results/baseline.json` with the configuration, the golden version and hash, metrics overall and per kind, per-question ranks and no passage text. A second run gives the same numbers, the library's passage fingerprints and `results.sqlite3` are unchanged, and the request counter does not move.
+- [X] T023 [US2] Implement the `retrieval` command and the result writer in `evaluation/retrieval.py` and `evaluation/__main__.py` so that T022 passes.
 - [ ] T024 [US2] Run `python -m evaluation retrieval baseline` (0 requests); show hit@6, MRR and per-kind figures; commit `eval/results/baseline.json`.
 - [ ] T025 [P] [US2] Write failing tests in `tests/evaluation/test_rerank.py`, with a fake cross-encoder:
   - it reorders the vector top 20 and keeps the top k;

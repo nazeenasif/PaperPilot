@@ -21,7 +21,9 @@ COMMANDS = {
 
 def build_parser() -> argparse.ArgumentParser:
     """The argument parser with one subcommand per entry of COMMANDS."""
+    from evaluation.experiments import EXPERIMENTS_FILE
     from evaluation.golden import GOLDEN_FILE
+    from evaluation.retrieval import RESULTS_DIR
 
     parser = argparse.ArgumentParser(prog="python -m evaluation", description="PaperPilot's evaluation harness")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -32,6 +34,11 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--drafts", action="store_true",
                                  help="list unconfirmed items and missing evidence instead of failing")
             command.add_argument("--cross-min-papers", type=int, default=2, help=argparse.SUPPRESS)
+        elif name == "retrieval":
+            command.add_argument("names", nargs="*", help="experiments to run (default: every retrieval experiment)")
+            command.add_argument("--golden", default=str(GOLDEN_FILE), help="the golden-set file")
+            command.add_argument("--experiments", default=str(EXPERIMENTS_FILE), help="the experiments file")
+            command.add_argument("--results", default=str(RESULTS_DIR), help="where result files are written")
         else:
             command.add_argument("rest", nargs="*", help=argparse.SUPPRESS)
     return parser
@@ -69,11 +76,66 @@ def run_check(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _figure(value) -> str:
+    return "—" if value is None else f"{value:.3f}"
+
+
+def run_retrieval(args: argparse.Namespace) -> int:
+    """Run retrieval experiments (0 model requests): write each result file and print its figures."""
+    from evaluation import experiments, golden, retrieval
+    from paperpilot import library
+
+    sys.stdout.reconfigure(encoding="utf-8")
+    try:
+        loaded = golden.load_golden(args.golden)
+        known = {e.name: e for e in experiments.load_experiments(args.experiments)}
+    except (OSError, ValueError, KeyError) as error:
+        print(f"FAIL: {error}")
+        return 1
+    names = args.names or [name for name, e in known.items() if retrieval.is_retrieval_experiment(e)]
+    for name in names:
+        if name not in known:
+            print(f"{name}: unknown experiment; known: {', '.join(known)}")
+            return 2
+        if not retrieval.is_retrieval_experiment(known[name]):
+            print(f"{name}: not a retrieval experiment (it changes {', '.join(known[name].changes)})")
+            return 2
+    try:
+        paper_ids = retrieval.golden_papers(loaded)
+        before = {pid: library.passage_fingerprint(pid) for pid in paper_ids.values()}
+        baseline = retrieval.baseline_configuration(loaded)
+        rows = []
+        for name in names:
+            result = retrieval.run_experiment(known[name], loaded, baseline)
+            path = retrieval.write_result(result, args.results)
+            rows.append(result)
+            r = result["retrieval"]
+            print(f"{name}: hit@1 {_figure(r['hit@1'])}  hit@3 {_figure(r['hit@3'])}  hit@6 {_figure(r['hit@6'])}  "
+                  f"hit@10 {_figure(r['hit@10'])}  MRR {_figure(r['mrr'])}  gated not-founds "
+                  f"{r['gated_not_found']['gated']} of {r['gated_not_found']['of']}  {r['latency_s']} s/question  -> {path}")
+            for kind, figures in r["per_kind"].items():
+                if "mrr" in figures:
+                    print(f"    {kind}: hit@6 {_figure(figures['hit@6'])}  MRR {_figure(figures['mrr'])}  ({figures['answerable']})")
+                else:
+                    print(f"    {kind}: gated {figures['gated']} of {figures['questions']}")
+            print("    ranks: " + ", ".join(f"{q['id']} {q['rank'] if q['rank'] else '-'}"
+                                          for q in result["questions"] if q["kind"] in golden.ANSWERABLE))
+    except ValueError as error:
+        print(f"FAIL: {error}")
+        return 1
+    after = {pid: library.passage_fingerprint(pid) for pid in paper_ids.values()}
+    print(f"Library unchanged: {'yes' if after == before else 'NO'}")
+    print("Model requests: 0")
+    return 0 if after == before else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run one command; return its exit code."""
     args = build_parser().parse_args(argv)
     if args.command == "check":
         return run_check(args)
+    if args.command == "retrieval":
+        return run_retrieval(args)
     print(f"{args.command}: not implemented yet")
     return 2
 

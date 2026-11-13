@@ -6,11 +6,17 @@ passages, best first, and the score its relevance gate compares with the thresho
 retriever gates on the top vector score, so RELEVANCE_THRESHOLD keeps its meaning (research R4).
 """
 
+import contextlib
+import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 
+from evaluation import experiments
 from evaluation import golden as golden_module
+from evaluation.experiments import Experiment
 from paperpilot import library
 from paperpilot.config import load_settings
 
@@ -128,3 +134,67 @@ def evaluate(golden: golden_module.GoldenSet, retrieve: Retriever, threshold: fl
         })
     return {"questions": rows, "metrics": metrics(rows),
             "latency_s": round(seconds / len(rows), 3) if rows else None}
+
+
+# --- experiments and result files (research R11) ---
+
+RESULTS_DIR = Path("eval") / "results"
+RETRIEVAL_SETTINGS = frozenset({"retrieval", "embed_prefix"})
+
+
+def is_retrieval_experiment(experiment: Experiment) -> bool:
+    """A required golden-set experiment that changes nothing or only retrieval or the embedding text."""
+    return experiment.set == "golden" and not experiment.optional and set(experiment.changes) <= RETRIEVAL_SETTINGS
+
+
+@contextlib.contextmanager
+def experiment_library(experiment: Experiment) -> Iterator[None]:
+    """The library an experiment searches: the researcher's, unless it changes how passages are
+    embedded (the prefix experiment's own library, research R6)."""
+    yield
+
+
+def retriever_for(experiment: Experiment) -> tuple[Retriever, dict]:
+    """The experiment's retriever, and what to add to its recorded retrieval settings."""
+    return vector_retrieve, {}
+
+
+def _golden_info(golden: golden_module.GoldenSet) -> dict:
+    return {"version": golden.version, "sha256": golden.sha256, "questions": len(golden.questions)}
+
+
+def run_experiment(experiment: Experiment, golden: golden_module.GoldenSet, baseline_config: dict) -> dict:
+    """Measure one retrieval experiment; return its result row (no passage text). Raises ValueError
+    when it changes more than one setting from the baseline."""
+    with experiment_library(experiment):
+        paper_ids = golden_papers(golden)
+        config = experiments.configuration(experiment.changes, list(paper_ids.values()), _golden_info(golden))
+        experiments.check_one_change(baseline_config, config)
+        retrieve, extra = retriever_for(experiment)
+        config["retrieval"] = {**config["retrieval"], **extra}
+        measured = evaluate(golden, retrieve, threshold=config["relevance_threshold"])
+    return {
+        "experiment": experiment.name,
+        "configuration": config,
+        "measured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "retrieval": {**measured["metrics"], "latency_s": measured["latency_s"]},
+        "answers": None,
+        "requests": {"planned": 0, "retries": 0},
+        "self_graded": False,
+        "questions": measured["questions"],
+    }
+
+
+def write_result(result: dict, results_dir: Path | str = RESULTS_DIR) -> Path:
+    """Write `<results_dir>/<experiment>.json`."""
+    results_dir = Path(results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    path = results_dir / f"{result['experiment']}.json"
+    path.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def baseline_configuration(golden: golden_module.GoldenSet) -> dict:
+    """The baseline's configuration in the researcher's library, to compare experiments with."""
+    paper_ids = golden_papers(golden)
+    return experiments.configuration({}, list(paper_ids.values()), _golden_info(golden))

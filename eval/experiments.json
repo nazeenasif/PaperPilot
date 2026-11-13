@@ -1,0 +1,87 @@
+{
+  "conclusion": "Adding the paper title and section to each passage before embedding gave the best single improvement (MRR 0.31 → 0.41, hit@1 0.20 → 0.30) at no runtime cost. Combined with hybrid BM25 + vector search, it reached hit@6 0.70 (baseline 0.40) and MRR 0.43. Off-the-shelf rerankers found more answers within the top 10 but ranked them lower, and were 2–20× slower. With 10 answerable questions, these are indicative results.",
+  "experiments": [
+    {
+      "name": "baseline",
+      "changes": {},
+      "answers": true,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": "Reference row: evidence in the top 6 for 4 of 10 questions; Q2 (bert-01) and Q4 (lora-01) rank 12 and 19, and no row finds rag-02's evidence within 20."
+    },
+    {
+      "name": "rerank-minilm-l6",
+      "changes": {"retrieval": {"method": "rerank", "shortlist": 20, "reranker": "cross-encoder/ms-marco-MiniLM-L6-v2", "revision": "233902d25c44"}},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": "Pulls 9 of 10 into the top 10 (baseline 5) but seldom to the top: hit@6 +1 question, MRR falls to 0.246, and it is 20 times slower (3.9 s a question)."
+    },
+    {
+      "name": "rerank-tinybert",
+      "changes": {"retrieval": {"method": "rerank", "shortlist": 20, "reranker": "cross-encoder/ms-marco-TinyBERT-L2-v2", "revision": "81d1926f67cb"}},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": "Same hit@6 as MiniLM (+1 question) at an eighth of its time (0.46 s), but MRR falls to 0.260 and only 7 of 10 reach the top 10."
+    },
+    {
+      "name": "hybrid-rrf60",
+      "changes": {"retrieval": {"method": "hybrid", "shortlist": 20, "rrf_k": 60, "bm25": {"k1": 1.5, "b": 0.75}}},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": "Best hit@6 (0.6, +2 questions) at no extra cost: keywords lift the RAG and Transformer questions, though MRR stays level (0.315) and Q2 drops to 17."
+    },
+    {
+      "name": "prefix",
+      "changes": {"embed_prefix": true},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": "Best MRR (0.407) and hit@1 (0.3), +1 question at hit@6 and 9 of 10 in the top 10, including Q2 at 7; it needs the library re-embedded."
+    },
+    {
+      "name": "prefix-hybrid",
+      "base": "prefix",
+      "changes": {"retrieval": {"method": "hybrid", "shortlist": 20, "rrf_k": 60, "bm25": {"k1": 1.5, "b": 0.75}}},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": "The two ideas add up: the best hit@6 (0.7) and MRR (0.425) of any row at 0.15 s a question, though hit@1 is 0.2 (prefix alone 0.3) and Q2 still ranks 14."
+    },
+    {
+      "name": "reasoning-low",
+      "changes": {"reasoning_effort": "low"},
+      "answers": true,
+      "optional": true,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": null
+    },
+    {
+      "name": "gemma",
+      "changes": {"answer_model": "google/gemma-4-31b-it:free"},
+      "answers": true,
+      "optional": true,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": null
+    },
+    {
+      "name": "scope-rule-off",
+      "changes": {"scope_rule": false},
+      "answers": true,
+      "optional": true,
+      "set": "scope_set",
+      "runs": 3,
+      "takeaway": null
+    }
+  ]
+}

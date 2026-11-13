@@ -1,0 +1,307 @@
+"""Retrieval evaluation: evidence ranks, hit@k, MRR and gated not-founds, with no model requests
+(spec FR-006-FR-008; research R3-R6).
+
+A retriever turns a question's text and the papers in scope into a shortlist of up to SHORTLIST
+passages, best first, and the score its relevance gate compares with the threshold. Every
+retriever gates on the top vector score, so RELEVANCE_THRESHOLD keeps its meaning (research R4).
+"""
+
+import contextlib
+import json
+import re
+import time
+import unicodedata
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+from importlib import metadata
+from pathlib import Path
+
+from rank_bm25 import BM25Okapi
+
+from evaluation import experiments, libraries
+from evaluation import golden as golden_module
+from evaluation.experiments import Experiment
+from paperpilot import library, store
+from paperpilot.config import load_settings
+
+SHORTLIST = 20
+KS = (1, 3, 6, 10)
+
+
+@dataclass(frozen=True)
+class Ranked:
+    """A retriever's shortlist, best first and ranked from 1, and its gate score."""
+
+    passages: list[library.SearchResult]
+    gate_score: float | None
+
+
+Retriever = Callable[[str, list[str]], Ranked]
+
+
+def query_text(q: dict) -> str:
+    """What is searched: a follow-up's standalone wording, otherwise the question (FR-003)."""
+    if q.get("kind") == "follow_up" and str(q.get("standalone", "")).strip():
+        return q["standalone"]
+    return q["question"]
+
+
+def scope_paper_ids(q: dict, paper_ids: dict[str, str]) -> list[str]:
+    """The papers searched: the question's one paper for `scope: paper`, else every golden paper
+    (`paper_ids` maps arXiv ID to paper ID, in golden-set order)."""
+    if q.get("scope") == "paper":
+        return [paper_ids[q["papers"][0]]]
+    return list(paper_ids.values())
+
+
+def evidence_rank(q: dict, passages: list[library.SearchResult], arxiv_of: dict[str, str],
+                  limit: int = SHORTLIST) -> int | None:
+    """The position by which every required paper has a relevant passage: one of that paper's that
+    contains one of its evidence phrases (FR-007). None when that is not reached within `limit`."""
+    phrases: dict[str, list[str]] = {}
+    for ev in q.get("evidence", []):
+        phrases.setdefault(ev["paper"], []).append(golden_module.normalise(ev["phrase"]))
+    needed = set(q.get("papers", []))
+    if not needed or not phrases:
+        return None
+    covered: set[str] = set()
+    for position, passage in enumerate(passages[:limit], start=1):
+        arxiv = arxiv_of.get(passage.paper_id)
+        if arxiv in needed and arxiv not in covered:
+            text = golden_module.normalise(passage.text)
+            if any(phrase in text for phrase in phrases.get(arxiv, [])):
+                covered.add(arxiv)
+                if covered == needed:
+                    return position
+    return None
+
+
+def _ranking(rows: list[dict]) -> dict:
+    n = len(rows)
+    if not n:
+        return {f"hit@{k}": None for k in KS} | {"mrr": None, "answerable": 0}
+    figures = {f"hit@{k}": round(sum(r["rank"] is not None and r["rank"] <= k for r in rows) / n, 3) for k in KS}
+    figures["mrr"] = round(sum(1 / r["rank"] for r in rows if r["rank"]) / n, 3)
+    figures["answerable"] = n
+    return figures
+
+
+def metrics(rows: list[dict]) -> dict:
+    """hit@k and MRR over answerable questions, the same per kind, and gated not-founds."""
+    answerable = [r for r in rows if r["kind"] in golden_module.ANSWERABLE]
+    refusals = [r for r in rows if r["kind"] in golden_module.NOT_FOUND_KINDS]
+    result = _ranking(answerable)
+    per_kind: dict[str, dict] = {}
+    for kind in dict.fromkeys(r["kind"] for r in rows):
+        of_kind = [r for r in rows if r["kind"] == kind]
+        if kind in golden_module.ANSWERABLE:
+            per_kind[kind] = _ranking(of_kind)
+        else:
+            per_kind[kind] = {"questions": len(of_kind), "gated": sum(bool(r["gated"]) for r in of_kind)}
+    result["per_kind"] = per_kind
+    result["gated_not_found"] = {"gated": sum(bool(r["gated"]) for r in refusals), "of": len(refusals)}
+    return result
+
+
+def vector_retrieve(text: str, paper_ids: list[str]) -> Ranked:
+    """Today's search: the vector top SHORTLIST, gated on its top score."""
+    results = library.search(text, k=SHORTLIST, paper_ids=paper_ids)
+    return Ranked(results, max((r.score for r in results), default=None))
+
+
+def golden_papers(golden: golden_module.GoldenSet) -> dict[str, str]:
+    """arXiv ID to paper ID for the golden papers in the active library; raises ValueError for a missing one."""
+    by_arxiv = {p.arxiv_id: p.paper_id for p in library.list_papers() if p.arxiv_id}
+    missing = [a for a in golden.papers if a not in by_arxiv]
+    if missing:
+        raise ValueError(f"Not in the library: {', '.join(missing)}")
+    return {arxiv: by_arxiv[arxiv] for arxiv in golden.papers}
+
+
+def evaluate(golden: golden_module.GoldenSet, retrieve: Retriever, threshold: float | None = None) -> dict:
+    """Run every golden question through `retrieve`; return per-question rows (no passage text),
+    the metrics and the mean seconds per question."""
+    threshold = load_settings().relevance_threshold if threshold is None else threshold
+    paper_ids = golden_papers(golden)
+    arxiv_of = {pid: arxiv for arxiv, pid in paper_ids.items()}
+    rows, seconds = [], 0.0
+    if golden.questions:  # untimed warm-up: loads the embedding model and any reranker
+        first = golden.questions[0]
+        retrieve(query_text(first), scope_paper_ids(first, paper_ids))
+    for q in golden.questions:
+        start = time.perf_counter()
+        got = retrieve(query_text(q), scope_paper_ids(q, paper_ids))
+        seconds += time.perf_counter() - start
+        gate = got.gate_score
+        rows.append({
+            "id": q["id"], "kind": q["kind"],
+            "rank": evidence_rank(q, got.passages, arxiv_of) if q["kind"] in golden_module.ANSWERABLE else None,
+            "gate_score": gate,
+            "gated": gate is None or gate < threshold,
+        })
+    return {"questions": rows, "metrics": metrics(rows),
+            "latency_s": round(seconds / len(rows), 3) if rows else None}
+
+
+# --- experiments and result files (research R11) ---
+
+RESULTS_DIR = Path("eval") / "results"
+RETRIEVAL_SETTINGS = frozenset({"retrieval", "embed_prefix"})
+
+
+def is_retrieval_experiment(experiment: Experiment) -> bool:
+    """A required golden-set experiment that changes nothing or only retrieval or the embedding text."""
+    return experiment.set == "golden" and not experiment.optional and set(experiment.changes) <= RETRIEVAL_SETTINGS
+
+
+@contextlib.contextmanager
+def experiment_library(experiment: Experiment) -> Iterator[None]:
+    """The library an experiment searches: the researcher's, unless it changes how passages are
+    embedded (the prefix experiment's own library, research R6)."""
+    if not experiment.changes.get("embed_prefix"):
+        yield
+        return
+    root = libraries.build_prefix_library()
+    with libraries.using_library(root, embed_prefix=True):
+        yield
+
+
+def load_cross_encoder(name: str, revision: str):
+    """A cross-encoder at its pinned revision, on the CPU (research R4)."""
+    from sentence_transformers import CrossEncoder  # imported here: it pulls in torch
+
+    return CrossEncoder(name, revision=revision, device="cpu")
+
+
+def rerank_retriever(model) -> Retriever:
+    """Rerank the vector shortlist by the cross-encoder's score; the gate stays the top vector score."""
+
+    def retrieve(text: str, paper_ids: list[str]) -> Ranked:
+        base = vector_retrieve(text, paper_ids)
+        if not base.passages:
+            return base
+        scores = model.predict([(text, p.text) for p in base.passages], batch_size=8, show_progress_bar=False)
+        order = sorted(range(len(base.passages)), key=lambda i: -float(scores[i]))  # stable: ties keep vector order
+        return Ranked([replace(base.passages[i], rank=n) for n, i in enumerate(order, start=1)], base.gate_score)
+
+    return retrieve
+
+
+_TOKEN = re.compile(r"\w+(?:[-.]\w+)*")
+
+
+def tokenize(text: str) -> list[str]:
+    """BM25 tokens: NFKC, lower case, and words joined by - or . kept whole (gpt-3, sst-2, v1.1)."""
+    return _TOKEN.findall(unicodedata.normalize("NFKC", text).lower())
+
+
+def rrf_fuse(lists: list[list[str]], k: int = 60) -> list[str]:
+    """Reciprocal rank fusion: score(d) = sum of 1 / (k + rank of d in each list), best first.
+    Ties go to the better best rank, then to the earlier list's order (the vector list first)."""
+    score: dict[str, float] = {}
+    best: dict[str, int] = {}
+    order: dict[str, tuple[int, int]] = {}
+    for list_number, ids in enumerate(lists):
+        for rank, item in enumerate(ids, start=1):
+            score[item] = score.get(item, 0.0) + 1 / (k + rank)
+            best[item] = min(best.get(item, rank), rank)
+            order.setdefault(item, (list_number, rank))
+    return sorted(score, key=lambda item: (-score[item], best[item], order[item]))
+
+
+def hybrid_retriever(rrf_k: int = 60, k1: float = 1.5, b: float = 0.75) -> Retriever:
+    """BM25 over the scoped passages fused with the vector shortlist by RRF; the gate stays the
+    top vector score (research R5). One BM25 index per set of papers, built on first use."""
+    indexes: dict[tuple[str, ...], tuple[list[library.SearchResult], object]] = {}
+
+    def index_for(paper_ids: list[str]):
+        key = tuple(sorted(paper_ids))
+        if key not in indexes:
+            got = store.get_collection().get(where=store.build_where(list(key)), include=["documents", "metadatas"])
+            passages = [library.SearchResult(rank=0, score=0.0, passage_id=pid, paper_id=meta["paper_id"],
+                                             title=meta["title"], section=meta["section"], page=meta["page"], text=text)
+                        for pid, text, meta in zip(got["ids"], got["documents"], got["metadatas"])]
+            indexes[key] = (passages, BM25Okapi([tokenize(p.text) for p in passages], k1=k1, b=b))
+        return indexes[key]
+
+    def retrieve(text: str, paper_ids: list[str]) -> Ranked:
+        base = vector_retrieve(text, paper_ids)
+        passages, index = index_for(paper_ids)
+        scores = index.get_scores(tokenize(text)) if passages else []
+        keyword = sorted((i for i in range(len(passages)) if scores[i] > 0), key=lambda i: -scores[i])[:SHORTLIST]
+        by_id = {p.passage_id: p for p in passages} | {p.passage_id: p for p in base.passages}
+        fused = rrf_fuse([[p.passage_id for p in base.passages], [passages[i].passage_id for i in keyword]], k=rrf_k)
+        return Ranked([replace(by_id[pid], rank=n) for n, pid in enumerate(fused[:SHORTLIST], start=1)],
+                      base.gate_score)
+
+    return retrieve
+
+
+def retriever_for(experiment: Experiment) -> tuple[Retriever, dict]:
+    """The experiment's retriever, and what to add to its recorded retrieval settings. Raises
+    ValueError when a model it needs cannot be loaded, before any question is asked."""
+    settings = experiment.changes.get("retrieval", {})
+    method = settings.get("method", "vector")
+    if method == "rerank":
+        try:
+            model = load_cross_encoder(settings["reranker"], settings["revision"])
+        except Exception as error:  # a missing model or revision: stop before any question
+            raise ValueError(f"{experiment.name}: cannot load {settings.get('reranker')} at "
+                             f"{settings.get('revision')}: {error}") from error
+        return rerank_retriever(model), {}
+    if method == "hybrid":
+        bm25 = settings.get("bm25", {})
+        return (hybrid_retriever(settings.get("rrf_k", 60), bm25.get("k1", 1.5), bm25.get("b", 0.75)),
+                {"rank_bm25": metadata.version("rank-bm25")})
+    if method != "vector":
+        raise ValueError(f"{experiment.name}: unknown retrieval method {method!r}")
+    return vector_retrieve, {}
+
+
+def _golden_info(golden: golden_module.GoldenSet) -> dict:
+    return {"version": golden.version, "sha256": golden.sha256, "questions": len(golden.questions)}
+
+
+def run_experiment(experiment: Experiment, golden: golden_module.GoldenSet, baseline_config: dict,
+                   base: Experiment | None = None) -> dict:
+    """Measure one retrieval experiment; return its result row (no passage text). An experiment
+    with a `base` row applies that row's change too, and its own one change is counted from that
+    row. Raises ValueError when it changes more than one setting from the baseline or its base."""
+    changes = {**(base.changes if base else {}), **experiment.changes}
+    resolved = replace(experiment, changes=changes)
+    with experiment_library(resolved):
+        paper_ids = golden_papers(golden)
+        config = experiments.configuration(changes, list(paper_ids.values()), _golden_info(golden))
+        reference = (experiments.configuration(base.changes, list(paper_ids.values()), _golden_info(golden))
+                     if base else baseline_config)
+        experiments.check_one_change(reference, config)
+        retrieve, extra = retriever_for(resolved)
+        config["retrieval"] = {**config["retrieval"], **extra}
+        measured = evaluate(golden, retrieve, threshold=config["relevance_threshold"])
+    return {
+        "experiment": experiment.name,
+        "base": experiment.base,
+        "configuration": config,
+        "measured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "retrieval": {**measured["metrics"], "latency_s": measured["latency_s"]},
+        "answers": None,
+        "requests": {"planned": 0, "retries": 0},
+        "self_graded": False,
+        "questions": measured["questions"],
+    }
+
+
+def write_result(result: dict, results_dir: Path | str = RESULTS_DIR) -> Path:
+    """Write `<results_dir>/<experiment>.json`."""
+    results_dir = Path(results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    path = results_dir / f"{result['experiment']}.json"
+    path.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def baseline_configuration(golden: golden_module.GoldenSet) -> dict:
+    """The baseline's configuration in the researcher's library, to compare experiments with."""
+    paper_ids = golden_papers(golden)
+    return experiments.configuration({}, list(paper_ids.values()), _golden_info(golden))

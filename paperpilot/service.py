@@ -126,18 +126,38 @@ def review_reply(
     return text, citations, warning, None, None
 
 
+@dataclass(frozen=True)
+class Retrieval:
+    """The passages an answer reads, and the score its relevance gate compares with the threshold
+    (the top vector score; None when nothing was found). The evaluation harness supplies its own
+    (Feature 5, contracts/engine-api.md)."""
+
+    passages: list[library.SearchResult]
+    gate_score: float | None
+
+
+def _search(question: str, k: int, paper_ids: list[str] | None) -> Retrieval:
+    """Today's retrieval: a vector search, gated on its top score."""
+    results = library.search(question, k=k, paper_ids=paper_ids)
+    return Retrieval(results, max((r.score for r in results), default=None))
+
+
 def ask(
     question: str,
     paper_ids: list[str] | None = None,
     k: int | None = None,
     history: list[Turn] | None = None,
     on_event: Callable[[str, dict], None] | None = None,
+    retrieve: Callable[[str, int, list[str] | None], Retrieval] | None = None,
 ) -> Answer:
     """Answer a question from the library with [n] citations to the returned passages.
 
     `on_event(kind, detail)`, if given, is told the progress (spec FR-006): "rewriting",
     "searching", "reading" ({passages, papers}), "generating", "retry_wait" ({attempt,
     max_attempts, wait_seconds, reason}) and "checking". Events never carry answer text.
+    `retrieve(question, k, paper_ids)`, if given, replaces the vector search and supplies the
+    passages and the gate score (the evaluation harness; Feature 5). With none, the behaviour is
+    unchanged.
 
     Raises EmptyQueryError for an empty question, UnknownPaperError for an unknown paper filter,
     SettingsError for missing LLM settings and LLMError when the model fails.
@@ -211,14 +231,15 @@ def ask(
 
     start = time.perf_counter()
     emit("searching")
-    results = library.search(standalone, k=k, paper_ids=paper_ids)
+    retrieval = (retrieve or _search)(standalone, k, paper_ids)
+    results = retrieval.passages
     timings["retrieve"] = time.perf_counter() - start
     passages: list[NumberedPassage] = []
     if not results:
         return finish(prompts.NOT_FOUND, NO_CITATIONS, "no_passages")
-    # The threshold was calibrated on top-1 scores, so it gates the question on its best passage;
-    # when that passes, all k passages go to the model unfiltered (research R8).
-    if max(r.score for r in results) < settings.relevance_threshold:
+    # The threshold was calibrated on top-1 vector scores, so it gates the question on its best
+    # passage; when that passes, all k passages go to the model unfiltered (research R8).
+    if retrieval.gate_score is None or retrieval.gate_score < settings.relevance_threshold:
         return finish(prompts.NOT_FOUND, NO_CITATIONS, "below_threshold")
     passages = number_passages(results)
     emit("reading", {"passages": len(passages), "papers": len({p.paper_id for p in passages})})

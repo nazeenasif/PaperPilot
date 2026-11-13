@@ -25,6 +25,11 @@ _ENV_NAMES = {
     "llm_timeout_seconds": "LLM_TIMEOUT_SECONDS",
     "daily_request_limit": "DAILY_REQUEST_LIMIT",
     "frontend_origins": "FRONTEND_ORIGINS",
+    "usage_dir": "USAGE_DIR",
+    "embed_prefix": "EMBED_PREFIX",
+    "scope_rule": "SCOPE_RULE",
+    "eval_judge_model": "EVAL_JUDGE_MODEL",
+    "eval_reserve": "EVAL_RESERVE",
 }
 # Settings whose values must never be printed.
 _SECRET_FIELDS = {"llm_api_key"}
@@ -50,6 +55,12 @@ class Settings:
     daily_request_limit: int = 50  # free requests per UTC day; the provider's figure wins when known
     # Browser origins the web API accepts (CORS and the Origin guard, research R11).
     frontend_origins: tuple[str, ...] = ("http://127.0.0.1:3000", "http://localhost:3000")
+    # Feature 5, the evaluation harness (contracts/engine-api.md); each default is today's behaviour.
+    usage_dir: Path | None = None  # where usage.sqlite3 lives; None: LIBRARY_DIR
+    embed_prefix: bool = False  # embed "title. section. text"; the stored text is unchanged
+    scope_rule: bool = True  # the scope rule in the section, TL;DR and row instructions
+    eval_judge_model: str = "google/gemma-4-31b-it:free"  # the harness's judge
+    eval_reserve: int = 10  # requests an evaluation session never spends
 
     def describe(self) -> str:
         """Return one 'ENV_NAME = value' line per setting; secrets show only whether they are set."""
@@ -95,6 +106,22 @@ def _read_fraction(name: str, default: float) -> float:
 def _read_text(name: str, default: str) -> str:
     """Read a text env var; empty or missing gives the default."""
     return (os.getenv(name) or "").strip() or default
+
+
+_TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off"}
+
+
+def _read_bool(name: str, default: bool) -> bool:
+    """Read an on/off env var (1/0, true/false, yes/no, on/off, any case)."""
+    raw = (os.getenv(name) or "").strip().lower()
+    if not raw:
+        return default
+    if raw in _TRUE:
+        return True
+    if raw in _FALSE:
+        return False
+    raise SettingsError(f"{name}={raw} is not on or off; use true or false")
 
 
 def _read_list(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
@@ -148,4 +175,9 @@ def load_settings() -> Settings:
         llm_timeout_seconds=_read_int("LLM_TIMEOUT_SECONDS", defaults.llm_timeout_seconds, 1),
         daily_request_limit=_read_int("DAILY_REQUEST_LIMIT", defaults.daily_request_limit, 1),
         frontend_origins=_read_list("FRONTEND_ORIGINS", defaults.frontend_origins),
+        usage_dir=Path(os.getenv("USAGE_DIR")) if (os.getenv("USAGE_DIR") or "").strip() else library_dir,
+        embed_prefix=_read_bool("EMBED_PREFIX", defaults.embed_prefix),
+        scope_rule=_read_bool("SCOPE_RULE", defaults.scope_rule),
+        eval_judge_model=_read_text("EVAL_JUDGE_MODEL", defaults.eval_judge_model),
+        eval_reserve=_read_int("EVAL_RESERVE", defaults.eval_reserve, 0),
     )

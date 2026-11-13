@@ -142,13 +142,13 @@ never marks them done.
   - a load failure stops the experiment before any question;
   - the configuration records the reranker and revision.
 - [X] T026 [US2] Implement reranking in `evaluation/retrieval.py` with `sentence_transformers.CrossEncoder(name, revision=..., device="cpu")`, for `cross-encoder/ms-marco-MiniLM-L6-v2@233902d25c44` and `cross-encoder/ms-marco-TinyBERT-L2-v2@81d1926f67cb`, so that T025 passes.
-- [ ] T027 [P] [US2] Write failing tests in `tests/evaluation/test_hybrid.py`:
+- [X] T027 [P] [US2] Write failing tests in `tests/evaluation/test_hybrid.py`:
   - **Tokens**: `gpt-3`, `sst-2` and `v1.1` stay whole, and NFKC and lower case apply.
   - **BM25**: it runs over exactly the scoped passages, with `BM25Okapi` k1 1.5 and b 0.75.
   - **Fusion**: RRF with k = 60 on two known lists gives the expected order and ties.
   - **Gate**: it stays the vector top score.
   - **Configuration**: it records `rrf_k`, `bm25` and the rank-bm25 version.
-- [ ] T028 [US2] Implement hybrid search in `evaluation/retrieval.py` so that T027 passes.
+- [X] T028 [US2] Implement hybrid search in `evaluation/retrieval.py` so that T027 passes.
 - [ ] T029 [P] [US2] Write failing tests:
   - `tests/test_embed_prefix.py`: with `EMBED_PREFIX` on, `library.add_paper` embeds `"{title}. {section}. {text}"` (spy on the embedder) while the stored text, passage IDs and fingerprint equal the unprefixed ones; it is off by default.
   - `tests/evaluation/test_libraries.py`: `build_prefix_library(root)` ingests the papers into `data/eval/libraries/prefix/` under its own `LIBRARY_DIR` with `USAGE_DIR` at the main library, is reused when already built for the same settings, and leaves the main library unchanged.

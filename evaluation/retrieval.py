@@ -8,16 +8,21 @@ retriever gates on the top vector score, so RELEVANCE_THRESHOLD keeps its meanin
 
 import contextlib
 import json
+import re
 import time
+import unicodedata
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from importlib import metadata
 from pathlib import Path
+
+from rank_bm25 import BM25Okapi
 
 from evaluation import experiments
 from evaluation import golden as golden_module
 from evaluation.experiments import Experiment
-from paperpilot import library
+from paperpilot import library, store
 from paperpilot.config import load_settings
 
 SHORTLIST = 20
@@ -178,6 +183,56 @@ def rerank_retriever(model) -> Retriever:
     return retrieve
 
 
+_TOKEN = re.compile(r"\w+(?:[-.]\w+)*")
+
+
+def tokenize(text: str) -> list[str]:
+    """BM25 tokens: NFKC, lower case, and words joined by - or . kept whole (gpt-3, sst-2, v1.1)."""
+    return _TOKEN.findall(unicodedata.normalize("NFKC", text).lower())
+
+
+def rrf_fuse(lists: list[list[str]], k: int = 60) -> list[str]:
+    """Reciprocal rank fusion: score(d) = sum of 1 / (k + rank of d in each list), best first.
+    Ties go to the better best rank, then to the earlier list's order (the vector list first)."""
+    score: dict[str, float] = {}
+    best: dict[str, int] = {}
+    order: dict[str, tuple[int, int]] = {}
+    for list_number, ids in enumerate(lists):
+        for rank, item in enumerate(ids, start=1):
+            score[item] = score.get(item, 0.0) + 1 / (k + rank)
+            best[item] = min(best.get(item, rank), rank)
+            order.setdefault(item, (list_number, rank))
+    return sorted(score, key=lambda item: (-score[item], best[item], order[item]))
+
+
+def hybrid_retriever(rrf_k: int = 60, k1: float = 1.5, b: float = 0.75) -> Retriever:
+    """BM25 over the scoped passages fused with the vector shortlist by RRF; the gate stays the
+    top vector score (research R5). One BM25 index per set of papers, built on first use."""
+    indexes: dict[tuple[str, ...], tuple[list[library.SearchResult], object]] = {}
+
+    def index_for(paper_ids: list[str]):
+        key = tuple(sorted(paper_ids))
+        if key not in indexes:
+            got = store.get_collection().get(where=store.build_where(list(key)), include=["documents", "metadatas"])
+            passages = [library.SearchResult(rank=0, score=0.0, passage_id=pid, paper_id=meta["paper_id"],
+                                             title=meta["title"], section=meta["section"], page=meta["page"], text=text)
+                        for pid, text, meta in zip(got["ids"], got["documents"], got["metadatas"])]
+            indexes[key] = (passages, BM25Okapi([tokenize(p.text) for p in passages], k1=k1, b=b))
+        return indexes[key]
+
+    def retrieve(text: str, paper_ids: list[str]) -> Ranked:
+        base = vector_retrieve(text, paper_ids)
+        passages, index = index_for(paper_ids)
+        scores = index.get_scores(tokenize(text)) if passages else []
+        keyword = sorted((i for i in range(len(passages)) if scores[i] > 0), key=lambda i: -scores[i])[:SHORTLIST]
+        by_id = {p.passage_id: p for p in passages} | {p.passage_id: p for p in base.passages}
+        fused = rrf_fuse([[p.passage_id for p in base.passages], [passages[i].passage_id for i in keyword]], k=rrf_k)
+        return Ranked([replace(by_id[pid], rank=n) for n, pid in enumerate(fused[:SHORTLIST], start=1)],
+                      base.gate_score)
+
+    return retrieve
+
+
 def retriever_for(experiment: Experiment) -> tuple[Retriever, dict]:
     """The experiment's retriever, and what to add to its recorded retrieval settings. Raises
     ValueError when a model it needs cannot be loaded, before any question is asked."""
@@ -190,6 +245,10 @@ def retriever_for(experiment: Experiment) -> tuple[Retriever, dict]:
             raise ValueError(f"{experiment.name}: cannot load {settings.get('reranker')} at "
                              f"{settings.get('revision')}: {error}") from error
         return rerank_retriever(model), {}
+    if method == "hybrid":
+        bm25 = settings.get("bm25", {})
+        return (hybrid_retriever(settings.get("rrf_k", 60), bm25.get("k1", 1.5), bm25.get("b", 0.75)),
+                {"rank_bm25": metadata.version("rank-bm25")})
     if method != "vector":
         raise ValueError(f"{experiment.name}: unknown retrieval method {method!r}")
     return vector_retrieve, {}

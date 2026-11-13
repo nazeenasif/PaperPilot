@@ -744,3 +744,13 @@ test("F4 polish: keyboard only, a summary, a citation and a comparison", async (
   await page.keyboard.press("Enter");
   await expect(page.getByRole("table").getByText(/RAG retrieves passages/)).toBeVisible();
 });
+
+test("the browser tab shows PaperPilot's icon", async ({ page, request }) => {
+  await fakeBackend(page);
+  await page.goto("/");
+  const icon = page.locator('head link[rel="icon"][type="image/svg+xml"]');
+  await expect(icon).toHaveCount(1);
+  const response = await request.get((await icon.getAttribute("href"))!);
+  expect(response.status()).toBe(200);
+  expect(await response.text()).toContain("<svg");
+});

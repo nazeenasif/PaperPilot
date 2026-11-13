@@ -10,7 +10,7 @@ import contextlib
 import json
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -157,8 +157,41 @@ def experiment_library(experiment: Experiment) -> Iterator[None]:
     yield
 
 
+def load_cross_encoder(name: str, revision: str):
+    """A cross-encoder at its pinned revision, on the CPU (research R4)."""
+    from sentence_transformers import CrossEncoder  # imported here: it pulls in torch
+
+    return CrossEncoder(name, revision=revision, device="cpu")
+
+
+def rerank_retriever(model) -> Retriever:
+    """Rerank the vector shortlist by the cross-encoder's score; the gate stays the top vector score."""
+
+    def retrieve(text: str, paper_ids: list[str]) -> Ranked:
+        base = vector_retrieve(text, paper_ids)
+        if not base.passages:
+            return base
+        scores = model.predict([(text, p.text) for p in base.passages], batch_size=8, show_progress_bar=False)
+        order = sorted(range(len(base.passages)), key=lambda i: -float(scores[i]))  # stable: ties keep vector order
+        return Ranked([replace(base.passages[i], rank=n) for n, i in enumerate(order, start=1)], base.gate_score)
+
+    return retrieve
+
+
 def retriever_for(experiment: Experiment) -> tuple[Retriever, dict]:
-    """The experiment's retriever, and what to add to its recorded retrieval settings."""
+    """The experiment's retriever, and what to add to its recorded retrieval settings. Raises
+    ValueError when a model it needs cannot be loaded, before any question is asked."""
+    settings = experiment.changes.get("retrieval", {})
+    method = settings.get("method", "vector")
+    if method == "rerank":
+        try:
+            model = load_cross_encoder(settings["reranker"], settings["revision"])
+        except Exception as error:  # a missing model or revision: stop before any question
+            raise ValueError(f"{experiment.name}: cannot load {settings.get('reranker')} at "
+                             f"{settings.get('revision')}: {error}") from error
+        return rerank_retriever(model), {}
+    if method != "vector":
+        raise ValueError(f"{experiment.name}: unknown retrieval method {method!r}")
     return vector_retrieve, {}
 
 

@@ -106,17 +106,17 @@ never marks them done.
     - what makes a good near-miss;
     - why there are no passage IDs;
     - that evidence is drafted afterwards for confirmation.
-- [ ] T016 [US1] **HUMAN**: write the golden questions in `eval/golden.json`, following `eval/GOLDEN_GUIDE.md`:
+- [X] T016 [US1] ~~**HUMAN**~~ (reassigned to Claude Code by the researcher, 2026-11-13): write the golden questions in `eval/golden.json`, following `eval/GOLDEN_GUIDE.md`:
   - **Counts** (reduced 2026-11-13): 12 questions: 2 single-paper per paper (10) and 2 near-miss. Table answers are welcome but not required; cross-paper, off-topic and follow-up questions are optional extras.
   - **Fields**: `id`, `kind`, `question`, `scope`, `papers`, `expected` and `table`; `turns` and `standalone` for follow-ups.
   - **Evidence**: none needed yet.
   - **Known cases**: optional (FR-005 is future work); the Q2 and Q4 false not-founds may be among the 12, with `known_case`.
-- [ ] T017 [US1] Draft evidence for every answerable question (0 requests; Claude Code):
+- [X] T017 [US1] Draft evidence for every answerable question (0 requests; Claude Code):
   - one or two phrases copied from the PDF, each with its page, that match a stored passage of the paper (in a table passage for `table: true`), checked by `check --drafts`;
   - every item is set `"confirmed": false`;
   - a question whose answer cannot be found in the paper is listed for the researcher, not given invented evidence.
-- [ ] T018 [US1] **HUMAN**: confirm each evidence phrase and page against the PDF, correct any, set `"confirmed": true` per item, and set `version` to 1.
-- [ ] T019 [US1] Run `python -m evaluation check` (0 requests); it must pass with no `--drafts`. Commit `eval/golden.json`.
+- [X] T018 [US1] ~~**HUMAN**~~ (reassigned to Claude Code by the researcher, 2026-11-13; her review of the drafted set follows): confirm each evidence phrase and page against the PDF, correct any, set `"confirmed": true` per item, and set `version` to 1.
+- [X] T019 [US1] Run `python -m evaluation check` (0 requests); it must pass with no `--drafts`. Commit `eval/golden.json`.
 
 ---
 

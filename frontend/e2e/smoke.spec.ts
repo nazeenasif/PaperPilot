@@ -66,6 +66,11 @@ test("US2 viewer", async ({ page }) => {
   const viewer = page.getByRole("dialog");
   await expect(viewer.getByText(/Our Method · page 1 of 1/)).toBeVisible();
   await expect(viewer.locator(".react-pdf__Page canvas")).toBeVisible({ timeout: 15_000 });
+  // The whole page fits inside the panel: neither side is cut off.
+  const panelBox = await viewer.boundingBox();
+  const canvasBox = await viewer.locator(".react-pdf__Page canvas").boundingBox();
+  expect(canvasBox!.x).toBeGreaterThanOrEqual(panelBox!.x);
+  expect(canvasBox!.x + canvasBox!.width).toBeLessThanOrEqual(panelBox!.x + panelBox!.width);
   const highlight = viewer.getByRole("img", { name: /highlighted passage/i });
   await expect(highlight).toBeVisible();
   await expect(highlight.locator("[data-region]")).toHaveCount(2);

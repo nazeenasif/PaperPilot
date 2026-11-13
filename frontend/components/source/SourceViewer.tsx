@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { HighlightOverlay } from "@/components/source/HighlightOverlay";
 import { PassageGone } from "@/components/states/PassageGone";
@@ -28,10 +28,13 @@ export function SourceViewer({
   /** Rendered page width in pixels; by default fits the window (phone width, FR-029). */
   pageWidth?: number;
 }) {
-  const [measuredWidth] = useState(() =>
+  // The page is drawn as wide as the panel's content area (at most DEFAULT_PAGE_WIDTH), measured
+  // so it is never cut off by the panel's padding or scrollbar.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [frameWidth, setFrameWidth] = useState<number | null>(null);
+  const [windowWidth] = useState(() =>
     typeof window === "undefined" ? DEFAULT_PAGE_WIDTH : Math.min(DEFAULT_PAGE_WIDTH, window.innerWidth - 40),
   );
-  const pageWidth = fixedWidth ?? measuredWidth;
   // The chip that opened the viewer; Radix only restores focus to its own triggers (FR-030).
   const [opener] = useState(() => (typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null)));
   useEffect(() => () => void setTimeout(() => opener?.focus(), 0), [opener]);
@@ -55,6 +58,20 @@ export function SourceViewer({
   }, [citation.passage_id, citation.page, citation.moved]);
 
   const view = load.state === "loaded" ? load.view : null;
+  const showsPdf = Boolean(view?.has_pdf);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!showsPdf || !frame || typeof ResizeObserver === "undefined") return;
+    if (frame.clientWidth > 0) setFrameWidth(frame.clientWidth);
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry && entry.contentRect.width > 0) setFrameWidth(Math.floor(entry.contentRect.width));
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [showsPdf]);
+
+  const pageWidth = fixedWidth ?? Math.min(DEFAULT_PAGE_WIDTH, frameWidth ?? windowWidth);
   const layout = view?.layout ?? null;
   const pageSize = layout?.pages.find((p) => p.number === page);
   const scale = pageSize ? pageWidth / pageSize.width : 0;
@@ -73,7 +90,10 @@ export function SourceViewer({
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full gap-3 overflow-y-auto p-5 sm:max-w-xl">
+      <SheetContent
+        side="right"
+        className="gap-3 overflow-y-auto p-5 data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+      >
         <SheetHeader className="p-0 pr-8">
           <p className="font-mono text-xs tracking-wide text-amber">SOURCE {citation.number}</p>
           <SheetTitle className="font-heading text-lg leading-snug text-text">{citation.title}</SheetTitle>
@@ -108,9 +128,11 @@ export function SourceViewer({
 
         {view && view.has_pdf && (
           <>
-            <div className="relative self-center overflow-hidden rounded-lg bg-page" style={{ width: pageWidth }}>
-              <PdfPage url={apiUrl(`/api/papers/${encodeURIComponent(view.paper_id)}/pdf`)} page={page} width={pageWidth} />
-              {layout && scale > 0 && <HighlightOverlay regions={layout.regions} page={page} scale={scale} />}
+            <div ref={frameRef} className="w-full min-w-0">
+              <div className="relative mx-auto overflow-hidden rounded-lg bg-page" style={{ width: pageWidth }}>
+                <PdfPage url={apiUrl(`/api/papers/${encodeURIComponent(view.paper_id)}/pdf`)} page={page} width={pageWidth} />
+                {layout && scale > 0 && <HighlightOverlay regions={layout.regions} page={page} scale={scale} />}
+              </div>
             </div>
             <div className="flex items-center justify-between gap-2">
               <button

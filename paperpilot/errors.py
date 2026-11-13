@@ -27,3 +27,7 @@ class EmptyQueryError(PaperPilotError):
 
 class StorageError(PaperPilotError):
     """Writing to the library failed; any partial data has been removed."""
+
+
+class LLMError(PaperPilotError):
+    """The language model failed; the message is one readable line with no secrets."""

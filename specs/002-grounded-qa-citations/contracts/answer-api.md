@@ -1,0 +1,43 @@
+# Contract: question answering (Python API)
+
+**Feature**: 002-grounded-qa-citations. No network API (out of scope). Types are in
+[data-model.md](../data-model.md).
+
+## `paperpilot.service.ask`
+
+```python
+ask(question: str, paper_ids: list[str] | None = None, k: int | None = None,
+    history: list[Turn] | None = None) -> Answer
+```
+
+- `k` defaults to `TOP_K`; `paper_ids=None` or `[]` searches the whole library.
+- `history`: earlier turns, oldest first; only the last 6 are used; empty/None → no rewrite.
+- Never raises for "no answer": unsupported questions return `Answer(text=NOT_FOUND, ...)`.
+
+| Error | When |
+|---|---|
+| `EmptyQueryError` | question empty or whitespace |
+| `UnknownPaperError` | a filter ID is not in the library (from Feature 1 search) |
+| `SettingsError` | `LLM_API_KEY` missing, `LLM_BASE_URL` missing for a provider label without a default (message names the setting, never a value) — raised only when the model is actually needed |
+| `LLMError` | provider still failing after retries, non-retryable provider error (bad key, unknown model, out of credits), or cut-off/empty output (`finish_reason == "length"`) — one readable line, key scrubbed |
+
+## `paperpilot.prompts` (pure; unit-tested offline)
+
+- `NOT_FOUND: str` — `"I couldn't find that in the selected papers."`
+- `SYSTEM_INSTRUCTION: str`, `REWRITE_INSTRUCTION: str`
+- `build_answer_prompt(question: str, passages: list[NumberedPassage]) -> str`
+- `build_rewrite_prompt(history: list[Turn], question: str) -> str` (uses last 6 turns)
+- `clean_rewrite(reply: str) -> str`
+- `is_not_found(reply: str) -> bool`
+- `extract_citations(text: str) -> list[int]`
+- `check_citations(text: str, passage_count: int) -> CitationReport`
+- `word_count(text: str) -> int` — words excluding citation markers (`[2]`, `[2, 4]`, `[2-4]`)
+
+## `paperpilot.llm` (the only module that talks to an LLM)
+
+- `generate(system: str, prompt: str) -> LLMReply` — one OpenAI-compatible chat completion
+  (system + user message) using `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`; retries per
+  research R3; raises `SettingsError` or `LLMError`.
+- `DEFAULT_BASE_URLS: dict[str, str]` — `{"openrouter": "https://openrouter.ai/api/v1"}`.
+- `retry_wait(error, attempt) -> float | None` — pure: seconds to wait from `Retry-After` /
+  `X-RateLimit-Reset` or the 2/4/8 s backoff; `None` when the error is not retryable.

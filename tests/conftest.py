@@ -143,3 +143,81 @@ def fake_embedder(monkeypatch):
     monkeypatch.setattr(store, "load_model", lambda: 0.0)
     monkeypatch.setattr(store, "embed_passages", lambda texts: [fake_vector(t) for t in texts])
     monkeypatch.setattr(store, "embed_query", fake_vector)
+
+
+TEST_API_KEY = "sk-test-key-123"
+
+
+@pytest.fixture(autouse=True)
+def no_real_llm_client(monkeypatch):
+    """Fail any test that tries to create a real LLM client (unit tests never call the API)."""
+    import openai
+
+    def blocked(*args, **kwargs):
+        raise AssertionError("real LLM client created in a unit test")
+
+    monkeypatch.setattr(openai, "OpenAI", blocked)
+    try:
+        from paperpilot import llm
+    except ImportError:  # llm.py not written yet
+        return
+    monkeypatch.setattr(llm, "_make_client", blocked)
+
+
+@pytest.fixture
+def llm_env(monkeypatch):
+    """Default LLM settings with a dummy key; a real .env cannot override them."""
+    for name, value in {
+        "LLM_PROVIDER": "openrouter",
+        "LLM_BASE_URL": "",
+        "LLM_API_KEY": TEST_API_KEY,
+        "LLM_MODEL": "test/model:free",
+        "LLM_REASONING_EFFORT": "",
+    }.items():
+        monkeypatch.setenv(name, value)
+    return TEST_API_KEY
+
+
+class ScriptedLLM:
+    """Stands in for llm.generate: returns queued replies (str or LLMReply) or raises queued errors."""
+
+    def __init__(self) -> None:
+        self.queue: list = []
+        self.calls: list[tuple[str, str]] = []
+
+    def add(self, *items) -> None:
+        """Queue replies: a str becomes an LLMReply with 100 input and 40 output tokens."""
+        self.queue.extend(items)
+
+    def __call__(self, system: str, prompt: str):
+        from paperpilot.llm import LLMReply
+
+        self.calls.append((system, prompt))
+        if not self.queue:
+            raise AssertionError("no scripted LLM reply left")
+        item = self.queue.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        if isinstance(item, str):
+            return LLMReply(item, 100, 40, None, 1, 0.01)
+        return item
+
+
+@pytest.fixture
+def fake_answers(monkeypatch):
+    """Replace llm.generate with a ScriptedLLM (service must call it as llm.generate)."""
+    from paperpilot import llm
+
+    scripted = ScriptedLLM()
+    monkeypatch.setattr(llm, "generate", scripted)
+    return scripted
+
+
+@pytest.fixture
+def answer_env(tmp_path, make_pdf, library_env, fake_embedder, llm_env, fake_answers, monkeypatch):
+    """A temporary library with one generated paper, threshold 0 and a scripted LLM."""
+    from paperpilot.library import add_paper
+
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", "0.0")
+    paper = add_paper(make_pdf(tmp_path / "paper.pdf"))
+    return paper

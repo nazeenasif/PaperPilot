@@ -86,5 +86,43 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
   paper can outrank the one passage that holds the answer. A 5-query probe found the answer
   in the top 6 for 3 of 5 queries (`eval/probe_notes.md`). Improving this belongs to the
   evaluation feature.
+- **Title-and-author passages can take a retrieval slot without adding content.** A paper's
+  "Front Matter" passage may hold only its title, authors, affiliations and arXiv line. It
+  matches questions that name the paper's topic, so it can fill one of the top 6 slots while
+  giving the model nothing to answer from. Example: for "What is LoRA?" it ranked 5th (0.578),
+  ahead of passages that explain the method. Whether to drop such passages, or merge them into
+  the next passage, is a question for the evaluation feature, measured against the probe
+  baseline.
 - **The first search after startup is slower.** Opening the library and loading the embedding
   model are one-time costs (about 1–2 s and 2–8 s); later searches take well under a second.
+
+## Question answering
+
+- **A correct answer can be missed when its passage ranks low (false not-found).** The model
+  only sees the top passages (6 by default). If the passage that holds the answer ranks below
+  them, the model correctly says "I couldn't find that in the selected papers." even though
+  the paper does answer the question. Example: "What are the two pre-training tasks of BERT?"
+  filtered to the BERT paper — the Masked LM and Next Sentence Prediction passages rank 13 and
+  22 within BERT, so the answer is not-found. Filtering to one paper does not fix this, because
+  the problem is ranking inside the paper. Reranking is the top-priority experiment for the
+  evaluation feature (`eval/probe_notes.md`).
+- **A valid citation does not prove the passage supports the claim.** Validation checks that
+  every [n] points to a passage that was provided; it does not check what the passage says.
+  Two cases passed it: a correct fact cited to the wrong passage, and a claim from one paper
+  section stretched to cover others ("Faithfulness cases" in `eval/probe_notes.md`). Checking
+  each claim against its passage is a job for the evaluation feature.
+- **The relevance threshold is calibrated for this library.** 0.58 was measured for
+  bge-small-en-v1.5 on the 5 test papers with 220/40 chunking (`eval/threshold_calibration.md`).
+  It must be recalibrated (`python scripts/calibrate_threshold.py`, no LLM requests) when papers,
+  chunking or the embedding model change. At 0.58 one word-level near-miss ("How do electrical
+  transformers step down voltage?", 0.588) passes and relies on the model saying not-found.
+- **Free models change and can be removed.** The default `:free` model can be rate-limited,
+  changed or withdrawn by the provider at any time; checkpoint 4 checks that it is still listed.
+  Switching needs only `LLM_MODEL` (or another OpenAI-compatible provider in `.env`).
+- **Free-tier limits make repeated runs impractical.** OpenRouter's free models allow 20
+  requests per minute and 50 per day (1,000 per day after $10 of lifetime credits). One full
+  checkpoint run uses about 16 requests, so repeated runs, and any evaluation run over many
+  questions, need credits or another provider.
+- **The uncited-sentence warning can be noisy.** Sentences are split with a simple rule, so
+  abbreviations such as "et al." or "e.g." can split a sentence in two and report its first half
+  as uncited. The warning never rejects an answer.

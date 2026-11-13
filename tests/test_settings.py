@@ -16,6 +16,13 @@ ENV_VARS = [
     "TOP_K",
     "LIBRARY_DIR",
     "EMBED_MODEL",
+    "LLM_PROVIDER",
+    "LLM_BASE_URL",
+    "LLM_API_KEY",
+    "LLM_MODEL",
+    "RELEVANCE_THRESHOLD",
+    "LLM_REASONING_EFFORT",
+    "LLM_TIMEOUT_SECONDS",
 ]
 
 
@@ -105,3 +112,75 @@ def test_describe_lists_every_field():
     text = load_settings().describe()
     for name in ENV_VARS:
         assert name in text
+
+
+# --- LLM settings (Feature 2) ---
+
+SECRET = "sk-or-v1-secret-test-value"
+
+
+def test_llm_defaults():
+    s = load_settings()
+    assert s.llm_provider == "openrouter"
+    assert s.llm_base_url == ""
+    assert s.llm_api_key == ""
+    assert s.llm_model == "nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert s.relevance_threshold == 0.58
+    assert s.llm_reasoning_effort == ""
+
+
+def test_llm_env_overrides(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "groq")
+    monkeypatch.setenv("LLM_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("LLM_API_KEY", SECRET)
+    monkeypatch.setenv("LLM_MODEL", "some/model")
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", "0.5")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "low")
+    s = load_settings()
+    assert (s.llm_provider, s.llm_base_url, s.llm_model) == ("groq", "https://example.test/v1", "some/model")
+    assert s.llm_api_key == SECRET
+    assert s.relevance_threshold == 0.5
+    assert s.llm_reasoning_effort == "low"
+
+
+@pytest.mark.parametrize("value", ["abc", "-0.1", "1.5"])
+def test_invalid_threshold_names_variable_and_value(monkeypatch, value):
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", value)
+    with pytest.raises(SettingsError) as exc:
+        load_settings()
+    assert "RELEVANCE_THRESHOLD" in str(exc.value)
+    assert value in str(exc.value)
+
+
+@pytest.mark.parametrize("value", ["0", "1", "0.0", "1.0"])
+def test_threshold_bounds_are_inclusive(monkeypatch, value):
+    monkeypatch.setenv("RELEVANCE_THRESHOLD", value)
+    assert load_settings().relevance_threshold == float(value)
+
+
+def test_api_key_never_in_repr_or_describe(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", SECRET)
+    s = load_settings()
+    assert SECRET not in repr(s)
+    text = s.describe()
+    assert SECRET not in text
+    assert "LLM_API_KEY = set (hidden)" in text
+
+
+def test_describe_says_when_key_is_missing():
+    assert "LLM_API_KEY = not set" in load_settings().describe()
+
+
+def test_llm_timeout_default_and_override(monkeypatch):
+    assert load_settings().llm_timeout_seconds == 60
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "30")
+    assert load_settings().llm_timeout_seconds == 30
+
+
+@pytest.mark.parametrize("value", ["0", "-5", "abc"])
+def test_invalid_llm_timeout_names_variable_and_value(monkeypatch, value):
+    monkeypatch.setenv("LLM_TIMEOUT_SECONDS", value)
+    with pytest.raises(SettingsError) as exc:
+        load_settings()
+    assert "LLM_TIMEOUT_SECONDS" in str(exc.value)
+    assert value in str(exc.value)

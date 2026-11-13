@@ -45,17 +45,19 @@ def write(tmp_path, questions, version=1, papers=(ARXIV,), comments=""):
 
 
 def full_set():
-    """A set meeting the targets for one paper (the fixture library holds one)."""
-    questions = [item(id=f"s{n}") for n in range(19)]
+    """A set meeting the reduced targets for one paper (the fixture library holds one): 10 single-paper
+    questions, one with a table answer, and 2 near-misses."""
+    questions = [item(id=f"s{n}") for n in range(9)]
     questions.append(item(id="t1", table=True, question="What accuracy does Ours reach?", expected="91.7.",
                           evidence=[{"paper": ARXIV, "page": 1, "phrase": "Ours 91.7"}]))
-    questions += [item(id=f"c{n}", kind="cross") for n in range(5)]
-    questions += [item(id=f"n{n}", kind="near_miss", expected="not_found", evidence=[]) for n in range(4)]
-    questions += [item(id=f"o{n}", kind="off_topic", papers=[], expected="not_found", evidence=[]) for n in range(3)]
-    questions += [item(id=f"f{n}", kind="follow_up", standalone="What corpus is used for pre-training?",
-                       turns=[{"role": "user", "text": "Tell me about the method."},
-                              {"role": "assistant", "text": "It is a retrieval method [1]."}]) for n in range(4)]
+    questions += [item(id=f"n{n}", kind="near_miss", expected="not_found", evidence=[]) for n in range(2)]
     return questions
+
+
+def follow_up(qid="f1", **overrides):
+    return item(id=qid, kind="follow_up", standalone="What corpus is used for pre-training?",
+                turns=[{"role": "user", "text": "Tell me about the method."},
+                       {"role": "assistant", "text": "It is a retrieval method [1]."}], **overrides)
 
 
 def check(tmp_path, questions, drafts=False, **kwargs):
@@ -104,14 +106,28 @@ def test_the_file_hash_is_recorded(tmp_path):
 def test_a_full_valid_set_passes(tmp_path, paper):
     report = check(tmp_path, full_set())
     assert report.ok, report.errors
-    assert report.counts == {"single": 20, "cross": 5, "near_miss": 4, "off_topic": 3, "follow_up": 4}
+    assert report.counts == {"single": 10, "cross": 0, "near_miss": 2, "off_topic": 0, "follow_up": 0}
+
+
+def test_the_targets_are_the_reduced_set():
+    """Scope reduced 2026-11-13: 2 single-paper questions per paper and 2 near-misses (spec FR-001)."""
+    assert golden.TARGETS == {"single": 10, "cross": 0, "near_miss": 2, "off_topic": 0, "follow_up": 0}
+    assert golden.SINGLE_PER_PAPER == 2
+
+
+def test_other_kinds_are_still_accepted(tmp_path, paper):
+    questions = full_set() + [item(id="c1", kind="cross"), item(id="o1", kind="off_topic", papers=[],
+                                                                  expected="not_found", evidence=[]), follow_up()]
+    assert check(tmp_path, questions).ok
 
 
 def test_an_empty_set_reports_every_target_at_zero_and_fails(tmp_path, paper):
     report = check(tmp_path, [])
     assert not report.ok
     assert report.counts == dict.fromkeys(golden.TARGETS, 0)
-    assert any("single" in e and "20" in e for e in report.errors)
+    assert any("single" in e and "10" in e for e in report.errors)
+    assert any("near_miss" in e and "2" in e for e in report.errors)
+    assert not any(kind in e for e in report.errors for kind in ("cross", "off_topic", "follow_up"))
 
 
 @pytest.mark.parametrize(
@@ -138,17 +154,23 @@ def test_a_bad_item_fails_and_is_named(tmp_path, paper, change, fragment):
     assert any(questions[0]["id"] in e and fragment in e for e in report.errors), report.errors
 
 
-def test_a_paper_without_a_table_question_fails(tmp_path, paper):
+def test_a_paper_with_fewer_than_two_single_paper_questions_fails(tmp_path, paper):
+    questions = [item(id="s0")] + [q for q in full_set() if q["kind"] != "single"]
+    report = check(tmp_path, questions)
+    assert any(ARXIV in e and "1 single-paper question" in e and "2" in e for e in report.errors), report.errors
+
+
+def test_table_answers_are_counted_but_not_required(tmp_path, paper):
     questions = [q for q in full_set() if not q.get("table")] + [item(id="s-extra")]
     report = check(tmp_path, questions)
-    assert any(ARXIV in e and "table" in e for e in report.errors)
+    assert report.ok, report.errors
+    assert report.table_answers == {ARXIV: 0}
 
 
 def test_a_follow_up_needs_turns_and_a_standalone_wording(tmp_path, paper):
-    questions = full_set()
-    questions[-1] = {**questions[-1], "turns": [], "standalone": ""}
+    questions = full_set() + [follow_up(turns=[], standalone="")]
     report = check(tmp_path, questions)
-    assert any(questions[-1]["id"] in e and "turns" in e for e in report.errors)
+    assert any("f1" in e and "turns" in e for e in report.errors)
 
 
 def test_drafts_allow_unconfirmed_items_and_missing_evidence(tmp_path, paper):
@@ -181,4 +203,4 @@ def test_check_command_exit_codes(tmp_path, paper, capsys):
     empty = write(tmp_path, [])
     assert main(["check", "--golden", str(empty), "--cross-min-papers", "1"]) == 1
     out = capsys.readouterr().out
-    assert "single: 0 of 20" in out and "Model requests: 0" in out
+    assert "single: 0 of 10" in out and "Model requests: 0" in out

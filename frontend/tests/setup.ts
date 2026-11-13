@@ -30,6 +30,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  // Screens remember choices for the tab (e.g. Compare's papers); no test may see another's.
+  window.sessionStorage.clear();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });

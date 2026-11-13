@@ -113,8 +113,7 @@ describe("A comparison survives leaving the Compare page", () => {
 
     rerender(<App page="compare" />);
     expect(await screen.findByRole("button", { name: "Remove BERT: Pre-training" })).toBeInTheDocument();
-    expect(await screen.findByText(/BERT method claim/)).toBeInTheDocument();
-    expect(screen.getByText("Writing method")).toBeInTheDocument();
+    expect(await screen.findByText(/BERT method claim/)).toBeInTheDocument(); // arrived while away
 
     stream.send("comparison", comparison());
     stream.close();

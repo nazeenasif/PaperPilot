@@ -160,11 +160,23 @@ export function fakeLibrary(): FakeLibrary {
 /** Make POST /api/ask stream its events over time inside the page (page.route can only send a
  *  whole body at once): each step waits `afterMs`, then sends one event. */
 export async function streamAskInPage(page: Page, steps: { afterMs: number; event: string; data: unknown }[]) {
-  await page.addInitScript((plan) => {
+  await streamPostInPage(page, "/api/ask", steps);
+}
+
+/** The same for any POST whose URL ends with `suffix` (e.g. "/api/summaries/lora"). */
+export async function streamPostInPage(
+  page: Page,
+  suffix: string,
+  steps: { afterMs: number; event: string; data: unknown }[],
+) {
+  await page.addInitScript(({ plan, suffix }) => {
     const original = window.fetch.bind(window);
     window.fetch = async (input, init) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-      if (!url.endsWith("/api/ask")) return original(input, init);
+      if (!url.endsWith(suffix) || (init?.method ?? "GET") !== "POST") return original(input, init);
+      // Count the POSTs, so tests can check that reopening a saved result sends none.
+      const counts = ((window as unknown as { __posts?: Record<string, number> }).__posts ??= {});
+      counts[suffix] = (counts[suffix] ?? 0) + 1;
       const encoder = new TextEncoder();
       const body = new ReadableStream<Uint8Array>({
         async start(controller) {
@@ -179,5 +191,5 @@ export async function streamAskInPage(page: Page, steps: { afterMs: number; even
       });
       return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
     };
-  }, steps);
+  }, { plan: steps, suffix });
 }

@@ -130,3 +130,15 @@ class FakeClient:
         self.calls: list[dict] = []
         self.chat = _Chat(self)
         self.models = _Models(model_ids or [])
+
+
+def row_reply(cells: dict[str, str]) -> str:
+    """A comparison row reply as the model is asked to give it: {"cells": [{"paper", "text"}]}."""
+    import json
+
+    return json.dumps({"cells": [{"paper": label, "text": text} for label, text in cells.items()]})
+
+
+def fenced(text: str) -> str:
+    """The same reply wrapped in a ```json code fence, as some models answer."""
+    return f"```json\n{text}\n```"

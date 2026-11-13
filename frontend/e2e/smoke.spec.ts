@@ -3,15 +3,20 @@
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { CORS, eventStream, fakeBackend, fakeLibrary, streamAskInPage } from "./fake-backend";
+import { CORS, eventStream, fakeBackend, fakeLibrary, streamAskInPage, streamPostInPage } from "./fake-backend";
 import {
   ANSWER,
   FOLLOW_UP_ANSWER,
   HELD_BACK_ANSWER,
   LIBRARY_PAPERS,
+  LORA_CARD,
+  LORA_SUMMARY,
+  summaryPart,
   NOT_FOUND_ANSWER,
   NOT_FOUND_TEXT,
   SCOPED_ANSWER,
+  STATUS,
+  SUMMARY_STEPS,
   USAGE,
 } from "./fixtures";
 import { makePdf } from "./pdf";
@@ -191,7 +196,7 @@ test("US5 states: server unreachable, then recovered", async ({ page }) => {
     routes: {
       "/api/status": async (route) => {
         if (down) await route.abort("connectionrefused");
-        else await route.fallback();
+        else await route.fulfill({ status: 200, headers: CORS, json: STATUS });
       },
     },
   });
@@ -312,7 +317,7 @@ test("layout: no sideways scrolling on the Ask, Library and state screens", asyn
   await page.keyboard.press("Escape");
 
   await page.getByRole("link", { name: "Library" }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers", { timeout: 15_000 }); // client navigation is slow under parallel load
   await expectNoSideScroll(page, "Library");
 
   await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -379,7 +384,7 @@ test("keyboard only: scope, ask, open a citation, library", async ({ page }, tes
   await tabTo(page, library);
   await expectFocusRing(page);
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 papers", { timeout: 15_000 }); // client navigation is slow under parallel load
   const remove = page.getByRole("button", { name: /^Delete BERT/ });
   await tabTo(page, remove);
   await expectFocusRing(page);
@@ -451,4 +456,286 @@ test("reduced motion: the answer appears in one step", async ({ page }) => {
   expect(state.minOpacity).toBe(1);
   expect(state.chips).toBe(2); // the fixture answer cites [1] and [2]
   expect(state.badge).toBe(true);
+});
+
+// --- Feature 4: summaries ---
+
+function summaryRoutes(saved: boolean, savedSummary: typeof LORA_SUMMARY = LORA_SUMMARY) {
+  return {
+    "/api/papers": async (route: import("@playwright/test").Route) =>
+      route.fulfill({ status: 200, headers: CORS, json: { papers: [LORA_CARD], total_passages: 56 } }),
+    "/api/summaries": async (route: import("@playwright/test").Route) =>
+      route.fulfill({ status: 200, headers: CORS, json: { plan: { max_requests: 6 }, papers: [
+        { paper_id: "lora", title: LORA_CARD.title, arxiv_id: LORA_CARD.arxiv_id,
+          summary: saved ? { status: "current", created_at: LORA_SUMMARY.created_at, model: LORA_SUMMARY.model }
+            : { status: "none", created_at: null, model: null } },
+      ] } }),
+    "/api/summaries/lora": async (route: import("@playwright/test").Route) =>
+      saved
+        ? route.fulfill({ status: 200, headers: CORS, json: savedSummary })
+        : route.fulfill({ status: 404, headers: CORS, json: { kind: "not_saved", plan: { max_requests: 6 } } }),
+  };
+}
+
+test("F4 US1 summary", async ({ page }) => {
+  await streamPostInPage(page, "/api/summaries/lora", SUMMARY_STEPS);
+  await fakeBackend(page, { routes: summaryRoutes(false) });
+  await page.goto("/library");
+  await page.getByRole("article").getByRole("link", { name: "Summarize" }).click(); // the card, not the tab
+  await expect(page).toHaveURL(/\/summarize\/lora$/, { timeout: 30_000 }); // a first visit compiles the route
+  await expect(page.getByText("uses 6 requests · 16 left today")).toBeVisible();
+  await page.getByRole("button", { name: "Summarize this paper" }).click();
+
+  // Progress per part, then the checked parts.
+  await expect(page.getByText("Writing method")).toBeVisible();
+  await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible();
+  const headings = page.getByRole("heading", { level: 2 });
+  await expect(headings).toHaveText(["Problem", "Method", "Data", "Results", "Limitations"]);
+  await expect(page.getByText("All citations verified")).toBeVisible();
+
+  // A citation opens the PDF at the passage with its highlight.
+  await page.getByRole("region", { name: "Method" }).getByRole("button", { name: /^Citation 1:/ }).click();
+  const viewer = page.getByRole("dialog");
+  await expect(viewer.locator(".react-pdf__Page canvas")).toBeVisible({ timeout: 15_000 });
+  await expect(viewer.getByRole("img", { name: /highlighted passage/i })).toBeVisible();
+});
+
+test("F4 US2 reopen", async ({ page }) => {
+  const regenerated = { ...LORA_SUMMARY, tldr: { ...LORA_SUMMARY.tldr, text: "A regenerated TL;DR about LoRA [1]." } };
+  await streamPostInPage(page, "/api/summaries/lora", [{ afterMs: 50, event: "summary", data: regenerated }]);
+  await fakeBackend(page, { routes: summaryRoutes(true) });
+  const posts = () => page.evaluate(() => (window as unknown as { __posts?: Record<string, number> }).__posts?.["/api/summaries/lora"] ?? 0);
+
+  // From the Summarize tab to the saved summary: shown at once, nothing posted.
+  await page.goto("/summarize");
+  await page.getByRole("link", { name: /LoRA/ }).click();
+  await expect(page).toHaveURL(/\/summarize\/lora$/, { timeout: 30_000 });
+  await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible();
+  await expect(page.getByText(/reopening cost 0 requests/)).toBeVisible();
+  expect(await posts()).toBe(0);
+
+  // Regenerate asks first, then replaces the view.
+  await page.getByRole("button", { name: "Regenerate summary" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("It uses 6 requests");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  expect(await posts()).toBe(0);
+  await page.getByRole("button", { name: "Regenerate summary" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Regenerate" }).click();
+  await expect(page.getByText(/A regenerated TL;DR about LoRA/)).toBeVisible();
+  expect(await posts()).toBe(1);
+});
+
+test("F4 US4 part states", async ({ page }) => {
+  const mixed = {
+    ...LORA_SUMMARY,
+    verified_parts: 4,
+    sections: LORA_SUMMARY.sections.map((section) =>
+      section.part === "method"
+        ? summaryPart("method", { state: "not_reported", text: null, reason: "no_citations" })
+        : section.part === "data"
+          ? summaryPart("data", { state: "held_back", text: null, reason: "invalid_citations", passages: [1, 2, 3, 4],
+              rejected_text: "Experiments use GLUE [9].", citations: { valid: [], invalid: [9], uncited_sentences: [] } })
+          : section,
+    ),
+  };
+  await fakeBackend(page, { routes: summaryRoutes(true, mixed) });
+  await page.goto("/summarize/lora");
+  await expect(page.getByRole("region", { name: "Method" }).getByText("Not reported in the retrieved passages.")).toBeVisible();
+  const data = page.getByRole("region", { name: "Data" });
+  await expect(data.getByText("Held back: this section cited passage 9, but only passages 1–4 were provided.")).toBeVisible();
+  await expect(data.getByText(/GLUE/)).toHaveCount(0);
+  await data.getByRole("button", { name: "View the unverified text" }).click();
+  await expect(data.getByText("Not verified")).toBeVisible();
+  await expect(data.getByLabel("Citation 9: not among the provided passages")).toBeVisible();
+  for (const name of ["Problem", "Results", "Limitations"]) {
+    await expect(page.getByRole("region", { name }).getByText(/is described in the paper/)).toBeVisible();
+  }
+  await expect(page.getByText("4 of 6 parts verified")).toBeVisible();
+  await expect(page.getByText("All citations verified")).toHaveCount(0);
+});
+
+test("F4 US3 compare", async ({ page }, testInfo) => {
+  const cards = [
+    { ...LORA_CARD, paper_id: "bert", title: "BERT: Pre-training of Deep Bidirectional Transformers", arxiv_id: "1810.04805" },
+    { ...LORA_CARD, paper_id: "rag", title: "Retrieval-Augmented Generation for NLP Tasks", arxiv_id: "2005.11401" },
+  ];
+  const passages = [1, 2].map((number) => ({
+    number, passage_id: `p-${number}`, paper_id: number === 1 ? "bert" : "rag", title: cards[number - 1]!.title,
+    section: "Methods", page: 1, score: 0.7, text: "Passage text.",
+  }));
+  const verified = summaryPart("method:bert", { text: "BERT trains a deep bidirectional encoder on unlabelled text with masked tokens and next-sentence labels [1].", passages: [1] });
+  const notReported = summaryPart("method:rag", { state: "not_reported", text: null, reason: "missing_cell", passages: [2], citations: { valid: [], invalid: [], uncited_sentences: [] } });
+  const heldBack = summaryPart("results:bert", { state: "held_back", text: null, reason: "invalid_citations", rejected_text: "A claim [2].", passages: [1], citations: { valid: [], invalid: [2], uncited_sentences: [] } });
+  const longCell = summaryPart("results:rag", { text: "RAG retrieves supporting documents and generates answers from them across several open-domain question sets [2].", passages: [2], citations: { valid: [2], invalid: [], uncited_sentences: [] } });
+  const finished = {
+    paper_ids: ["bert", "rag"],
+    papers: cards.map((card, i) => ({ paper_id: card.paper_id, title: card.title, arxiv_id: card.arxiv_id, label: `P${i + 1}` })),
+    aspects: ["method", "results"],
+    rows: [
+      { aspect: "method", state: "ok", reason: null, cells: [verified, notReported], until: null, tokens: {} },
+      { aspect: "results", state: "ok", reason: null, cells: [heldBack, longCell], until: null, tokens: {} },
+    ],
+    passages,
+    plan: { max_requests: 2, parts: ["method", "results"] },
+    requests: { planned: 2, retries: 0 },
+    model: "nvidia/x:free",
+    prompt_version: 8,
+    created_at: new Date().toISOString(),
+    status: "current",
+    stale_reason: null,
+    pending: null,
+    verified_cells: 2,
+    total_cells: 4,
+  };
+  await streamPostInPage(page, "/api/comparisons", [
+    { afterMs: 50, event: "plan", data: finished.plan },
+    { afterMs: 50, event: "progress", data: { part: "method", step: "generating" } },
+    { afterMs: 400, event: "part", data: verified },
+    { afterMs: 50, event: "part", data: notReported },
+    { afterMs: 50, event: "part", data: heldBack },
+    { afterMs: 50, event: "part", data: longCell },
+    { afterMs: 50, event: "comparison", data: finished },
+  ]);
+  await fakeBackend(page, {
+    routes: {
+      "/api/papers": async (route: import("@playwright/test").Route) =>
+        route.fulfill({ status: 200, headers: CORS, json: { papers: cards, total_passages: 80 } }),
+      "/api/comparisons": async (route: import("@playwright/test").Route) =>
+        route.fulfill({ status: 404, headers: CORS, json: { kind: "not_saved", plan: { max_requests: 2 } } }),
+    },
+  });
+
+  await page.goto("/compare");
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: cards[0]!.title }, { timeout: 30_000 });
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: cards[1]!.title });
+  for (const name of ["Problem", "Datasets", "Limitations"]) await page.getByRole("checkbox", { name }).uncheck();
+  await expect(page.getByText("uses 2 requests, 1 per aspect", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Compare papers" }).click();
+
+  const table = page.getByRole("table");
+  await expect(table.getByRole("columnheader", { name: /arXiv 1810\.04805/ })).toBeVisible();
+  await expect(table.getByText("Not reported in the retrieved passages.")).toBeVisible();
+  await expect(table.getByText(/Held back: this cell cited passage 2/)).toBeVisible();
+  await expect(page.getByText(/2 of 4 cells verified/)).toBeVisible();
+
+  // At phone width the table scrolls inside its own container, not the page.
+  const widths = await page.evaluate(() => {
+    const box = document.querySelector('[aria-label="Comparison table"]')!;
+    return { page: document.documentElement.scrollWidth, window: window.innerWidth, inner: box.scrollWidth, outer: box.clientWidth };
+  });
+  expect(widths.page).toBeLessThanOrEqual(widths.window);
+  if (testInfo.project.name === "phone") expect(widths.inner).toBeGreaterThan(widths.outer);
+});
+
+test("F4 US5 cost and limits", async ({ page }) => {
+  const usedUp = { ...USAGE, used: 50, limit: 50, remaining: 0 };
+  await fakeBackend(page, { usage: usedUp, routes: summaryRoutes(false) });
+  await page.goto("/summarize/lora");
+  await expect(page.getByRole("button", { name: "Summarize this paper" })).toBeDisabled({ timeout: 30_000 });
+  await expect(page.getByText("Daily limit")).toBeVisible();
+  await expect(page.getByText(/Summaries resume at/)).toBeVisible();
+});
+
+test("F4 US5 a saved summary opens at the daily limit", async ({ page }) => {
+  await fakeBackend(page, { usage: { ...USAGE, used: 50, limit: 50, remaining: 0 }, routes: summaryRoutes(true) });
+  await page.goto("/summarize/lora");
+  await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Regenerate summary" })).toBeDisabled();
+});
+
+// --- Polish (T051, SC-010): 375 px without sideways scrolling, and a keyboard-only pass ---
+
+async function noSidewaysScroll(page: Page, where: string) {
+  const widths = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, window: window.innerWidth }));
+  expect(widths.page, `${where} scrolls sideways`).toBeLessThanOrEqual(widths.window);
+}
+
+const BERT_RAG = [
+  { ...LORA_CARD, paper_id: "bert", title: "BERT: Pre-training of Deep Bidirectional Transformers", arxiv_id: "1810.04805" },
+  { ...LORA_CARD, paper_id: "rag", title: "Retrieval-Augmented Generation for NLP Tasks", arxiv_id: "2005.11401" },
+];
+
+function compareRoutes() {
+  return {
+    "/api/papers": async (route: import("@playwright/test").Route) =>
+      route.fulfill({ status: 200, headers: CORS, json: { papers: BERT_RAG, total_passages: 80 } }),
+    "/api/comparisons": async (route: import("@playwright/test").Route) =>
+      route.fulfill({ status: 404, headers: CORS, json: { kind: "not_saved", plan: { max_requests: 5 } } }),
+  };
+}
+
+test("F4 polish: the Summarize picker, a summary and the Compare form fit 375 px", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "phone", "a phone-width check");
+  await fakeBackend(page, { routes: summaryRoutes(true) });
+  await page.goto("/summarize");
+  await expect(page.getByRole("link", { name: /LoRA/ })).toBeVisible({ timeout: 30_000 });
+  await noSidewaysScroll(page, "the Summarize picker");
+  await page.goto("/summarize/lora");
+  await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible({ timeout: 30_000 });
+  await noSidewaysScroll(page, "a summary");
+
+  await fakeBackend(page, { routes: compareRoutes() });
+  await page.goto("/compare");
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: BERT_RAG[0]!.title }, { timeout: 30_000 });
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: BERT_RAG[1]!.title });
+  await expect(page.getByRole("button", { name: "Compare papers" })).toBeEnabled();
+  await noSidewaysScroll(page, "the Compare form");
+});
+
+test("F4 polish: keyboard only, a summary, a citation and a comparison", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "one keyboard pass is enough");
+  await streamPostInPage(page, "/api/summaries/lora", SUMMARY_STEPS);
+  await fakeBackend(page, { routes: summaryRoutes(false) });
+  await page.goto("/summarize/lora");
+  const summarize = page.getByRole("button", { name: "Summarize this paper" });
+  await expect(summarize).toBeEnabled({ timeout: 30_000 });
+  await tabTo(page, summarize);
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("All citations verified")).toBeVisible();
+
+  const chip = page.getByRole("region", { name: "Method" }).getByRole("button", { name: /^Citation 1:/ });
+  await tabTo(page, chip);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(chip).toBeFocused();
+
+  const steps = [
+    { afterMs: 50, event: "plan", data: { max_requests: 1, parts: ["method"] } },
+    { afterMs: 50, event: "comparison", data: {
+      paper_ids: ["bert", "rag"],
+      papers: BERT_RAG.map((card, i) => ({ paper_id: card.paper_id, title: card.title, arxiv_id: card.arxiv_id, label: `P${i + 1}` })),
+      aspects: ["method"],
+      rows: [{ aspect: "method", state: "ok", reason: null, until: null, tokens: {}, cells: [
+        summaryPart("method:bert", { text: "BERT pre-trains a bidirectional encoder [1].", passages: [1] }),
+        summaryPart("method:rag", { text: "RAG retrieves passages before it generates [2].", passages: [2], citations: { valid: [2], invalid: [], uncited_sentences: [] } }),
+      ] }],
+      passages: [1, 2].map((number) => ({ number, passage_id: `p-${number}`, paper_id: number === 1 ? "bert" : "rag",
+        title: BERT_RAG[number - 1]!.title, section: "Methods", page: 1, score: 0.7, text: "Passage text." })),
+      plan: { max_requests: 1, parts: ["method"] }, requests: { planned: 1, retries: 0 }, model: "nvidia/x:free",
+      prompt_version: 8, created_at: new Date().toISOString(), status: "current", stale_reason: null, pending: null,
+      verified_cells: 2, total_cells: 2,
+    } },
+  ];
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await streamPostInPage(page, "/api/comparisons", steps);
+  await fakeBackend(page, { routes: compareRoutes() });
+  await page.goto("/compare");
+  const add = page.getByRole("combobox", { name: "Add paper" });
+  await expect(add).toBeVisible({ timeout: 30_000 });
+  for (let i = 0; i < 2; i++) {
+    await tabTo(page, add);
+    await page.keyboard.press("ArrowDown"); // the first paper still available
+  }
+  for (const name of ["Problem", "Datasets", "Results", "Limitations"]) {
+    await tabTo(page, page.getByRole("checkbox", { name }));
+    await page.keyboard.press("Space");
+  }
+  const compare = page.getByRole("button", { name: "Compare papers" });
+  await expect(compare).toBeEnabled();
+  await tabTo(page, compare);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("table").getByText(/RAG retrieves passages/)).toBeVisible();
 });

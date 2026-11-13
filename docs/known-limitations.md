@@ -57,13 +57,18 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
 
 - **Mixed blocks stay in text passages.** Table-like blocks (mostly numbers or symbols) become
   separate table passages, but a PDF block that mixes prose with table rows or figure labels
-  (axis ticks, legend entries) is not table-like, so it stays in a text passage. Table header
-  rows, which are mostly words, may also stay with the surrounding prose. On the Checkpoint 2
-  samples about 12 of 15 text passages read cleanly; the rest contain such fragments. The
-  goal (SC-003) remains 9 of 10.
+  (axis ticks, legend entries) is not table-like, so it stays in a text passage. On the Checkpoint
+  2 samples about 12 of 15 text passages read cleanly; the rest contain such fragments. The goal
+  (SC-003) remains 9 of 10.
+- **Table header rows are not always found.** Rows directly above a table in the same column join it,
+  and a split table repeats them in every piece. A header block beside the table stays out ("Model &
+  Method # Trainable", LoRA Table 2), and a table's split can fall mid-row, so a piece's first row may
+  not line up with the repeated header. A last piece under `MIN_CHUNK_WORDS` joins the one before, so a
+  table passage can pass the word budget by up to that much.
 - **Figure axis labels can become table passages.** A block of axis ticks such as "5 10 20 30
   40 50 Number of Retrieved Docs" is mostly numbers, so it is classified as a table passage.
-  This is harmless for search, but these passages are not real tables.
+  This is harmless for search, but these passages are not real tables. A short legend or label
+  directly above such a block joins it as if it were a header row.
 - **Tables are not structured.** Table passages are rows of text, not cells, so column
   meaning is lost.
 
@@ -150,3 +155,36 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
   retries. Its raw value is logged with every retried 429, but no real 429 has been seen yet.
 - **The source viewer shows one page at a time.** Use the page buttons or "Open full PDF" to
   read around a passage; a passage that continues onto the next page says so.
+
+## Summaries and comparison
+
+- **The TL;DR check cannot catch a non-numeric claim attached to a valid citation.** The TL;DR
+  is checked in code: a sentence without a citation, a citation to a passage that no verified
+  section cites, or a number that does not appear in the sections a sentence cites holds the
+  TL;DR back. A sentence whose citations are all valid and which states no number passes even
+  if the cited sections do not say it — the F1 pattern in `eval/probe_notes.md`, where a correct
+  fact was cited to the wrong passage. Summary sections and comparison cells use the answer
+  validator, so they share the same blind spot (see "A valid citation does not prove the passage
+  supports the claim" under Question answering). Detecting it is assigned to the evaluation
+  feature's faithfulness judge; until then, checkpoint 7 lists every claim with its cited
+  passages for a hand check.
+- **A real number can be placed against the wrong item.** A section or cell can take a number
+  from its cited passage and attach it to the wrong table column or the neighbouring result (F3 in
+  `eval/probe_notes.md`: LoRA Table 5, and BERT's SQuAD 2.0 figure given to SWAG). The number check
+  passes because the number is in the passage.
+- **Free-model JSON rows may need a retry.** A comparison row whose reply is not the expected JSON
+  fails on its own ("This row couldn't be read") and can be retried for 1 request. The parser
+  tolerates code fences and text around the JSON, but not a broken object.
+- **The TL;DR number check can report false positives.** A number must appear in the sections a
+  sentence cites in the same written form, so a paraphrase ("ten thousand", "10K" for "10,000",
+  a converted unit) holds the TL;DR back although it is right.
+- **Earlier results are kept for reading until replaced.** After a re-process, a model change or
+  an instructions change, a saved summary or comparison stays readable, marked as earlier. Its
+  citations whose passage text changed show the text as cited instead of a highlight, and its
+  parts cannot be retried one by one; only a full regeneration replaces it.
+- **The plan's maximum can refuse a run that would have needed fewer requests.** A summary plans
+  6 and a comparison 1 per aspect, and a run starts only if that many remain today. A section
+  below the relevance threshold uses no request, so a run refused at 5 requests left might have
+  fitted.
+- **A grounded cell can still be off-aspect.** RAG has no Limitations section, so its Limitations
+  cell reported broader-impact concerns: supported by the passage, but not what the aspect asks.

@@ -28,7 +28,8 @@ STATUS = {
     "unknown_passage": 404,
     "pdf_missing": 404,
     "not_found": 404,
-    "busy_question": 409,
+    "not_saved": 404,
+    "busy_task": 409,
     "busy_job": 409,
     "daily_limit": 429,
     "rate_limited": 429,
@@ -73,7 +74,8 @@ def error_for(error: Exception) -> ApiError:
     if isinstance(error, ApiError):
         return error
     if isinstance(error, DailyLimitError):
-        return ApiError("daily_limit", used=error.used, limit=error.limit, resets_at=iso_utc(error.resets_at))
+        needed = {} if error.needed is None else {"needed": error.needed}
+        return ApiError("daily_limit", used=error.used, limit=error.limit, resets_at=iso_utc(error.resets_at), **needed)
     if isinstance(error, RateLimitedError):
         return ApiError("rate_limited", until=iso_utc(error.until), daily=error.daily)
     if isinstance(error, LLMError):

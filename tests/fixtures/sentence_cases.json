@@ -1,0 +1,75 @@
+[
+  {
+    "name": "claims 10-12 of the v4 report are one sentence",
+    "text": "The setup follows Li & Liang (2021) for GPT-2 and replicates Houlsby et al. (2019) and Pfeiffer et al. (2021) for adapters, using a fixed batch size, sequence length 128, and pre-trained initialization for MRPC, RTE, and STS-B [8,10]. All experiments run on NVIDIA Tesla V100 GPUs [8].",
+    "sentences": [
+      "The setup follows Li & Liang (2021) for GPT-2 and replicates Houlsby et al. (2019) and Pfeiffer et al. (2021) for adapters, using a fixed batch size, sequence length 128, and pre-trained initialization for MRPC, RTE, and STS-B [8,10].",
+      "All experiments run on NVIDIA Tesla V100 GPUs [8]."
+    ],
+    "uncited": []
+  },
+  {
+    "name": "each abbreviation",
+    "text": "Smith et al. Found it, e.g. Table 2, i.e. All of it, see Fig. 3, Eq. 2, Sec. 4 and Tab. 5, A vs. B, cf. Jones [1]. Next [2].",
+    "sentences": [
+      "Smith et al. Found it, e.g. Table 2, i.e. All of it, see Fig. 3, Eq. 2, Sec. 4 and Tab. 5, A vs. B, cf. Jones [1].",
+      "Next [2]."
+    ],
+    "uncited": []
+  },
+  {
+    "name": "a decimal is not a sentence end",
+    "text": "Accuracy was 91.7 on MultiNLI and 0.5 on the other [1]. It used 96.9±.2 [2].",
+    "sentences": [
+      "Accuracy was 91.7 on MultiNLI and 0.5 on the other [1].",
+      "It used 96.9±.2 [2]."
+    ],
+    "uncited": []
+  },
+  {
+    "name": "a citation right after an abbreviation",
+    "text": "As shown by Smith et al. [3]. Then Jones agreed [4].",
+    "sentences": [
+      "As shown by Smith et al. [3].",
+      "Then Jones agreed [4]."
+    ],
+    "uncited": []
+  },
+  {
+    "name": "an uncited sentence with an abbreviation counts once",
+    "text": "As Smith et al. (2019) showed. Jones agreed [4].",
+    "sentences": [
+      "As Smith et al. (2019) showed.",
+      "Jones agreed [4]."
+    ],
+    "uncited": [
+      "As Smith et al. (2019) showed."
+    ]
+  },
+  {
+    "name": "ordinary sentence ends still split",
+    "text": "First claim [1]. Second claim. Third claim [2]? Fourth claim [3]!",
+    "sentences": [
+      "First claim [1].",
+      "Second claim.",
+      "Third claim [2]?",
+      "Fourth claim [3]!"
+    ],
+    "uncited": [
+      "Second claim."
+    ]
+  },
+  {
+    "name": "a word that only looks like an abbreviation",
+    "text": "We open the tab. We measure in sec. Then stop [1].",
+    "sentences": [
+      "We open the tab.",
+      "We measure in sec.",
+      "Then stop [1]."
+    ],
+    "uncited": [
+      "We open the tab.",
+      "We measure in sec."
+    ]
+  }
+]

@@ -23,7 +23,10 @@ export function TurnFailure({
   dailyLimit,
   onRetry,
   onOpenPassage,
+  what,
 }: {
+  /** What stops until the daily limit resets; answers by default. */
+  what?: string;
   kind: string;
   fields: Record<string, unknown>;
   question: string;
@@ -43,6 +46,7 @@ export function TurnFailure({
         resetsAt={resetsAt}
         question={question}
         onOpenPassage={onOpenPassage}
+        what={what}
       />
     );
   }

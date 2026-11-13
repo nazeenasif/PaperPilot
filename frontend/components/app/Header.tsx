@@ -16,6 +16,8 @@ export function modelLabel(model: string, isFree: boolean): string {
 const NAV = [
   { href: "/", label: "Ask" },
   { href: "/library", label: "Library" },
+  { href: "/summarize", label: "Summarize" },
+  { href: "/compare", label: "Compare" },
 ];
 
 /** Top bar: name, tagline, Ask/Library navigation and the configured model (FR-024). */

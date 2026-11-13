@@ -58,20 +58,26 @@ class StorageError(PaperPilotError):
     """Writing to the library failed; any partial data has been removed."""
 
 
-class LLMError(PaperPilotError):
-    """The language model failed; the message is one readable line with no secrets."""
+class RowFormatError(PaperPilotError):
+    """A comparison row's reply is not the expected JSON; a per-row failure, never shown raw."""
 
-    def __init__(self, message: str, reason: str | None = None) -> None:
+
+class LLMError(PaperPilotError):
+    """The language model failed; the message is one readable line with no secrets. `tokens` holds
+    the provider's counts when it charged for output, as a cut-off does."""
+
+    def __init__(self, message: str, reason: str | None = None, tokens: dict[str, int] | None = None) -> None:
         if reason is not None and reason not in LLM_ERROR_REASONS:
             raise ValueError(f"Unknown LLMError reason: {reason}")
         super().__init__(message)
         self.reason = reason
+        self.tokens = tokens
 
 
 class DailyLimitError(LLMError):
     """Today's free model requests are used up; no request was sent."""
 
-    def __init__(self, used: int, limit: int, resets_at: datetime) -> None:
+    def __init__(self, used: int, limit: int, resets_at: datetime, needed: int | None = None) -> None:
         super().__init__(
             f"Daily model request limit reached ({used} of {limit}); resets at {resets_at.isoformat()}",
             reason="daily_limit",
@@ -79,6 +85,7 @@ class DailyLimitError(LLMError):
         self.used = used
         self.limit = limit
         self.resets_at = resets_at
+        self.needed = needed  # a run's plan, when it was refused before starting
 
 
 class RateLimitedError(LLMError):

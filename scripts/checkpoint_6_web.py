@@ -156,6 +156,19 @@ def part_boundary(run: Run, client: httpx.Client) -> None:
     run.check(no_header.status_code == 403 and no_header.json().get("reason") == "header",
               "a write without X-PaperPilot: 1 is refused, even from an allowed origin")
 
+    # Feature 4's model-spending writes are refused the same way, before any request (T052).
+    used_before = client.get("/api/usage").json()["used"]
+    allowed_origin = load_settings().frontend_origins[0]
+    for path, body in [("/api/summaries/000000000000", {}), ("/api/comparisons", {"paper_ids": ["a", "b"], "aspects": ["method"]})]:
+        unmarked = client.post(path, json=body, headers={"Origin": allowed_origin})
+        run.check(unmarked.status_code == 403 and unmarked.json().get("reason") == "header",
+                  f"POST {path.split('/0')[0]} without X-PaperPilot: 1 is refused")
+        cross = client.post(path, json=body, headers={"Origin": foreign, **WRITE_HEADERS})
+        run.check(cross.status_code == 403 and cross.json().get("reason") == "origin",
+                  f"POST {path.split('/0')[0]} from {foreign} is refused")
+    used_after = client.get("/api/usage").json()["used"]
+    run.check(used_after == used_before, f"the refused summary and comparison writes sent no model request ({used_before} -> {used_after})")
+
     foreign_host = client.get("/api/status", headers={"Host": "192.168.1.20"})
     run.check(foreign_host.status_code == 400, "a foreign Host header is rejected (trusted hosts)")
 
@@ -684,7 +697,7 @@ def part_scope(run: Run, client: httpx.Client) -> None:
 
 
 ALLOWED_PUBLIC_VARS = {"NEXT_PUBLIC_API_URL"}  # nothing secret may be NEXT_PUBLIC_ (inlined in the bundle)
-IGNORED_PATHS = ["data/library/pdfs/x.pdf", "data/library/usage.sqlite3"]
+IGNORED_PATHS = ["data/library/pdfs/x.pdf", "data/library/usage.sqlite3", "data/library/results.sqlite3"]
 BUILD_TIMEOUT = 600
 
 

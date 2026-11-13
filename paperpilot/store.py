@@ -106,11 +106,16 @@ def distance_to_score(distance: float) -> float:
     return round(min(max(1.0 - distance, 0.0), 1.0), 3)
 
 
-def build_where(paper_ids: list[str] | None) -> dict | None:
-    """Return a paper filter, or None for the whole library (never an empty $in list)."""
-    if not paper_ids:
+def build_where(paper_ids: list[str] | None, sections: list[str] | None = None) -> dict | None:
+    """Return a paper and section filter, or None for the whole library (never an empty $in list)."""
+    filters = []
+    if paper_ids:
+        filters.append({"paper_id": {"$in": list(paper_ids)}})
+    if sections:
+        filters.append({"section": {"$in": list(sections)}})
+    if not filters:
         return None
-    return {"paper_id": {"$in": list(paper_ids)}}
+    return filters[0] if len(filters) == 1 else {"$and": filters}
 
 
 def has_paper(paper_id: str) -> bool:
@@ -182,7 +187,9 @@ def get_passage(passage_id: str) -> tuple[str, dict] | None:
     return result["documents"][0], result["metadatas"][0]
 
 
-def query(embedding: list[float], k: int, paper_ids: list[str] | None = None) -> list[Hit]:
+def query(
+    embedding: list[float], k: int, paper_ids: list[str] | None = None, sections: list[str] | None = None
+) -> list[Hit]:
     """Return up to k passages most similar to the embedding, best first."""
     collection = get_collection()
     count = collection.count()
@@ -192,7 +199,7 @@ def query(embedding: list[float], k: int, paper_ids: list[str] | None = None) ->
     result = collection.query(
         query_embeddings=[embedding],
         n_results=min(k, count),
-        where=build_where(paper_ids),
+        where=build_where(paper_ids, sections),
         include=["documents", "metadatas", "distances"],
     )
     logger.info("Searched %d passages in %.3fs", count, time.perf_counter() - start)

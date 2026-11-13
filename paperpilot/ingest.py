@@ -461,27 +461,64 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
 TABLE_MIN_TOKENS = 10
 TABLE_SYMBOL_FRACTION = 0.5
 _TABLE_CAPTION = re.compile(r"^Table\s+\d+\s*[:.]")
+# A header row: at most this many tokens, directly before a table on the same page and column.
+HEADER_MAX_TOKENS = 30
+_NOT_A_HEADER = re.compile(r"^(Table|Figure|Fig\.)\s*\d")
+_SENTENCE_END = re.compile(r"[A-Za-z]{5,}[.:;]|[!?](\s|$)")
+_PROSE_WORDS = frozenset(
+    "a an and are as at be by for from has in is it of on or that the this to was we were which with".split()
+)
+
+
+def _mostly_symbolic(tokens: list[str]) -> bool:
+    symbolic = sum(1 for t in tokens if t[0].isdigit() or not any(c.isalpha() for c in t))
+    return symbolic > TABLE_SYMBOL_FRACTION * len(tokens)
 
 
 def is_table_like(text: str) -> bool:
     """True for a block that is mostly numbers or symbols, such as a flattened table."""
     tokens = text.split()
-    if len(tokens) < TABLE_MIN_TOKENS:
+    return len(tokens) >= TABLE_MIN_TOKENS and _mostly_symbolic(tokens)
+
+
+def is_table_header(text: str) -> bool:
+    """True for a block that reads like a table's header row: a few short labels, not prose.
+
+    Abbreviations such as "Avg." and "Acc." are allowed; a word of five or more letters ending in
+    sentence punctuation is not, nor a line broken at a hyphen, nor everyday prose words.
+    """
+    tokens = text.split()
+    if not 2 <= len(tokens) <= HEADER_MAX_TOKENS or _mostly_symbolic(tokens):
         return False
-    symbolic = sum(1 for t in tokens if t[0].isdigit() or not any(c.isalpha() for c in t))
-    return symbolic > TABLE_SYMBOL_FRACTION * len(tokens)
+    if _NOT_A_HEADER.match(text) or tokens[-1].endswith("-") or _SENTENCE_END.search(text):
+        return False
+    return not any(t.lower() in _PROSE_WORDS for t in tokens)
+
+
+def _same_column(first: Block, second: Block) -> bool:
+    """True if two blocks share most of the narrower one's width; blocks without boxes count."""
+    if not first.words or not second.words:
+        return True
+    a0, a1 = min(w.x0 for w in first.words), max(w.x1 for w in first.words)
+    b0, b1 = min(w.x0 for w in second.words), max(w.x1 for w in second.words)
+    return min(a1, b1) - max(a0, b0) > 0.5 * min(a1 - a0, b1 - b0)
 
 
 def _units(blocks: list[Block]) -> list[tuple[str, list[Block]]]:
     """Group a section's blocks into ("text", [block]) and ("table", [caption?, rows..., caption?]).
 
-    Consecutive table-like blocks form one table. A "Table N:" caption directly before the
-    table joins it; otherwise a caption directly after it does (unless that caption belongs
-    to a following table).
+    Consecutive table-like blocks form one table, with any header rows directly before it on
+    the same page and in the same column. A "Table N:" caption directly before the table joins
+    it; otherwise a caption directly after it does (unless that caption belongs to a following
+    table).
     """
     tables = [is_table_like(b.text) for b in blocks]
     captions = [bool(_TABLE_CAPTION.match(b.text)) for b in blocks]
     n = len(blocks)
+    for j in range(n - 2, -1, -1):  # backwards, so a header over two blocks joins whole
+        if (not tables[j] and tables[j + 1] and blocks[j].page == blocks[j + 1].page
+                and is_table_header(blocks[j].text) and _same_column(blocks[j], blocks[j + 1])):
+            tables[j] = True
     units: list[tuple[str, list[Block]]] = []
     i = 0
     while i < n:
@@ -505,14 +542,57 @@ def _units(blocks: list[Block]) -> list[tuple[str, list[Block]]]:
     return units
 
 
+def _split_table(blocks: list[Block], budget: int, min_words: int) -> list[list[tuple[str, tuple[Block, int]]]]:
+    """Split a table's blocks into pieces of at most `budget` (word, source) pairs.
+
+    Every piece after the first starts with the nearest header row above it, so its numbers keep
+    their column names; a header of more than half the budget is not repeated. A table with no
+    header is split evenly. A last piece with fewer than `min_words` new words joins the piece
+    before it, even past the budget, so a stray caption end is not a passage of its own.
+    """
+    words: list[tuple[str, tuple[Block, int]]] = []
+    headers: list[list[tuple[str, tuple[Block, int]]]] = []  # per word: the header above it
+    header: list[tuple[str, tuple[Block, int]]] = []
+    previous_was_header = False
+    for b in blocks:
+        split = [(word, (b, k)) for k, word in enumerate(b.text.split())]
+        is_header = is_table_header(b.text) and not is_table_like(b.text)
+        if is_header:
+            header = header + split if previous_was_header else split
+        words += split
+        headers += [[] if is_header else header] * len(split)
+        previous_was_header = is_header
+    result: list[list[tuple[str, tuple[Block, int]]]] = []
+    tail: list[tuple[str, tuple[Block, int]]] = []  # the last piece's new words
+    if not any(headers):
+        pieces = math.ceil(len(words) / budget)
+        size = math.ceil(len(words) / pieces)
+        for start in range(0, len(words), size):
+            tail = words[start : start + size]
+            result.append(tail)
+    else:
+        start = 0
+        while start < len(words):
+            repeated = headers[start] if start and len(headers[start]) <= budget // 2 else []
+            room = budget - len(repeated)
+            tail = words[start : start + room]
+            result.append(repeated + tail)
+            start += room
+    if len(result) > 1 and len(tail) < min_words:
+        result[-2] = result[-2] + tail
+        result.pop()
+    return result
+
+
 def chunk_sections(sections: list[Section], paper_id: str, title: str, settings: Settings) -> list[Passage]:
     """Split sections into passages of about `chunk_words` words (research R8, ADR-0002).
 
     Whole paragraphs are packed up to the budget, which includes the overlap words carried
     from the previous passage of the same section. Only paragraphs longer than the budget
     are split. Prose with fewer than `min_chunk_words` new words is dropped at the end of a
-    section or before a table. Table-like blocks (with their captions) become their own
-    "table" passages, split evenly if longer than the budget; overlap never crosses them.
+    section or before a table. Table-like blocks (with their captions and header rows) become
+    their own "table" passages, split if longer than the budget, each piece repeating the header
+    row and a short last piece joining the one before (`_split_table`); overlap never crosses them.
     Each passage records the page of its first new (non-overlap) word, and the regions of
     every word it contains, overlap included (research R4, ADR-0006).
     """
@@ -545,16 +625,8 @@ def chunk_sections(sections: list[Section], paper_id: str, title: str, settings:
                 if new_words >= settings.min_chunk_words:
                     emit(current, current_src, first_page, section.name)
                 current, current_src, new_words = [], [], 0
-                table_words: list[str] = []
-                table_src: list[tuple[Block, int]] = []
-                for b in blocks:
-                    split = b.text.split()
-                    table_words += split
-                    table_src += [(b, k) for k in range(len(split))]
-                pieces = math.ceil(len(table_words) / budget)
-                size = math.ceil(len(table_words) / pieces)
-                for start in range(0, len(table_words), size):
-                    emit(table_words[start : start + size], table_src[start : start + size], blocks[0].page,
+                for piece in _split_table(blocks, budget, settings.min_chunk_words):
+                    emit([word for word, _ in piece], [source for _, source in piece], blocks[0].page,
                          section.name, "table")
                 continue
             block = blocks[0]

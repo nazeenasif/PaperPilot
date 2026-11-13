@@ -20,7 +20,7 @@ class AppState:
         self._lock = threading.Lock()
         self._state: State = "loading"
         # Held while a question is being answered (FR-010); used by the ask endpoint.
-        self.question_lock = threading.Lock()
+        self.model_lock = threading.Lock()  # one model task at a time (FR-025)
 
     @property
     def state(self) -> State:

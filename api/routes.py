@@ -8,11 +8,11 @@ from fastapi.responses import FileResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from api.errors import ApiError, error_for
-from api.schemas import AskIn, SearchIn, StatusOut, answer_body, usage_body
+from api.schemas import AskIn, CompareIn, SearchIn, StatusOut, SummarizeIn, answer_body, comparison_body, summary_body, usage_body
 from api.streams import run_streaming
-from paperpilot import library, llm, service, store
+from paperpilot import library, llm, prompts, service, store
 from paperpilot.config import Settings
-from paperpilot.errors import PdfMissingError, UnknownPaperError, UnknownPassageError
+from paperpilot.errors import DailyLimitError, PdfMissingError, UnknownPaperError, UnknownPassageError
 from paperpilot.service import Turn
 
 router = APIRouter(prefix="/api")
@@ -61,15 +61,15 @@ def start_question(body: AskIn, request: Request) -> AskIn:
     if not body.question.strip():
         raise ApiError("empty_question")
     check_scope(body.paper_ids)
-    if not request.app.state.paperpilot.question_lock.acquire(blocking=False):
-        raise ApiError("busy_question")
+    if not request.app.state.paperpilot.model_lock.acquire(blocking=False):
+        raise ApiError("busy_task")
     return body
 
 
 @router.post("/ask", response_class=EventSourceResponse)
 async def ask_question(request: Request, body: AskIn = Depends(start_question)) -> AsyncIterable[ServerSentEvent]:
     """Stream progress and retry waits, then the checked answer (or an error) (FR-006, FR-011)."""
-    lock = request.app.state.paperpilot.question_lock
+    lock = request.app.state.paperpilot.model_lock
     usage = request.app.state.usage
     history = [Turn(turn.role, turn.text) for turn in body.history]
 
@@ -167,3 +167,152 @@ def get_pdf(paper_id: str) -> FileResponse:
         raise ApiError("pdf_missing", paper_id=paper_id) from None
     return FileResponse(path, media_type="application/pdf", content_disposition_type="inline",
                         filename=f"{paper_id}.pdf")
+
+
+# --- Feature 4: summaries (contracts/web-api.md; spec US1, US2) ---
+
+SUMMARY_PARTS = {*prompts.FACETS, service.TLDR}
+
+
+def _check_budget(needed: int) -> None:
+    """Refuse a run before its stream when fewer requests remain than its plan (FR-023)."""
+    try:
+        service.check_request_budget(needed)
+    except DailyLimitError as error:
+        raise error_for(error) from None
+
+
+@router.get("/summaries")
+def list_summaries() -> dict:
+    """Every paper with its saved summary's status, for the Summarize tab (FR-001). No model request."""
+    papers = []
+    for paper in library.list_papers():
+        saved = service.saved_summary(paper.paper_id)
+        papers.append({
+            "paper_id": paper.paper_id,
+            "title": paper.title,
+            "arxiv_id": paper.arxiv_id,
+            "summary": {
+                "status": saved.status if saved else "none",
+                "created_at": saved.created_at if saved else None,
+                "model": saved.model if saved else None,
+            },
+        })
+    return {"papers": papers, "plan": service.summary_plan("")}
+
+
+@router.get("/summaries/{paper_id}")
+def get_summary(paper_id: str) -> dict:
+    """The saved summary, current or stale (with its reason) and the plan for regenerating it.
+    404 not_saved (with the plan) when there is none. Never sends a model request (FR-016)."""
+    if not store.has_paper(paper_id):
+        raise ApiError("unknown_paper", paper_id=paper_id)
+    saved = service.saved_summary(paper_id)
+    if saved is None:
+        raise ApiError("not_saved", plan=service.summary_plan(paper_id))
+    return {**summary_body(saved), "plan": service.summary_plan(paper_id)}
+
+
+def start_summary(paper_id: str, body: SummarizeIn, request: Request) -> SummarizeIn:
+    """Validate before the stream starts (plain JSON errors) and take the one-task lock."""
+    if not store.has_paper(paper_id):
+        raise ApiError("unknown_paper", paper_id=paper_id)
+    if body.retry_parts is not None:
+        if not body.retry_parts or any(part not in SUMMARY_PARTS for part in body.retry_parts):
+            raise ApiError("invalid_request")
+        saved = service.saved_summary(paper_id)
+        if saved is None:
+            raise ApiError("not_saved", plan=service.summary_plan(paper_id))
+        if saved.status == "stale":
+            raise ApiError("invalid_request")
+    if body.retry_parts is not None:
+        _check_budget(service.summary_plan(paper_id, body.retry_parts)["max_requests"])
+    elif body.regenerate or service.saved_summary(paper_id) is None:
+        _check_budget(service.summary_plan(paper_id)["max_requests"])
+    if not request.app.state.paperpilot.model_lock.acquire(blocking=False):
+        raise ApiError("busy_task")
+    return body
+
+
+@router.post("/summaries/{paper_id}", response_class=EventSourceResponse)
+async def summarize_paper(
+    paper_id: str, request: Request, body: SummarizeIn = Depends(start_summary)
+) -> AsyncIterable[ServerSentEvent]:
+    """Stream the plan, per-part progress and checked parts, then the saved summary (FR-012)."""
+    lock = request.app.state.paperpilot.model_lock
+
+    def work(emit):
+        return service.summarize(paper_id, regenerate=body.regenerate, retry_parts=body.retry_parts,
+                                 on_event=emit)
+
+    async for item in run_streaming(work, on_finished=lock.release):
+        if item[0] == "event":
+            yield ServerSentEvent(event=item[1], data=item[2])
+        elif item[0] == "result":
+            yield ServerSentEvent(event="summary", data=summary_body(item[1]))
+        else:
+            yield ServerSentEvent(event="error", data=error_for(item[1]).body())
+
+
+# --- Feature 4: comparisons (contracts/web-api.md; spec US3) ---
+
+
+def _checked_comparison(paper_ids: list[str], aspects: list[str]) -> None:
+    """Refuse a bad comparison before anything else (plain JSON errors)."""
+    try:
+        service.check_comparison(paper_ids, aspects)
+    except ValueError:
+        raise ApiError("invalid_request") from None
+    except UnknownPaperError:
+        raise ApiError("unknown_paper") from None
+
+
+@router.get("/comparisons")
+def get_comparison(papers: str, aspects: str) -> dict:
+    """The saved comparison in any paper and aspect order, current or stale, and the plan for
+    running it. 404 not_saved (with the plan) when there is none. Never sends a model request."""
+    paper_ids, wanted = papers.split(","), aspects.split(",")
+    _checked_comparison(paper_ids, wanted)
+    plan = service.comparison_plan(paper_ids, wanted)
+    saved = service.saved_comparison(paper_ids, wanted)
+    if saved is None:
+        raise ApiError("not_saved", plan=plan)
+    return {**comparison_body(saved), "plan": plan}
+
+
+def start_comparison(body: CompareIn, request: Request) -> CompareIn:
+    """Validate before the stream starts (plain JSON errors) and take the one-task lock."""
+    _checked_comparison(body.paper_ids, body.aspects)
+    if body.retry_aspects is not None:
+        if not body.retry_aspects or set(body.retry_aspects) - set(body.aspects):
+            raise ApiError("invalid_request")
+        saved = service.saved_comparison(body.paper_ids, body.aspects)
+        if saved is None:
+            raise ApiError("not_saved", plan=service.comparison_plan(body.paper_ids, body.aspects))
+        if saved.status == "stale":
+            raise ApiError("invalid_request")
+    if body.retry_aspects is not None:
+        _check_budget(len(body.retry_aspects))
+    elif body.regenerate or service.saved_comparison(body.paper_ids, body.aspects) is None:
+        _check_budget(len(body.aspects))
+    if not request.app.state.paperpilot.model_lock.acquire(blocking=False):
+        raise ApiError("busy_task")
+    return body
+
+
+@router.post("/comparisons", response_class=EventSourceResponse)
+async def compare_papers(request: Request, body: CompareIn = Depends(start_comparison)) -> AsyncIterable[ServerSentEvent]:
+    """Stream the plan, per-aspect progress and checked cells, then the saved comparison (FR-012)."""
+    lock = request.app.state.paperpilot.model_lock
+
+    def work(emit):
+        return service.compare(body.paper_ids, body.aspects, regenerate=body.regenerate,
+                               retry_aspects=body.retry_aspects, on_event=emit)
+
+    async for item in run_streaming(work, on_finished=lock.release):
+        if item[0] == "event":
+            yield ServerSentEvent(event=item[1], data=item[2])
+        elif item[0] == "result":
+            yield ServerSentEvent(event="comparison", data=comparison_body(item[1]))
+        else:
+            yield ServerSentEvent(event="error", data=error_for(item[1]).body())

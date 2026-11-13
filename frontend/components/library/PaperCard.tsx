@@ -107,6 +107,12 @@ export function PaperCard({
         >
           Ask this paper
         </Link>
+        <Link
+          href={`/summarize/${paper.paper_id}`}
+          className="rounded-xl border border-line px-4 py-2.5 text-center text-text transition-colors hover:border-teal/60"
+        >
+          Summarize
+        </Link>
         <button
           type="button"
           aria-label={`Delete ${paper.title}`}

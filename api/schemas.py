@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from api.errors import iso_utc
 from paperpilot.llm import RequestCounts, Usage
+from paperpilot import service
 from paperpilot.service import Answer
 
 
@@ -64,7 +65,7 @@ def answer_body(answer: Answer, requests: RequestCounts, usage: dict | None = No
         "citations": asdict(answer.citations),
         # The badge claims only what the code checked (FR-005).
         "verified": not answer.not_found and not answer.citations.invalid,
-        "passages": [asdict(p) for p in answer.passages],
+        "passages": [{k: v for k, v in asdict(p).items() if k != "moved"} for p in answer.passages],
         "papers_read": len({p.paper_id for p in answer.passages}),
         "word_count": answer.word_count,
         "llm_calls": answer.llm_calls,
@@ -73,3 +74,36 @@ def answer_body(answer: Answer, requests: RequestCounts, usage: dict | None = No
         "tokens": answer.tokens,
         "usage": usage,  # today's requests after this question (ADR-0007)
     }
+
+
+# --- Feature 4: summaries (contracts/web-api.md) ---
+
+
+class CompareIn(BaseModel):
+    """POST /api/comparisons body; the service checks the papers and aspects themselves."""
+
+    paper_ids: list[str] = Field(max_length=10)
+    aspects: list[str] = Field(max_length=10)
+    regenerate: bool = False
+    retry_aspects: list[str] | None = Field(default=None, max_length=10)
+
+
+class SummarizeIn(BaseModel):
+    """POST /api/summaries/{paper_id} body."""
+
+    regenerate: bool = False
+    retry_parts: list[str] | None = Field(default=None, max_length=6)
+
+
+def comparison_body(comparison: service.Comparison) -> dict:
+    """A comparison as sent to the browser: every field of data-model.md, plus its cell counts."""
+    return {
+        **service.comparison_to_dict(comparison),
+        "verified_cells": comparison.verified_cells,
+        "total_cells": comparison.total_cells,
+    }
+
+
+def summary_body(summary: service.Summary) -> dict:
+    """A summary as sent to the browser: every field of data-model.md, plus verified_parts."""
+    return {**service.summary_to_dict(summary), "verified_parts": summary.verified_parts}

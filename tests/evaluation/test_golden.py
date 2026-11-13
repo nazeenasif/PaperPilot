@@ -55,9 +55,10 @@ def full_set():
 
 
 def follow_up(qid="f1", **overrides):
-    return item(id=qid, kind="follow_up", standalone="What corpus is used for pre-training?",
-                turns=[{"role": "user", "text": "Tell me about the method."},
-                       {"role": "assistant", "text": "It is a retrieval method [1]."}], **overrides)
+    fields = {"id": qid, "kind": "follow_up", "standalone": "What corpus is used for pre-training?",
+              "turns": [{"role": "user", "text": "Tell me about the method."},
+                        {"role": "assistant", "text": "It is a retrieval method [1]."}]}
+    return item(**{**fields, **overrides})
 
 
 def check(tmp_path, questions, drafts=False, **kwargs):

@@ -51,7 +51,9 @@ def run_check(args: argparse.Namespace) -> int:
     report = golden.check(loaded, drafts=args.drafts, cross_min_papers=args.cross_min_papers)
     print(f"Golden set {loaded.path} (version {loaded.version}, {len(loaded.questions)} questions)")
     for kind, target in golden.TARGETS.items():
-        print(f"  {kind}: {report.counts[kind]} of {target}")
+        print(f"  {kind}: {report.counts[kind]} of {target}" if target else f"  {kind}: {report.counts[kind]} (optional)")
+    if report.table_answers:
+        print("  table answers per paper: " + ", ".join(f"{p} {n}" for p, n in report.table_answers.items()))
     for note in report.notes:
         print(f"TODO: {note}")
     for error in report.errors:

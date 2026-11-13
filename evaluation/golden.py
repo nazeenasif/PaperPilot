@@ -17,8 +17,10 @@ import pymupdf
 from paperpilot import ingest, library, store
 
 GOLDEN_FILE = Path("eval") / "golden.json"
-# The researcher's target counts (spec FR-001, amended 2026-11-11).
-TARGETS = {"single": 20, "cross": 5, "near_miss": 4, "off_topic": 3, "follow_up": 4}
+# The researcher's target counts (spec FR-001, reduced 2026-11-13): 2 single-paper questions per
+# paper and 2 near-misses. The other kinds are still accepted, with no minimum.
+TARGETS = {"single": 10, "cross": 0, "near_miss": 2, "off_topic": 0, "follow_up": 0}
+SINGLE_PER_PAPER = 2
 ANSWERABLE = ("single", "cross", "follow_up")
 NOT_FOUND_KINDS = ("near_miss", "off_topic")
 SCOPES = ("library", "paper")
@@ -67,6 +69,7 @@ class CheckReport:
     errors: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     counts: dict[str, int] = field(default_factory=dict)
+    table_answers: dict[str, int] = field(default_factory=dict)  # per paper; counted, not required
 
     @property
     def ok(self) -> bool:
@@ -187,12 +190,13 @@ def check(golden: GoldenSet, drafts: bool = False, cross_min_papers: int = 2) ->
 
     report.counts = {kind: sum(q.get("kind") == kind for q in golden.questions) for kind in TARGETS}
     for kind, target in TARGETS.items():
-        if report.counts[kind] < target:
+        if target and report.counts[kind] < target:
             report.errors.append(f"{kind}: {report.counts[kind]} of {target} questions")
     if len(golden.questions) > MAX_QUESTIONS:
         report.errors.append(f"the set has {len(golden.questions)} questions; at most {MAX_QUESTIONS}")
     for arxiv in golden.papers:
-        if not any(q.get("kind") == "single" and q.get("table") and arxiv in q.get("papers", [])
-                   for q in golden.questions):
-            report.errors.append(f"{arxiv}: no single-paper question with a table answer")
+        singles = [q for q in golden.questions if q.get("kind") == "single" and arxiv in q.get("papers", [])]
+        if len(singles) < SINGLE_PER_PAPER:
+            report.errors.append(f"{arxiv}: {len(singles)} single-paper question(s); needs {SINGLE_PER_PAPER}")
+        report.table_answers[arxiv] = sum(bool(q.get("table")) for q in singles)
     return report

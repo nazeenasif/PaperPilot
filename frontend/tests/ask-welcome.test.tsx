@@ -89,8 +89,8 @@ describe("The Ask screen before the first question", () => {
     const asks = backend(PAPERS);
     const user = userEvent.setup();
     render(<AskScreen />);
-    const first = await screen.findByRole("button", { name: /use this question: .*LoRA/i });
-    await user.click(first);
+    const [first] = await screen.findAllByRole("button", { name: /use this question: .*LoRA/i });
+    await user.click(first!);
     const box = screen.getByRole("textbox", { name: /ask about your papers/i });
     expect((box as HTMLTextAreaElement).value).toContain("LoRA");
     expect(box).toHaveFocus();

@@ -1,24 +1,39 @@
 "use client";
 
 import { ArrowRight } from "lucide-react";
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 /** The composer's element id, so states can move focus to it ("Rephrase more specifically"). */
 export const COMPOSER_ID = "ask-composer";
 
 /** The question box: Enter sends, Shift+Enter adds a line; disabled while answering (FR-010).
- *  `blocked` disables sending and says why (e.g. no paper to search). */
+ *  `blocked` disables sending and says why (e.g. no paper to search). `prefill` puts a question in
+ *  the box (a new `key` each time) and focuses it, without sending. */
 export function Composer({
   busy,
   blocked,
+  prefill,
   onAsk,
 }: {
   busy: boolean;
   blocked?: string;
+  prefill?: { text: string; key: number };
   onAsk: (question: string) => void;
 }) {
   const [text, setText] = useState("");
   const [hint, setHint] = useState<string | null>(null);
+  const box = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!prefill) return;
+    setText(prefill.text);
+    setHint(null);
+    const element = box.current;
+    if (element) {
+      element.focus();
+      element.setSelectionRange(prefill.text.length, prefill.text.length);
+    }
+  }, [prefill]);
 
   function submit(event?: FormEvent) {
     event?.preventDefault();
@@ -44,6 +59,7 @@ export function Composer({
     <form onSubmit={submit} className="w-full">
       <div className="flex items-end gap-2 rounded-2xl border border-teal/30 bg-panel p-2 focus-within:border-teal/70">
         <textarea
+          ref={box}
           id={COMPOSER_ID}
           aria-label="Ask about your papers"
           aria-describedby={hint || blocked ? "composer-hint" : undefined}

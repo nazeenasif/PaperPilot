@@ -263,7 +263,9 @@ scripted run midway and confirm the next one continues without repeating finishe
 experiments of FR-024; future work: the other FR-024 experiments, FR-024a's answer evaluation, FR-024b's hand-off
 and FR-025–FR-025b (2026-11-13)*
 
-- **FR-023**: Each experiment MUST change exactly one setting from the baseline, and MUST be refused otherwise.
+- **FR-023**: Each experiment MUST change exactly one setting from the baseline, and MUST be refused otherwise. An experiment MAY name an earlier row as its `base` (no chains); it then applies
+  that row's change and MUST change exactly one setting from it, and the table names the base (amended 2026-11-13,
+  for the researcher's prefix + hybrid row).
 - **FR-024**: These experiments MUST be supported: baseline; cross-encoder reranking of the top 20; hybrid
   keyword and vector search; title and section prefix before embedding; the scope rule on and off; reasoning
   effort low against default; and the second model `google/gemma-4-31b-it:free`.

@@ -1,4 +1,5 @@
 {
+  "conclusion": "Adding the paper title and section to each passage before embedding gave the best ranking (MRR 0.31 → 0.41, hit@1 0.20 → 0.30) at no runtime cost. Off-the-shelf rerankers found more answers within the top 10 but ranked them lower, and were 2–20× slower. With 10 answerable questions, these are indicative results.",
   "experiments": [
     {
       "name": "baseline",
@@ -44,6 +45,16 @@
       "set": "golden",
       "runs": 1,
       "takeaway": "Best MRR (0.407) and hit@1 (0.3), +1 question at hit@6 and 9 of 10 in the top 10, including Q2 at 7; it needs the library re-embedded."
+    },
+    {
+      "name": "prefix-hybrid",
+      "base": "prefix",
+      "changes": {"retrieval": {"method": "hybrid", "shortlist": 20, "rrf_k": 60, "bm25": {"k1": 1.5, "b": 0.75}}},
+      "answers": false,
+      "optional": false,
+      "set": "golden",
+      "runs": 1,
+      "takeaway": "The two ideas add up: the best hit@6 (0.7) and MRR (0.425) of any row at 0.15 s a question, though hit@1 is 0.2 (prefix alone 0.3) and Q2 still ranks 14."
     },
     {
       "name": "reasoning-low",

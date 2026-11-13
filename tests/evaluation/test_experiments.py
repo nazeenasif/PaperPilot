@@ -90,7 +90,7 @@ def test_applied_sets_and_restores_the_environment(env, monkeypatch):
 def test_the_experiments_file_loads():
     loaded = experiments.load_experiments()
     names = [e.name for e in loaded]
-    assert names[0] == "baseline" and len(names) == len(set(names)) == 8
+    assert names[0] == "baseline" and len(names) == len(set(names)) == 9
     assert all(len(e.changes) <= 1 for e in loaded)
 
 

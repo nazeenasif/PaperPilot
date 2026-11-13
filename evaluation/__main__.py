@@ -104,7 +104,8 @@ def run_retrieval(args: argparse.Namespace) -> int:
         if name not in known:
             print(f"{name}: unknown experiment; known: {', '.join(known)}")
             return 2
-        if not retrieval.is_retrieval_experiment(known[name]):
+        if not retrieval.is_retrieval_experiment(known[name]) or (
+                known[name].base and not retrieval.is_retrieval_experiment(known[known[name].base])):
             print(f"{name}: not a retrieval experiment (it changes {', '.join(known[name].changes)})")
             return 2
     try:
@@ -113,7 +114,7 @@ def run_retrieval(args: argparse.Namespace) -> int:
         baseline = retrieval.baseline_configuration(loaded)
         rows = []
         for name in names:
-            result = retrieval.run_experiment(known[name], loaded, baseline)
+            result = retrieval.run_experiment(known[name], loaded, baseline, base=known.get(known[name].base))
             path = retrieval.write_result(result, args.results)
             rows.append(result)
             r = result["retrieval"]

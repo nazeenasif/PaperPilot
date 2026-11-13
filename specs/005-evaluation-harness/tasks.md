@@ -154,8 +154,8 @@ never marks them done.
   - `tests/evaluation/test_libraries.py`: `build_prefix_library(root)` ingests the papers into `data/eval/libraries/prefix/` under its own `LIBRARY_DIR` with `USAGE_DIR` at the main library, is reused when already built for the same settings, and leaves the main library unchanged.
 - [X] T030 [US2] Implement the prefix in `paperpilot/library.py` and `evaluation/libraries.py`, and the `prefix` experiment in `evaluation/retrieval.py`, so that T029 passes.
 - [X] T031 [US2] Run `python -m evaluation retrieval rerank-minilm-l6 rerank-tinybert hybrid-rrf60 prefix` (0 requests; the first run downloads 91 MB and 18 MB of reranker weights and builds the prefix library). Show the five rows side by side, confirm that the main library's fingerprints are unchanged, and commit `eval/results/*.json`.
-- [ ] T031a [US2] (added 2026-11-13, researcher's request) Write failing tests in `tests/evaluation/test_combined.py`: an experiment may name a `base` row defined earlier (no chains) and changes one setting from it (FR-023); the run applies both changes; the report names the base and shows the overall `conclusion` from `eval/experiments.json` above the table.
-- [ ] T031b [US2] Implement `base` in `evaluation/experiments.py`, `evaluation/retrieval.py`, `evaluation/__main__.py` and `evaluation/report.py`, and the `conclusion`, so that T031a passes; add `prefix-hybrid` (base `prefix`, change: hybrid RRF 60) and run it (0 requests); commit its row.
+- [X] T031a [US2] (added 2026-11-13, researcher's request) Write failing tests in `tests/evaluation/test_combined.py`: an experiment may name a `base` row defined earlier (no chains) and changes one setting from it (FR-023); the run applies both changes; the report names the base and shows the overall `conclusion` from `eval/experiments.json` above the table.
+- [X] T031b [US2] Implement `base` in `evaluation/experiments.py`, `evaluation/retrieval.py`, `evaluation/__main__.py` and `evaluation/report.py`, and the `conclusion`, so that T031a passes; add `prefix-hybrid` (base `prefix`, change: hybrid RRF 60) and run it (0 requests); commit its row.
 
 ---
 

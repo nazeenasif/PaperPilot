@@ -56,6 +56,7 @@ class Experiment:
     set: str = "golden"
     runs: int = 1
     takeaway: str | None = None
+    base: str | None = None  # another row this one builds on; its one change counts from that row
 
 
 def _sha(text: str) -> str:
@@ -176,9 +177,22 @@ def load_experiments(path: Path | str = EXPERIMENTS_FILE) -> list[Experiment]:
             problems.append("runs must be at least 1")
         if any(e.name == name for e in loaded):
             problems.append("the name is used twice")
+        base = entry.get("base")
+        if base is not None:
+            earlier = {e.name: e for e in loaded}
+            if base not in earlier:
+                problems.append(f"its base {base!r} must be an experiment listed before it")
+            elif earlier[base].base is not None:
+                problems.append(f"its base {base!r} has a base itself; chains are not allowed")
         if problems:
             raise ValueError(f"{name}: {'; '.join(problems)}")
         loaded.append(Experiment(name=name, changes=changes, answers=bool(entry.get("answers", False)),
                                  optional=bool(entry.get("optional", False)), set=entry.get("set", "golden"),
-                                 runs=entry.get("runs", 1), takeaway=entry.get("takeaway")))
+                                 runs=entry.get("runs", 1), takeaway=entry.get("takeaway"), base=base))
     return loaded
+
+
+def resolved_changes(experiment: Experiment, by_name: dict[str, Experiment]) -> dict:
+    """Everything an experiment changes from the baseline: its base row's change, then its own."""
+    base = by_name[experiment.base].changes if experiment.base else {}
+    return {**base, **experiment.changes}

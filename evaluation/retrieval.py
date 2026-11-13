@@ -263,18 +263,25 @@ def _golden_info(golden: golden_module.GoldenSet) -> dict:
     return {"version": golden.version, "sha256": golden.sha256, "questions": len(golden.questions)}
 
 
-def run_experiment(experiment: Experiment, golden: golden_module.GoldenSet, baseline_config: dict) -> dict:
-    """Measure one retrieval experiment; return its result row (no passage text). Raises ValueError
-    when it changes more than one setting from the baseline."""
-    with experiment_library(experiment):
+def run_experiment(experiment: Experiment, golden: golden_module.GoldenSet, baseline_config: dict,
+                   base: Experiment | None = None) -> dict:
+    """Measure one retrieval experiment; return its result row (no passage text). An experiment
+    with a `base` row applies that row's change too, and its own one change is counted from that
+    row. Raises ValueError when it changes more than one setting from the baseline or its base."""
+    changes = {**(base.changes if base else {}), **experiment.changes}
+    resolved = replace(experiment, changes=changes)
+    with experiment_library(resolved):
         paper_ids = golden_papers(golden)
-        config = experiments.configuration(experiment.changes, list(paper_ids.values()), _golden_info(golden))
-        experiments.check_one_change(baseline_config, config)
-        retrieve, extra = retriever_for(experiment)
+        config = experiments.configuration(changes, list(paper_ids.values()), _golden_info(golden))
+        reference = (experiments.configuration(base.changes, list(paper_ids.values()), _golden_info(golden))
+                     if base else baseline_config)
+        experiments.check_one_change(reference, config)
+        retrieve, extra = retriever_for(resolved)
         config["retrieval"] = {**config["retrieval"], **extra}
         measured = evaluate(golden, retrieve, threshold=config["relevance_threshold"])
     return {
         "experiment": experiment.name,
+        "base": experiment.base,
         "configuration": config,
         "measured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "retrieval": {**measured["metrics"], "latency_s": measured["latency_s"]},

@@ -1,0 +1,176 @@
+{
+  "experiment": "prefix-hybrid",
+  "base": "prefix",
+  "configuration": {
+    "answer_model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "reasoning_effort": "",
+    "output_tokens": {
+      "answer": 2048,
+      "summary_section": 8192,
+      "tldr": 8192,
+      "comparison": 8192,
+      "judge": 8192
+    },
+    "instruction_hashes": {
+      "answer": "144cac54cb83b46c849a82f37fe1c946bd5e8a065c92391856f9f011e28e7d51",
+      "rewrite": "9bc84398b161f861d307263c44265bde15d3fa9609c67493e2dd733d634cb1fb",
+      "section": "2a49e127ca14cdba8f59933d475d0e3e062e153fd9df52ad1c4116c393640de0",
+      "tldr": "959e7a398f7df6b451b00629ca51723ec5def7f6165297f74721a56bca854ce7",
+      "row": "b78e738ae5e4d6053664ee2d19c82cfc5f4e3deb9d5811ee1ff3975204e97a8d"
+    },
+    "summary_prompt_version": 8,
+    "judge_prompt_version": null,
+    "chunk_words": 220,
+    "chunk_overlap": 40,
+    "min_chunk_words": 30,
+    "embed_model": "BAAI/bge-small-en-v1.5",
+    "embed_prefix": true,
+    "retrieval": {
+      "method": "hybrid",
+      "shortlist": 20,
+      "rrf_k": 60,
+      "bm25": {
+        "k1": 1.5,
+        "b": 0.75
+      },
+      "rank_bm25": "0.2.2"
+    },
+    "k": 6,
+    "relevance_threshold": 0.58,
+    "scope_rule": true,
+    "paper_fingerprints": {
+      "62d3275b909c": "1c002d7f79b08947bd99399dab27e353eddedd3bcb9f69799c058abfe9318a92",
+      "a639448e61be": "3817f4a6be4d46bab4b954f8e78686866c8c931128ee543f541e792f27ab58a3",
+      "a7b7a17d0cf9": "ab19cec2680994bf716dfea349e3f5e95f9f50e2e9d52beb1ee7f637ba4f1eec",
+      "a8ca46b17146": "4156140663965cf0b7409a1e19ee6b273a84787e0dff3f1d73d9974127dea41e",
+      "e34bb18418cd": "33e3bde2ffd20a349679e9bf576661c3fc6a54ddaac68b01574d2c1f153369d1"
+    },
+    "golden": {
+      "version": 1,
+      "sha256": "867b1c31a3d0babd3b8ae24819ab80e4105dd3f070c47895608df7f9119fd042",
+      "questions": 12
+    },
+    "commit": "bf6d8bca80b28cfa122578b3380fadcf282cdda4",
+    "judge_model": "google/gemma-4-31b-it:free"
+  },
+  "measured_at": "2026-11-13T14:03:42+00:00",
+  "retrieval": {
+    "hit@1": 0.2,
+    "hit@3": 0.6,
+    "hit@6": 0.7,
+    "hit@10": 0.8,
+    "mrr": 0.425,
+    "answerable": 10,
+    "per_kind": {
+      "single": {
+        "hit@1": 0.2,
+        "hit@3": 0.6,
+        "hit@6": 0.7,
+        "hit@10": 0.8,
+        "mrr": 0.425,
+        "answerable": 10
+      },
+      "near_miss": {
+        "questions": 2,
+        "gated": 0
+      }
+    },
+    "gated_not_found": {
+      "gated": 0,
+      "of": 2
+    },
+    "latency_s": 0.153
+  },
+  "answers": null,
+  "requests": {
+    "planned": 0,
+    "retries": 0
+  },
+  "self_graded": false,
+  "questions": [
+    {
+      "id": "attention-01",
+      "kind": "single",
+      "rank": 1,
+      "gate_score": 0.757,
+      "gated": false
+    },
+    {
+      "id": "attention-02",
+      "kind": "single",
+      "rank": 2,
+      "gate_score": 0.759,
+      "gated": false
+    },
+    {
+      "id": "bert-01",
+      "kind": "single",
+      "rank": 14,
+      "gate_score": 0.874,
+      "gated": false
+    },
+    {
+      "id": "bert-02",
+      "kind": "single",
+      "rank": 1,
+      "gate_score": 0.826,
+      "gated": false
+    },
+    {
+      "id": "rag-01",
+      "kind": "single",
+      "rank": 2,
+      "gate_score": 0.711,
+      "gated": false
+    },
+    {
+      "id": "rag-02",
+      "kind": "single",
+      "rank": null,
+      "gate_score": 0.697,
+      "gated": false
+    },
+    {
+      "id": "lora-01",
+      "kind": "single",
+      "rank": 5,
+      "gate_score": 0.73,
+      "gated": false
+    },
+    {
+      "id": "lora-02",
+      "kind": "single",
+      "rank": 3,
+      "gate_score": 0.763,
+      "gated": false
+    },
+    {
+      "id": "lost-01",
+      "kind": "single",
+      "rank": 7,
+      "gate_score": 0.844,
+      "gated": false
+    },
+    {
+      "id": "lost-02",
+      "kind": "single",
+      "rank": 2,
+      "gate_score": 0.763,
+      "gated": false
+    },
+    {
+      "id": "near-01",
+      "kind": "near_miss",
+      "rank": null,
+      "gate_score": 0.642,
+      "gated": false
+    },
+    {
+      "id": "near-02",
+      "kind": "near_miss",
+      "rank": null,
+      "gate_score": 0.691,
+      "gated": false
+    }
+  ]
+}

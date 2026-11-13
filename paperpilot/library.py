@@ -7,7 +7,7 @@ from pathlib import Path
 
 from paperpilot import ingest, store
 from paperpilot.config import load_settings
-from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError
+from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError, UnknownPaperError
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,44 @@ class SearchResult:
     section: str
     page: int
     text: str
+
+
+@dataclass(frozen=True)
+class PaperSummary:
+    """One paper in the library, as shown by list_papers()."""
+
+    paper_id: str
+    title: str
+    source_file: str
+    page_count: int
+    passage_count: int
+
+
+def list_papers() -> list[PaperSummary]:
+    """Return one summary per stored paper, sorted by title (FR-017)."""
+    papers: dict[str, dict] = {}
+    counts: dict[str, int] = {}
+    for metadata in store.all_metadata():
+        paper_id = metadata["paper_id"]
+        papers.setdefault(paper_id, metadata)
+        counts[paper_id] = counts.get(paper_id, 0) + 1
+    summaries = [
+        PaperSummary(paper_id, m["title"], m["source_file"], m["page_count"], counts[paper_id])
+        for paper_id, m in papers.items()
+    ]
+    return sorted(summaries, key=lambda p: p.title.lower())
+
+
+def delete_paper(paper_id: str) -> int:
+    """Delete a paper and all its passages; return the number removed (FR-018).
+
+    Raises UnknownPaperError if the paper is not in the library.
+    """
+    if not store.has_paper(paper_id):
+        raise UnknownPaperError(f"Paper {paper_id} is not in the library")
+    removed = store.delete_paper_passages(paper_id)
+    logger.info("Deleted %s: %d passages", paper_id, removed)
+    return removed
 
 
 def add_paper(path: str | Path) -> AddResult:
@@ -81,13 +119,17 @@ def search(query: str, k: int | None = None, paper_ids: list[str] | None = None)
     """Return up to k passages most similar to the query, best first.
 
     k defaults to TOP_K; an empty paper_ids searches the whole library.
-    Raises EmptyQueryError for an empty or whitespace query.
+    Raises EmptyQueryError for an empty or whitespace query and UnknownPaperError if a
+    paper ID in paper_ids is not in the library.
     """
     if not query or not query.strip():
         raise EmptyQueryError("The search query is empty")
     k = load_settings().top_k if k is None else k
     if k < 1:
         raise ValueError(f"k must be at least 1, got {k}")
+    for paper_id in paper_ids or []:
+        if not store.has_paper(paper_id):
+            raise UnknownPaperError(f"Paper {paper_id} is not in the library")
     hits = store.query(store.embed_query(query.strip()), k, paper_ids)
     return [
         SearchResult(

@@ -127,9 +127,9 @@ unchanged.
 
 **Independent Test**: With ≥ 2 papers, a search filtered to one paper returns only that paper.
 
-- [ ] T038 [US4] Add failing tests to `tests/test_library.py`: filter to one paper → every result has that `paper_id`; filter to two papers → every result is from one of them; `paper_ids=[]` behaves like no filter; an unknown ID raises `UnknownPaperError` whose message names the ID
-- [ ] T039 [US4] In `paperpilot/library.py`, make `search` validate each ID in `paper_ids` with `store.has_paper()` (raise `UnknownPaperError`) and pass `paper_ids` to `store.query` (which uses `build_where`, never an empty `$in`) (FR-016); make T038 pass
-- [ ] T040 [US4] Extend `scripts/checkpoint_3_search.py` with a filtered search for each paper: print `PASS`/`FAIL` that 100% of results come from that paper — **Checkpoint 3, US4 part** (SC-005)
+- [X] T038 [US4] Add failing tests to `tests/test_library.py`: filter to one paper → every result has that `paper_id`; filter to two papers → every result is from one of them; `paper_ids=[]` behaves like no filter; an unknown ID raises `UnknownPaperError` whose message names the ID
+- [X] T039 [US4] In `paperpilot/library.py`, make `search` validate each ID in `paper_ids` with `store.has_paper()` (raise `UnknownPaperError`) and pass `paper_ids` to `store.query` (which uses `build_where`, never an empty `$in`) (FR-016); make T038 pass
+- [X] T040 [US4] Extend `scripts/checkpoint_3_search.py` with a filtered search for each paper: print `PASS`/`FAIL` that 100% of results come from that paper — **Checkpoint 3, US4 part** (SC-005)
 
 ---
 
@@ -140,17 +140,17 @@ unchanged.
 **Independent Test**: Add two papers, list, delete one, list again, and confirm search no
 longer returns it.
 
-- [ ] T041 [US5] Add failing tests to `tests/test_library.py`: `list_papers()` returns one `PaperSummary` per paper sorted by title with correct `passage_count`, `source_file`, `page_count`, and `[]` for an empty library; `delete_paper(id)` returns the number of passages removed, the paper disappears from `list_papers()` and from search results; deleting an unknown ID raises `UnknownPaperError` and changes nothing
-- [ ] T042 [US5] In `paperpilot/library.py`, implement `list_papers()` by aggregating `store.all_metadata()` by `paper_id` into `PaperSummary` (FR-017); make the list tests in T041 pass
-- [ ] T043 [US5] In `paperpilot/library.py`, implement `delete_paper(paper_id)` using `store.has_paper()` and `store.delete_paper_passages()` (FR-018); make the remaining T041 tests pass
-- [ ] T044 [US5] Extend `scripts/checkpoint_3_search.py` with a library section: print the `list_papers()` table (ID, title, passages); delete one paper, print `PASS`/`FAIL` that it is gone from the list and from a search, then re-add it and check the counts are restored — **Checkpoint 3, US5 part**
+- [X] T041 [US5] Add failing tests to `tests/test_library.py`: `list_papers()` returns one `PaperSummary` per paper sorted by title with correct `passage_count`, `source_file`, `page_count`, and `[]` for an empty library; `delete_paper(id)` returns the number of passages removed, the paper disappears from `list_papers()` and from search results; deleting an unknown ID raises `UnknownPaperError` and changes nothing
+- [X] T042 [US5] In `paperpilot/library.py`, implement `list_papers()` by aggregating `store.all_metadata()` by `paper_id` into `PaperSummary` (FR-017); make the list tests in T041 pass
+- [X] T043 [US5] In `paperpilot/library.py`, implement `delete_paper(paper_id)` using `store.has_paper()` and `store.delete_paper_passages()` (FR-018); make the remaining T041 tests pass
+- [X] T044 [US5] Extend `scripts/checkpoint_3_search.py` with a library section: print the `list_papers()` table (ID, title, passages); delete one paper, print `PASS`/`FAIL` that it is gone from the list and from a search, then re-add it and check the counts are restored — **Checkpoint 3, US5 part**
 
 ---
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T045 Run `pytest` and every command in `specs/001-pdf-ingest-search/quickstart.md` on a fresh `LIBRARY_DIR` with the 5 test papers; fix any drift in `specs/001-pdf-ingest-search/quickstart.md` and record timings in the PHR
-- [ ] T046 Pin exact versions of the direct dependencies in `requirements.txt` (`==` from `pip freeze`) and write `docs/known-limitations.md` covering: regex heading detection (missed unnumbered non-standard headings, occasional false numbered headings), heuristic titles, messy equations/tables, scanned PDFs (no OCR), two-column band heuristic (three-column or sidebar layouts, narrow figures inside one column), heading sequence guard can skip a heading after a gap larger than 2, hyphenated compounds at line ends, appendices after References excluded, revised paper versions get a new ID, hard crash during write may leave a partial paper (delete and re-add), score band is a guide not a threshold (FR-020, SC-009)
+- [X] T045 Run `pytest` and every command in `specs/001-pdf-ingest-search/quickstart.md` on a fresh `LIBRARY_DIR` with the 5 test papers; fix any drift in `specs/001-pdf-ingest-search/quickstart.md` and record timings in the PHR
+- [X] T046 Pin exact versions of the direct dependencies in `requirements.txt` (`==` from `pip freeze`) and write `docs/known-limitations.md` covering: regex heading detection (missed unnumbered non-standard headings, occasional false numbered headings), heuristic titles, messy equations/tables, scanned PDFs (no OCR), two-column band heuristic (three-column or sidebar layouts, narrow figures inside one column), heading sequence guard can skip a heading after a gap larger than 2, hyphenated compounds at line ends, appendices after References excluded, revised paper versions get a new ID, hard crash during write may leave a partial paper (delete and re-add), score band is a guide not a threshold (FR-020, SC-009)
 
 ---
 

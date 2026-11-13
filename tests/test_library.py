@@ -6,9 +6,9 @@ Uses the conftest fixtures: a temporary library, the fake embedder, and generate
 import pytest
 
 from paperpilot import ingest, store
-from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError
+from paperpilot.errors import EmptyQueryError, NoTextError, PdfReadError, StorageError, UnknownPaperError
 from paperpilot.ingest import paper_id_for
-from paperpilot.library import add_paper, search
+from paperpilot.library import add_paper, delete_paper, list_papers, search
 
 
 @pytest.fixture
@@ -163,3 +163,74 @@ def test_library_survives_reopening_from_disk(paper, library_env):
     after = [r.passage_id for r in search("which evaluation dataset was used", k=4)]
     assert after == before
     assert add_paper(paper).already_present is True
+
+
+# --- US4: search within selected papers ---
+
+
+@pytest.fixture
+def three_papers(tmp_path, make_pdf, library_env, fake_embedder):
+    """Three different papers added to an empty temporary library; returns their IDs."""
+    titles = ["A Study of Searching Research Papers by Meaning", "Second Paper on Search", "Third Paper on Search"]
+    return [add_paper(make_pdf(tmp_path / f"p{i}.pdf", title=t)).paper_id for i, t in enumerate(titles)]
+
+
+def test_filter_to_one_paper(three_papers):
+    target = three_papers[1]
+    results = search("research papers search", k=20, paper_ids=[target])
+    assert results
+    assert {r.paper_id for r in results} == {target}
+
+
+def test_filter_to_two_papers(three_papers):
+    targets = three_papers[:2]
+    results = search("research papers search", k=20, paper_ids=targets)
+    assert results
+    assert {r.paper_id for r in results} <= set(targets)
+
+
+def test_empty_filter_searches_whole_library(three_papers):
+    everything = [r.passage_id for r in search("research papers search", k=20)]
+    assert [r.passage_id for r in search("research papers search", k=20, paper_ids=[])] == everything
+    assert len({pid.rsplit("-", 1)[0] for pid in everything}) == 3
+
+
+def test_unknown_paper_in_filter_raises(three_papers):
+    with pytest.raises(UnknownPaperError) as error:
+        search("research papers", paper_ids=[three_papers[0], "000000000000"])
+    assert "000000000000" in str(error.value)
+
+
+# --- US5: list and delete papers ---
+
+
+def test_list_papers_on_empty_library(library_env, fake_embedder):
+    assert list_papers() == []
+
+
+def test_list_papers_sorted_by_title_with_counts(three_papers):
+    papers = list_papers()
+    assert [p.title for p in papers] == sorted(p.title for p in papers)
+    assert {p.paper_id for p in papers} == set(three_papers)
+    for p in papers:
+        stored = store.paper_metadata(p.paper_id)
+        assert p.passage_count == len(stored) > 0
+        assert p.source_file.endswith(".pdf")
+        assert p.page_count >= 1
+
+
+def test_delete_paper_removes_it_everywhere(three_papers):
+    target = three_papers[0]
+    expected = len(store.paper_metadata(target))
+    assert delete_paper(target) == expected
+    assert target not in {p.paper_id for p in list_papers()}
+    assert all(r.paper_id != target for r in search("research papers search", k=50))
+    assert not store.has_paper(target)
+
+
+def test_delete_unknown_paper_raises_and_changes_nothing(three_papers):
+    count = store.get_collection().count()
+    with pytest.raises(UnknownPaperError):
+        delete_paper("000000000000")
+    assert store.get_collection().count() == count
+    assert len(list_papers()) == 3

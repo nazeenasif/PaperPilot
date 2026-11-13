@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from paperpilot import store  # noqa: E402
 from paperpilot.config import load_settings  # noqa: E402
 from paperpilot.errors import PaperPilotError  # noqa: E402
-from paperpilot.library import add_paper, search  # noqa: E402
+from paperpilot.library import add_paper, delete_paper, list_papers, search  # noqa: E402
 
 QUERY = "what dataset was used for evaluation?"
 MAX_ADD_SECONDS = 60.0  # SC-010, warm model
@@ -72,7 +72,7 @@ def main() -> int:
     print(f"Library: {settings.library_dir}   TOP_K={settings.top_k}")
     print(f"Model load: {store.load_model():.1f} s (excluded from timing checks)")
 
-    all_passed, add_seconds = True, []
+    all_passed, add_seconds, added = True, [], []  # added: (path, paper_id, title)
     print("\nAdding papers:")
     for path in papers:
         start = time.perf_counter()
@@ -84,6 +84,7 @@ def main() -> int:
             continue
         seconds = time.perf_counter() - start
         add_seconds.append(seconds)
+        added.append((path, result.paper_id, result.title))
         t = result.timings
         print(
             f"  {path.name}: {result.title} | {result.passage_count} passages | "
@@ -110,6 +111,16 @@ def main() -> int:
         print(f"      section: {r.section}, page {r.page}")
         print(f"      {r.text[:PREVIEW_CHARS]}...")
 
+    print("\nFiltered search (one paper at a time):")
+    all_filtered_ok = True
+    for _, paper_id, title in added:
+        filtered = search(QUERY, paper_ids=[paper_id])
+        only_this_paper = bool(filtered) and all(r.paper_id == paper_id for r in filtered)
+        all_filtered_ok = all_filtered_ok and only_this_paper
+        top = filtered[0] if filtered else None
+        top_text = f"top: {top.score:.3f} {top.section}, page {top.page}" if top else "no results"
+        print(f"  {paper_id} {title[:45]}: {len(filtered)} results, all from this paper: {only_this_paper} | {top_text}")
+
     print("\nRe-adding papers (duplicate check):")
     count_before = store.get_collection().count()
     all_already_present = True
@@ -124,9 +135,36 @@ def main() -> int:
         all_already_present = all_already_present and again.already_present
     count_after = store.get_collection().count()
 
+    print("\nLibrary:")
+    listed = list_papers()
+    print(f"  {'ID':<14}{'Passages':>9}  Title")
+    for paper in listed:
+        print(f"  {paper.paper_id:<14}{paper.passage_count:>9}  {paper.title}")
+    counts_before = {paper.paper_id: paper.passage_count for paper in listed}
+    deleted_ok = restored = False
+    if added:
+        path, paper_id, title = added[0]
+        removed = delete_paper(paper_id)
+        gone_from_list = paper_id not in {paper.paper_id for paper in list_papers()}
+        gone_from_search = all(r.paper_id != paper_id for r in search(QUERY, k=50))
+        deleted_ok = gone_from_list and gone_from_search
+        print(
+            f"\n  Deleted {paper_id} ({title}): {removed} passages removed; "
+            f"gone from list: {gone_from_list}; gone from search: {gone_from_search}"
+        )
+        readded = add_paper(path)
+        restored = {paper.paper_id: paper.passage_count for paper in list_papers()} == counts_before
+        print(
+            f"  Re-added {path.name}: already_present={readded.already_present}, "
+            f"{readded.passage_count} passages; library restored: {restored}"
+        )
+
     scores = [r.score for r in results]
     print()
     checks = [
+        (all_filtered_ok, "every paper-filtered search returns only that paper (SC-005)"),
+        (deleted_ok, "a deleted paper is gone from the list and from search (FR-018)"),
+        (restored, "re-adding the deleted paper restores the same papers and passage counts"),
         (all_already_present, "every re-added paper is reported as already present (SC-007)"),
         (count_after == count_before, f"total passages unchanged by re-adding ({count_before} -> {count_after})"),
         (0 < len(results) <= settings.top_k, f"1 to {settings.top_k} results (got {len(results)})"),

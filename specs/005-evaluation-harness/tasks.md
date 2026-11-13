@@ -254,11 +254,11 @@ never marks them done.
 **Goal**: the results table generated from stored results, in `eval/results.md` and the README.
 **Independent test**: `report` twice produces identical files from `eval/results/` and `eval/experiments.json` alone.
 
-- [ ] T048 [US5] Write failing tests in `tests/evaluation/test_report.py`:
+- [X] T048 [US5] Write failing tests in `tests/evaluation/test_report.py`:
   - **Rows**: one per experiment, from result files only (no cache, no PDFs). Unmeasured answer columns read "not measured", a row without a takeaway says so, a row from another golden version or hash is marked "earlier golden set", and a self-graded row is marked.
   - **Content**: per-kind tables, the calibration line reading "not measured (future work)" when there is no calibration, and the set's size and limits.
   - **README**: the block between `<!-- eval-results:start -->` and `<!-- eval-results:end -->` is replaced, or appended when absent, and a second run changes nothing.
-- [ ] T049 [US5] Implement `evaluation/report.py` and the `report` command so that T048 passes.
+- [X] T049 [US5] Implement `evaluation/report.py` and the `report` command so that T048 passes.
 - [ ] T050 [US5] **HUMAN**: write the `takeaway` of the baseline and of at least two experiments in `eval/experiments.json`.
 - [ ] T051 [US5] Run `python -m evaluation report` (0 requests); commit `eval/results.md` and `README.md`.
 

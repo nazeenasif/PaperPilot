@@ -48,6 +48,7 @@ class GoldenSet:
     questions: list[dict]
     sha256: str
     path: Path
+    note: str | None = None  # e.g. who drafted and reviewed the questions
 
 
 def load_golden(path: Path | str = GOLDEN_FILE) -> GoldenSet:
@@ -59,7 +60,8 @@ def load_golden(path: Path | str = GOLDEN_FILE) -> GoldenSet:
     except json.JSONDecodeError as error:
         raise ValueError(f"{path} is not valid JSON once comments are removed: {error}") from None
     return GoldenSet(version=data.get("version"), papers=list(data.get("papers", [])),
-                     questions=list(data.get("questions", [])), sha256=hashlib.sha256(raw).hexdigest(), path=path)
+                     questions=list(data.get("questions", [])), sha256=hashlib.sha256(raw).hexdigest(), path=path,
+                     note=data.get("note"))
 
 
 @dataclass

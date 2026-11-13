@@ -5,6 +5,7 @@ Exit codes: 0 every check passed, 1 a failed check or a refused run, 2 bad argum
 
 import argparse
 import sys
+from pathlib import Path
 
 COMMANDS = {
     "check": "validate eval/golden.json and eval/experiments.json (0 requests)",
@@ -39,6 +40,12 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--golden", default=str(GOLDEN_FILE), help="the golden-set file")
             command.add_argument("--experiments", default=str(EXPERIMENTS_FILE), help="the experiments file")
             command.add_argument("--results", default=str(RESULTS_DIR), help="where result files are written")
+        elif name == "report":
+            command.add_argument("--results", default=str(RESULTS_DIR), help="the result files")
+            command.add_argument("--experiments", default=str(EXPERIMENTS_FILE), help="the experiments file")
+            command.add_argument("--golden", default=str(GOLDEN_FILE), help="the golden-set file")
+            command.add_argument("--readme", default="README.md", help="the README to update")
+            command.add_argument("--out", default=str(Path("eval") / "results.md"), help="the results page")
         else:
             command.add_argument("rest", nargs="*", help=argparse.SUPPRESS)
     return parser
@@ -129,6 +136,21 @@ def run_retrieval(args: argparse.Namespace) -> int:
     return 0 if after == before else 1
 
 
+def run_report(args: argparse.Namespace) -> int:
+    """Write the results page and the README block from stored results (0 model requests)."""
+    from evaluation import report
+
+    sys.stdout.reconfigure(encoding="utf-8")
+    try:
+        built = report.write_report(args.results, args.experiments, args.golden, args.readme, args.out)
+    except (OSError, ValueError, KeyError) as error:
+        print(f"FAIL: {error}")
+        return 1
+    print(built.table)
+    print(f"Wrote {args.out} and the block in {args.readme}. Model requests: 0")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run one command; return its exit code."""
     args = build_parser().parse_args(argv)
@@ -136,6 +158,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_check(args)
     if args.command == "retrieval":
         return run_retrieval(args)
+    if args.command == "report":
+        return run_report(args)
     print(f"{args.command}: not implemented yet")
     return 2
 

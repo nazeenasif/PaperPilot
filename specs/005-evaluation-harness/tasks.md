@@ -115,7 +115,7 @@ never marks them done.
   - one or two phrases copied from the PDF, each with its page, that match a stored passage of the paper (in a table passage for `table: true`), checked by `check --drafts`;
   - every item is set `"confirmed": false`;
   - a question whose answer cannot be found in the paper is listed for the researcher, not given invented evidence.
-- [X] T018 [US1] ~~**HUMAN**~~ (reassigned to Claude Code by the researcher, 2026-11-13; her review of the drafted set follows): confirm each evidence phrase and page against the PDF, correct any, set `"confirmed": true` per item, and set `version` to 1.
+- [X] T018 [US1] ~~**HUMAN**~~ (reassigned to Claude Code by the researcher, 2026-11-13; the researcher reviews the drafted set): confirm each evidence phrase and page against the PDF, correct any, set `"confirmed": true` per item, and set `version` to 1.
 - [X] T019 [US1] Run `python -m evaluation check` (0 requests); it must pass with no `--drafts`. Commit `eval/golden.json`.
 
 ---
@@ -125,13 +125,13 @@ never marks them done.
 **Goal**: hit@k, MRR and gated not-founds for the baseline, the two rerankers, hybrid search and the prefix, without touching the library.
 **Independent test**: `python -m evaluation retrieval` writes five rows with 0 model requests, identical on a repeat run, and the library's fingerprints are unchanged.
 
-- [ ] T020 [P] [US2] Write failing tests in `tests/evaluation/test_retrieval_metrics.py`:
+- [X] T020 [P] [US2] Write failing tests in `tests/evaluation/test_retrieval_metrics.py`:
   - **Rank**: for a single-paper question, the rank is the first relevant passage. For a cross-paper question, it is the position by which every required paper is covered, and it is none if one paper is missing within 20.
   - **Metrics**: hit@1/3/6/10, MRR (0 when not found), and both per kind.
   - **Follow-ups**: they use `standalone`.
   - **Gating**: near-miss and off-topic questions count as gated when the top vector score is under the threshold.
   - **Scope**: searches are restricted to the golden papers, or the one paper for `scope: paper`.
-- [ ] T021 [US2] Implement the metrics and the vector retriever (shortlist 20, then the top k; the gate score is the top vector score) in `evaluation/retrieval.py` so that T020 passes.
+- [X] T021 [US2] Implement the metrics and the vector retriever (shortlist 20, then the top k; the gate score is the top vector score) in `evaluation/retrieval.py` so that T020 passes.
 - [ ] T022 [P] [US2] Write failing tests in `tests/evaluation/test_retrieval_run.py`: `retrieval baseline` writes `eval/results/baseline.json` with the configuration, the golden version and hash, metrics overall and per kind, per-question ranks and no passage text. A second run gives the same numbers, the library's passage fingerprints and `results.sqlite3` are unchanged, and the request counter does not move.
 - [ ] T023 [US2] Implement the `retrieval` command and the result writer in `evaluation/retrieval.py` and `evaluation/__main__.py` so that T022 passes.
 - [ ] T024 [US2] Run `python -m evaluation retrieval baseline` (0 requests); show hit@6, MRR and per-kind figures; commit `eval/results/baseline.json`.

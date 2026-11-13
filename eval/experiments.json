@@ -1,5 +1,5 @@
 {
-  "conclusion": "Adding the paper title and section to each passage before embedding gave the best ranking (MRR 0.31 → 0.41, hit@1 0.20 → 0.30) at no runtime cost. Off-the-shelf rerankers found more answers within the top 10 but ranked them lower, and were 2–20× slower. With 10 answerable questions, these are indicative results.",
+  "conclusion": "Adding the paper title and section to each passage before embedding gave the best single improvement (MRR 0.31 → 0.41, hit@1 0.20 → 0.30) at no runtime cost. Combined with hybrid BM25 + vector search, it reached hit@6 0.70 (baseline 0.40) and MRR 0.43. Off-the-shelf rerankers found more answers within the top 10 but ranked them lower, and were 2–20× slower. With 10 answerable questions, these are indicative results.",
   "experiments": [
     {
       "name": "baseline",

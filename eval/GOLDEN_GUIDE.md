@@ -4,15 +4,18 @@
 (Feature 5). You write the questions; evidence phrases are drafted afterwards for you to confirm.
 Check your work at any time with `python -m evaluation check --drafts` (0 model requests).
 
-## Target counts (36 questions)
+## Target counts (12 questions)
 
 | Kind | `kind` | Target | What it tests |
 |---|---|---|---|
-| Single-paper | `single` | 20: 4 per paper, at least 1 per paper with its answer in a **table** (`"table": true`) | retrieval and a cited answer from one paper |
-| Cross-paper | `cross` | 5 | evidence from two or more papers, each needed |
-| Near-miss | `near_miss` | 4 | the right topic but not in the papers; expects not-found |
-| Off-topic | `off_topic` | 3 | nothing to do with the papers; expects not-found |
-| Follow-up | `follow_up` | 4 | a question that only makes sense after earlier turns |
+| Single-paper | `single` | **10: 2 per paper**; a table answer (`"table": true`) is welcome but not required | retrieval from one paper |
+| Near-miss | `near_miss` | **2** | the right topic but not in the papers; expects not-found |
+| Cross-paper | `cross` | optional | evidence from two or more papers, each needed |
+| Off-topic | `off_topic` | optional | nothing to do with the papers; expects not-found |
+| Follow-up | `follow_up` | optional | a question that only makes sense after earlier turns |
+
+Only the retrieval experiments run for now (0 model requests); answer evaluation and the judge are future
+work. With 10 answerable questions, each one is worth 10 points of hit@6, so the README states the set's size.
 
 The papers, by arXiv ID: `1706.03762` Attention, `1810.04805` BERT, `2005.11401` RAG, `2106.09685`
 LoRA, `2307.03172` Lost in the Middle.
@@ -44,7 +47,7 @@ LoRA, `2307.03172` Lost in the Middle.
   models: "How was GPT-4 trained?", "What is the context window of Claude 3?".
 - **Table answers** are where numbers are most often misread (F3), so make them precise: one cell, named
   by its row and column.
-- **Known cases** (`eval/probe_notes.md`), to include with `known_case`:
+- **Known cases** (`eval/probe_notes.md`), optional; mark one with `known_case` if you use it:
   - **F1:** "How does that method reduce the number of trainable parameters?" (a LoRA follow-up)
   - **F2:** "What is LoRA?"
   - **Q2:** "What are the two pre-training tasks of BERT?"

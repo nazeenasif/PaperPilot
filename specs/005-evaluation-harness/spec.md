@@ -2,16 +2,31 @@
 
 **Feature Branch**: `005-evaluation-harness`  
 **Created**: 2026-11-11  
-**Status**: Draft  
+**Status**: Draft — scope reduced 2026-11-13 (see "Scope (2026-11-13)" below)  
 **Input**: User description: "Feature 5: Evaluation harness for PaperPilot (see docs/paperpilot-guide.pdf, Phases 11–12). Goal: measure retrieval and answer quality on a fixed golden set, so every change is judged by numbers, and produce the results table for the README. User stories: 1. As the developer, I maintain a golden set of 30–50 questions over the 5 papers: answerable single-paper questions, cross-paper questions, near-miss and off-topic questions (expected: not-found), and multi-turn follow-ups. Each answerable question records its expected answer and evidence phrase(s) with paper and page, never passage IDs (IDs change when chunking changes). 2. As the developer, I run retrieval evaluation (hit@k, MRR) with zero model requests, for any retrieval configuration. 3. As the developer, I run answer evaluation: each answer is checked for citation validity, correct refusal, and faithfulness by an LLM judge; answers and judge verdicts are cached so re-running the judge or the report costs nothing. 4. As the developer, I trust the judge because it is calibrated against my own hand verdicts (docs/verification reports and eval/probe_notes.md cases F1, F2, F3), with agreement reported, and every judge verdict shows the claim and passage it judged. 5. As the developer, I run experiments one variable at a time and get one row per experiment in a results table (hit@6, MRR, faithfulness, correct refusals, latency, requests), with a written takeaway. Requirements: Experiments to support: baseline; cross-encoder reranking of the top 20 (local, free); hybrid BM25 + vector; title/section prefix before embedding; the scope rule on/off; LLM_REASONING_EFFORT low vs default; a second model (google/gemma-4-31b-it:free). The known cases are fixed test items: F1 (misattribution), F2 (scope extension, 4+ occurrences), F3 (wrong-item number, 3 runs), Q2/Q4 false not-founds, the LoRA/BERT summary and comparison flags. Request budget: every run plans its requests up front, refuses to start without enough remaining, and can resume across days; retrieval-only runs cost 0. The judge should be a different model from the answerer where possible, to avoid self-grading. The judge sees only the claim and its cited passages, and outputs structured verdicts (supported / partly / unsupported, with the reason). Results are stored per experiment with the exact configuration (model, prompt versions, chunking, retrieval settings), so rows are reproducible. Out of scope: new user-facing features, RAGAS integration, fine-tuning. Acceptance criteria (guide Checkpoint 11): A golden set with a baseline row and at least two experiments with written conclusions. Judge agreement with my hand verdicts is reported, with disagreements listed. The README results table is generated from stored results, not typed by hand."
+
+## Scope (2026-11-13)
+
+The researcher reduced this feature's scope. **In scope now**: User Story 1 with a 12-question golden set
+(FR-001), User Story 2, and the parts of User Story 5 that need no model requests: the five free retrieval
+experiments (baseline, reranking with `cross-encoder/ms-marco-MiniLM-L6-v2`, reranking with
+`cross-encoder/ms-marco-TinyBERT-L2-v2`, hybrid BM25 + vector with RRF, and the title/section prefix), one row
+each, and the generated results table and README block (FR-028, FR-029), with every answer column reading
+"not measured". This whole scope makes **0 model requests**.
+
+**Future work** (kept in this spec, not built or run now): answer evaluation (User Story 3; FR-009–FR-016),
+the LLM judge and its calibration (User Story 4; FR-020–FR-022), request-budgeted sessions (User Story 6;
+FR-017–FR-019), the best-configuration rule's hand-off to answer evaluation (FR-024b), and the optional rows:
+reasoning effort, the second model and the scope rule (FR-024a, FR-025–FR-025b). SC-003, SC-005, SC-006,
+SC-007 and SC-010 belong to that future work. The engine seams already built for it (ADR-0010) stay, unused.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A golden set that survives re-chunking (Priority: P1)
 
-The developer keeps a fixed set of 30–50 questions over the 5 papers, of known kinds: answerable
-questions about one paper, questions across papers, near-miss and off-topic questions that should get
-"not found", and multi-turn follow-ups. An answerable question records its expected answer and the
+The developer keeps a fixed set of 12 questions over the 5 papers (reduced 2026-11-13 from 30–50): 2
+answerable questions about each paper and 2 near-miss questions that should get "not found"; other kinds
+(cross-paper, off-topic, follow-ups) are accepted but optional. An answerable question records its expected answer and the
 evidence phrases that prove it, each with its paper and page, and never a passage ID, so the set stays
 valid when chunking changes. A check confirms every evidence phrase really is on its stated page.
 
@@ -24,7 +39,8 @@ question kind and fails for a deliberately wrong page or a phrase that is not in
 **Acceptance Scenarios**:
 
 1. **Given** the golden set, **When** the check runs, **Then** it reports the number of questions per
-   kind and confirms the set has 30–50 questions over all 5 papers, with no model requests.
+   kind and confirms the set meets FR-001 (2 single-paper questions per paper and 2 near-miss), with no
+   model requests.
 2. **Given** an evidence phrase that is not on its stated page, or an unknown paper, **When** the check
    runs, **Then** it names that question and fails.
 3. **Given** a golden item containing a passage ID, **When** the check runs, **Then** it fails.
@@ -182,17 +198,19 @@ scripted run midway and confirm the next one continues without repeating finishe
 
 **Golden set (User Story 1)**
 
-- **FR-001**: The golden set MUST hold 30–50 questions over the 5 papers, with at least 20 answerable
-  single-paper questions (at least 1 per paper whose answer is in a table), 5 cross-paper questions, 4
-  near-miss and 3 off-topic questions (expected not-found) and 4 multi-turn follow-ups (amended 2026-11-11:
-  the researcher's target counts; the researcher writes the questions).
+- **FR-001**: The golden set MUST hold at least 12 questions over the 5 papers: at least 2 answerable
+  single-paper questions per paper (10 in all) and at least 2 near-miss questions (expected not-found).
+  Cross-paper, off-topic and multi-turn follow-up questions MAY be added and are validated, with no minimum.
+  Answers found in a table are counted per paper and not required (amended 2026-11-13, reduced from 30–50
+  questions; amended 2026-11-11: the researcher writes the questions).
 - **FR-002**: Each answerable question MUST record an expected answer and at least one evidence phrase, with
   paper and page; a golden item MUST NOT contain a passage ID.
 - **FR-003**: Each multi-turn item MUST record its earlier turns and a standalone wording of the follow-up.
 - **FR-004**: A check MUST confirm, with no model requests, the composition in FR-001 and that each evidence
   phrase is on its stated page, tolerating PDF ligatures, hyphenation and spacing, and MUST name each failure.
 - **FR-005**: The golden set MUST include the known cases as fixed items: the questions behind F1 and F2, and
-  the Q2 and Q4 false not-founds.
+  the Q2 and Q4 false not-founds. *(Future work since 2026-11-13: F1 and F2 are answer faults, measured only
+  by answer evaluation. The Q2 and Q4 questions MAY be among the 12; they are not required.)*
 
 **Retrieval evaluation (User Story 2)**
 
@@ -203,7 +221,7 @@ scripted run midway and confirm the next one continues without repeating finishe
 - **FR-008**: Retrieval evaluation MUST accept any supported retrieval configuration, and MUST NOT change the
   researcher's library, its passages or saved results.
 
-**Answer evaluation (User Stories 3 and 6)**
+**Answer evaluation (User Stories 3 and 6)** — *future work (2026-11-13)*
 
 - **FR-009**: Answers MUST be produced by PaperPilot's real answer pipeline under the experiment's configuration.
 - **FR-010**: Each answer MUST be scored for citation validity, correct refusal on unanswerable questions and
@@ -222,7 +240,7 @@ scripted run midway and confirm the next one continues without repeating finishe
   passages, the judge model and the judge instruction version; repeating a stored step MUST make no request.
 - **FR-016**: Every verdict MUST be traceable to the claim, passages, verdict and reason.
 
-**Request budget (User Story 6)**
+**Request budget (User Story 6)** — *future work (2026-11-13)*
 
 - **FR-017**: Before any request, a run MUST show the requests planned in total, already done and for this session.
 - **FR-018**: Each session MUST use a configurable slice of the daily quota and MUST keep a reserve for normal
@@ -232,7 +250,7 @@ scripted run midway and confirm the next one continues without repeating finishe
 - **FR-019**: A run stopped by the daily limit, a long wait or the session size MUST resume without repeating
   finished work. All requests MUST count in the shared daily counter, with retries reported separately.
 
-**Judge calibration (User Story 4)**
+**Judge calibration (User Story 4)** — *future work (2026-11-13)*
 
 - **FR-020**: Calibration MUST use stored claims with their passages and a hand verdict, so that it stays valid
   when chunking changes. It MUST include the F1, F2 and F3 cases and the LoRA and BERT–RAG summary and comparison flags.
@@ -241,7 +259,9 @@ scripted run midway and confirm the next one continues without repeating finishe
   MUST report the judge as not calibrated otherwise, because the recorded failure cases alone would reward a
   judge that always says unsupported.
 
-**Experiments and results (User Story 5)**
+**Experiments and results (User Story 5)** — *in scope: FR-023, FR-026–FR-030 and the five retrieval
+experiments of FR-024; future work: the other FR-024 experiments, FR-024a's answer evaluation, FR-024b's hand-off
+and FR-025–FR-025b (2026-11-13)*
 
 - **FR-023**: Each experiment MUST change exactly one setting from the baseline, and MUST be refused otherwise.
 - **FR-024**: These experiments MUST be supported: baseline; cross-encoder reranking of the top 20; hybrid
@@ -286,16 +306,16 @@ scripted run midway and confirm the next one continues without repeating finishe
 
 ### Measurable Outcomes
 
-- **SC-001**: A golden set of 30–50 questions meeting FR-001 passes its check, with every evidence phrase confirmed on its page and 0 model requests.
+- **SC-001**: A golden set of 12 questions meeting FR-001 passes its check, with every evidence phrase confirmed on its page and 0 model requests.
 - **SC-002**: A retrieval evaluation of the whole golden set makes 0 model requests and gives identical numbers on a repeat run.
-- **SC-003**: Repeating an answer evaluation or report from stored results makes 0 model requests and gives identical numbers.
-- **SC-004**: The results table has a baseline row and at least two experiments with written conclusions, each changing exactly one setting.
-- **SC-005**: Judge agreement with at least 20 hand verdicts is reported, for supported and not-supported claims separately, with 100% of disagreements listed.
-- **SC-006**: The judge flags at least the recorded F2 and F3 cases as partly or unsupported; a case it misses appears as a listed disagreement.
-- **SC-007**: With fewer requests remaining after the reserve than a session plans, starting it sends 0 requests; no session spends the reserve; a run stopped midway repeats 0 finished answers or verdicts when resumed.
+- **SC-003** *(future work)*: Repeating an answer evaluation or report from stored results makes 0 model requests and gives identical numbers.
+- **SC-004**: The results table has a baseline row and at least two experiments with written conclusions, each changing exactly one setting (the four retrieval experiments qualify; their answer columns read "not measured").
+- **SC-005** *(future work)*: Judge agreement with at least 20 hand verdicts is reported, for supported and not-supported claims separately, with 100% of disagreements listed.
+- **SC-006** *(future work)*: The judge flags at least the recorded F2 and F3 cases as partly or unsupported; a case it misses appears as a listed disagreement.
+- **SC-007** *(future work)*: With fewer requests remaining after the reserve than a session plans, starting it sends 0 requests; no session spends the reserve; a run stopped midway repeats 0 finished answers or verdicts when resumed.
 - **SC-008**: Every figure in the README results table can be traced to a stored result; regenerating it without new results changes nothing.
 - **SC-009**: After any experiment, the library's passages, saved summaries and comparisons and PaperPilot's defaults are unchanged.
-- **SC-010**: In 100% of scripted tests, a claim that could not be judged is reported as not judged and never counts as supported.
+- **SC-010** *(future work)*: In 100% of scripted tests, a claim that could not be judged is reported as not judged and never counts as supported.
 
 ## Clarifications
 
@@ -306,6 +326,11 @@ scripted run midway and confirm the next one continues without repeating finishe
 - Q: Which experiments come first, given the free tier? → A: Retrieval experiments first; answer evaluation only for the baseline and the best retrieval configuration; reasoning effort and the second model optional, if budget allows. Each session uses a configurable slice, keeping a reserve (default 10) (FR-018, FR-024a, FR-024b).
 - Q: What should the scope-rule experiment run on? → A: The LoRA and BERT summaries and the BERT–RAG comparison, rule on and off, reusing saved rule-on outputs whose stored configuration matches exactly; one run per condition is indicative only (FR-025, FR-025a, FR-025b).
 
+### Session 2026-11-13
+
+- Q: How large is the golden set now? → A: 12 questions, written by the researcher: 2 single-paper questions per paper and 2 near-miss (FR-001, SC-001).
+- Q: Which experiments run? → A: Only the free retrieval experiments: baseline, MiniLM reranker, TinyBERT reranker, hybrid and prefix, with the generated results table. The judge, calibration and answer evaluation are future work (see "Scope (2026-11-13)").
+
 ## Assumptions
 
 - **Saved outputs and "exact" configuration**: saved summaries and comparisons record their model, instruction version and passages, but not reasoning effort or output limit. Reuse compares what is recorded and requires the run to use today's default reasoning effort and output limit; the row states that those two were not recorded.
@@ -314,7 +339,7 @@ scripted run midway and confirm the next one continues without repeating finishe
 - **The scope-rule experiment** is optional. With at least 3 runs per condition on the fixed set it costs about 190 requests, so it may wait for spare budget. The current evidence is in Feature 4's research R3.
 - **Hand verdicts**: the Verdict columns of the verification reports are still empty, and `eval/probe_notes.md` records only failures. Calibration needs the developer to fill in hand verdicts, including supported claims, to reach FR-022.
 - **Golden authorship**: the developer owns the golden set; drafts are reviewed by the developer before they count.
-- **Honest limits**: a self-written set of about 40 questions is small and may favour easy phrasing; the README states this, as the guide asks.
+- **Honest limits**: a self-written set of 12 questions (10 answerable) is very small: one question moves hit@6 by 10 points, and the set may favour easy phrasing. The README states this beside the table, as the guide asks.
 - **Free tier**: about 50 requests a day, shared with normal use and every experiment.
 - **The guide's other experiments** (chunk size, overlap, embedding model, k, no query rewriting) are not required here, though the harness can express them as settings.
 

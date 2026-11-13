@@ -2,6 +2,7 @@
 // Lines starting with // are comments; the loader removes them. Add your questions to "questions".
 // Leave "evidence" empty and "confirmed" false: evidence is drafted for you to confirm (task T017).
 //
+// Targets: 2 "single" questions per paper (10) and 2 "near_miss" (12 in all); other kinds are optional.
 // One example of each kind (copy, change the id and wording, remove the leading //):
 //
 // {"id": "lora-01", "kind": "single", "scope": "library", "papers": ["2106.09685"],

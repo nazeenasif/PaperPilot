@@ -159,7 +159,7 @@ the same validator. Detecting it requires checking what each cited passage says,
 assigned to the evaluation feature's **faithfulness judge**; until then the limitation is
 recorded in `docs/known-limitations.md` and claims are checked by hand in checkpoint 7.
 
-**Scope rule (added 2026-11-05; a hypothesis, not a measured fix).** The section and TL;DR instructions
+**Scope rule (added 2026-11-05; status: unmeasured, enabled because the risk is low).** The section and TL;DR instructions
 now say: "Keep every claim's scope exactly as its source passage states it (models, datasets,
 conditions); never extend a result to models or tasks the passage does not name." It comes from F2
 (`eval/probe_notes.md`), which has 4 recorded occurrences: a result stated for one model or task,
@@ -167,6 +167,17 @@ extended to others while combining sources. Validation cannot see this, because 
 and the numbers appear in the passages. Whether the rule reduces F2 is to be measured in the evaluation
 feature: one regenerated summary shows nothing either way. Comparison cells take the same rule when
 they are built (T016).
+
+Current evidence (2026-11-11; anecdotal, all with the rule on, and no rule-off runs to compare):
+
+- The TL;DR F2 pattern did not recur in the two LoRA runs since the rule was added that had a Results section
+  to draw on (v4, 2026-11-08, and 2026-11-11). A third run (v3, 2026-11-05) had Results cut off, so its TL;DR made
+  no performance claim and shows nothing. F2 does not occur in every run, so its absence is weak evidence.
+- Scope was still lost with the rule on: the 2026-11-11 comparison's "TriviaQA not used" drops "for this model",
+  and v4's Data claim 9 extends GLUE to GPT-2 and GPT-3 175B (`eval/probe_notes.md`).
+
+The measurement is the optional scope-rule experiment of Feature 5: at least 3 runs per condition, with F2-type
+verdicts reported per run. Until it runs, the rule stays enabled and marked unmeasured.
 
 ## R4. Comparison rows as structured JSON
 

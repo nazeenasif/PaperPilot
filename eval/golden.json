@@ -1,0 +1,59 @@
+// PaperPilot's golden set (Feature 5). Read eval/GOLDEN_GUIDE.md before adding questions.
+// Questions drafted by Claude Code, reviewed by Nazeen Asif.
+// Lines starting with // are comments; the loader removes them. Add your questions to "questions".
+// Leave "evidence" empty and "confirmed" false: evidence is drafted for you to confirm (task T017).
+//
+// Targets: 2 "single" questions per paper (10) and 2 "near_miss" (12 in all); other kinds are optional.
+// One example of each kind (copy, change the id and wording, remove the leading //):
+//
+// {"id": "lora-01", "kind": "single", "scope": "library", "papers": ["2106.09685"],
+//  "question": "What rank r does LoRA use for GPT-3?", "expected": "... (the answer in one sentence)",
+//  "table": false, "evidence": [], "confirmed": false, "known_case": "Q4", "note": ""}
+//
+// {"id": "bert-03", "kind": "single", "scope": "library", "papers": ["1810.04805"],
+//  "question": "What MNLI accuracy does BERT-Large reach on the GLUE test set?", "expected": "...",
+//  "table": true, "evidence": [], "confirmed": false}
+//
+// {"id": "cross-01", "kind": "cross", "scope": "library", "papers": ["1810.04805", "2005.11401"],
+//  "question": "Which of BERT and RAG uses Wikipedia, and for what?", "expected": "...",
+//  "table": false, "evidence": [], "confirmed": false}
+//
+// {"id": "near-01", "kind": "near_miss", "scope": "library", "papers": ["2307.03172"],
+//  "question": "What is the context window of Claude 3?", "expected": "not_found",
+//  "table": false, "evidence": [], "confirmed": false}
+//
+// {"id": "off-01", "kind": "off_topic", "scope": "library", "papers": [],
+//  "question": "How do I bake a chocolate cake?", "expected": "not_found",
+//  "table": false, "evidence": [], "confirmed": false}
+//
+// {"id": "follow-01", "kind": "follow_up", "scope": "library", "papers": ["2106.09685"],
+//  "turns": [{"role": "user", "text": "What is LoRA?"},
+//            {"role": "assistant", "text": "A method that trains low-rank update matrices [1]."}],
+//  "question": "How does that method reduce the number of trainable parameters?",
+//  "standalone": "How does LoRA reduce the number of trainable parameters?", "expected": "...",
+//  "table": false, "evidence": [], "confirmed": false, "known_case": "F1"}
+{
+  "version": 1,
+  "note": "Questions drafted by Claude Code, reviewed by Nazeen Asif.",
+  "papers": [
+    "1706.03762",
+    "1810.04805",
+    "2005.11401",
+    "2106.09685",
+    "2307.03172"
+  ],
+  "questions": [
+    {"id": "attention-01", "kind": "single", "scope": "library", "papers": ["1706.03762"], "question": "How many layers are stacked in the Transformer's encoder?", "expected": "Six identical layers (N = 6), each with a self-attention and a feed-forward sub-layer.", "table": false, "evidence": [{"paper": "1706.03762", "page": 3, "phrase": "The encoder is composed of a stack of N = 6 identical layers"}], "confirmed": true, "note": ""},
+    {"id": "attention-02", "kind": "single", "scope": "library", "papers": ["1706.03762"], "question": "What BLEU score does the Transformer get on the WMT 2014 English to German test?", "expected": "28.4 BLEU (the big model), over 2 BLEU above the previous best, ensembles included.", "table": false, "evidence": [{"paper": "1706.03762", "page": 1, "phrase": "Our model achieves 28.4 BLEU on the WMT 2014"}], "confirmed": true, "note": ""},
+    {"id": "bert-01", "kind": "single", "scope": "library", "papers": ["1810.04805"], "question": "What are the two pre-training tasks of BERT?", "expected": "A masked language model (Masked LM) and next sentence prediction (NSP).", "table": false, "known_case": "Q2", "evidence": [{"paper": "1810.04805", "page": 4, "phrase": "Task #1: Masked LM"}, {"paper": "1810.04805", "page": 4, "phrase": "Task #2: Next Sentence Prediction (NSP)"}], "confirmed": true, "note": ""},
+    {"id": "bert-02", "kind": "single", "scope": "library", "papers": ["1810.04805"], "question": "What share of the input tokens does BERT hide during pre-training?", "expected": "15% of the WordPiece tokens in each sequence, chosen at random.", "table": false, "evidence": [{"paper": "1810.04805", "page": 4, "phrase": "we mask 15% of all WordPiece"}], "confirmed": true, "note": ""},
+    {"id": "rag-01", "kind": "single", "scope": "library", "papers": ["2005.11401"], "question": "Where does RAG look up the knowledge it retrieves?", "expected": "A dense vector index of Wikipedia, searched by a pre-trained neural retriever (DPR).", "table": false, "evidence": [{"paper": "2005.11401", "page": 1, "phrase": "the non-parametric memory is a dense vector index of Wikipedia"}], "confirmed": true, "note": ""},
+    {"id": "rag-02", "kind": "single", "scope": "library", "papers": ["2005.11401"], "question": "Which model writes RAG's answers, and how big is it?", "expected": "BART-large, a pre-trained seq2seq transformer with 400M parameters.", "table": false, "evidence": [{"paper": "2005.11401", "page": 3, "phrase": "We use BART-large [32], a pre-trained seq2seq transformer [58] with 400M parameters"}], "confirmed": true, "note": ""},
+    {"id": "lora-01", "kind": "single", "scope": "library", "papers": ["2106.09685"], "question": "What rank r does LoRA use for GPT-3?", "expected": "Under an 18M-parameter budget, r = 8 when one type of attention weight is adapted and r = 4 when two are.", "table": false, "known_case": "Q4", "evidence": [{"paper": "2106.09685", "page": 10, "phrase": "which corresponds to r = 8 if we adapt one type of attention weights or r = 4 if we adapt two types"}], "confirmed": true, "note": ""},
+    {"id": "lora-02", "kind": "single", "scope": "library", "papers": ["2106.09685"], "question": "How much GPU memory does LoRA save when training GPT-3 175B?", "expected": "Training VRAM falls from 1.2TB to 350GB.", "table": false, "evidence": [{"paper": "2106.09685", "page": 5, "phrase": "we reduce the VRAM consumption during training from 1.2TB to 350GB"}], "confirmed": true, "note": ""},
+    {"id": "lost-01", "kind": "single", "scope": "library", "papers": ["2307.03172"], "question": "Where in a long prompt do language models make the best use of information?", "expected": "At the very beginning or the end of the context; performance drops in the middle (a U-shaped curve).", "table": false, "evidence": [{"paper": "2307.03172", "page": 1, "phrase": "models are better at using relevant information that occurs at the very beginning"}], "confirmed": true, "note": ""},
+    {"id": "lost-02", "kind": "single", "scope": "library", "papers": ["2307.03172"], "question": "Which dataset are the multi-document question answering experiments built from?", "expected": "NaturalQuestions-Open: real Google search queries with answers taken from Wikipedia.", "table": false, "evidence": [{"paper": "2307.03172", "page": 3, "phrase": "We instantiate this task with data from NaturalQuestions-Open"}], "confirmed": true, "note": ""},
+    {"id": "near-01", "kind": "near_miss", "scope": "library", "papers": ["2307.03172"], "question": "What is the context window of Claude 3?", "expected": "not_found", "table": false, "evidence": [], "note": "The paper tests Claude-1.3 (8K and 100K), not Claude 3.", "confirmed": true},
+    {"id": "near-02", "kind": "near_miss", "scope": "library", "papers": ["2106.09685"], "question": "What rank does LoRA use when fine-tuning Llama 2?", "expected": "not_found", "table": false, "evidence": [], "note": "The LoRA paper predates Llama 2 and never mentions it.", "confirmed": true}
+  ]
+}

@@ -43,10 +43,10 @@
       "sha256": "867b1c31a3d0babd3b8ae24819ab80e4105dd3f070c47895608df7f9119fd042",
       "questions": 12
     },
-    "commit": "a258ba8b3da5b2c94a163db2468477ff11e8158b",
+    "commit": "a89febb382fbd848aebf563c9c6dcd27c15475ad",
     "judge_model": "google/gemma-4-31b-it:free"
   },
-  "measured_at": "2026-11-13T13:23:28+00:00",
+  "measured_at": "2026-11-13T13:36:32+00:00",
   "retrieval": {
     "hit@1": 0.2,
     "hit@3": 0.4,
@@ -72,7 +72,7 @@
       "gated": 0,
       "of": 2
     },
-    "latency_s": 0.15
+    "latency_s": 0.189
   },
   "answers": null,
   "requests": {

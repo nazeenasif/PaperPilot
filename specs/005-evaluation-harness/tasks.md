@@ -149,10 +149,10 @@ never marks them done.
   - **Gate**: it stays the vector top score.
   - **Configuration**: it records `rrf_k`, `bm25` and the rank-bm25 version.
 - [X] T028 [US2] Implement hybrid search in `evaluation/retrieval.py` so that T027 passes.
-- [ ] T029 [P] [US2] Write failing tests:
+- [X] T029 [P] [US2] Write failing tests:
   - `tests/test_embed_prefix.py`: with `EMBED_PREFIX` on, `library.add_paper` embeds `"{title}. {section}. {text}"` (spy on the embedder) while the stored text, passage IDs and fingerprint equal the unprefixed ones; it is off by default.
   - `tests/evaluation/test_libraries.py`: `build_prefix_library(root)` ingests the papers into `data/eval/libraries/prefix/` under its own `LIBRARY_DIR` with `USAGE_DIR` at the main library, is reused when already built for the same settings, and leaves the main library unchanged.
-- [ ] T030 [US2] Implement the prefix in `paperpilot/library.py` and `evaluation/libraries.py`, and the `prefix` experiment in `evaluation/retrieval.py`, so that T029 passes.
+- [X] T030 [US2] Implement the prefix in `paperpilot/library.py` and `evaluation/libraries.py`, and the `prefix` experiment in `evaluation/retrieval.py`, so that T029 passes.
 - [ ] T031 [US2] Run `python -m evaluation retrieval rerank-minilm-l6 rerank-tinybert hybrid-rrf60 prefix` (0 requests; the first run downloads 91 MB and 18 MB of reranker weights and builds the prefix library). Show the five rows side by side, confirm that the main library's fingerprints are unchanged, and commit `eval/results/*.json`.
 
 ---

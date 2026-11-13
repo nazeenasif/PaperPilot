@@ -197,6 +197,14 @@ def _no_progress(phase: str, percent: int | None) -> None:
     pass
 
 
+def _embedding_texts(passages: list[ingest.Passage], settings: Settings) -> list[str]:
+    """What is embedded for each passage: its text, or "title. section. text" with EMBED_PREFIX on
+    (Feature 5, research R6). The stored text is always the passage text alone."""
+    if settings.embed_prefix:
+        return [f"{p.title}. {p.section}. {p.text}" for p in passages]
+    return [p.text for p in passages]
+
+
 def _embed_with_progress(texts: list[str], report: Progress) -> list[list[float]]:
     """Embed passages, reporting the "embedding" phase from 0 to 100 percent."""
     report("embedding", 0)
@@ -240,7 +248,7 @@ def add_paper(path: str | Path, on_progress: Progress | None = None) -> AddResul
     parsed = time.perf_counter()
 
     # All slow, failure-prone work happens before the writes (research R11).
-    embeddings = _embed_with_progress([p.text for p in passages], report)
+    embeddings = _embed_with_progress(_embedding_texts(passages, settings), report)
     embedded = time.perf_counter()
     try:
         store.upsert_passages(passages, embeddings, paper.source_file, paper.page_count)
@@ -308,7 +316,7 @@ def reprocess_paper(paper_id: str, on_progress: Progress | None = None) -> AddRe
     if not passages:
         raise NoTextError(f"{source_file} has no passages long enough to store")
     parsed = time.perf_counter()
-    embeddings = _embed_with_progress([p.text for p in passages], report)
+    embeddings = _embed_with_progress(_embedding_texts(passages, settings), report)
     embedded = time.perf_counter()
     with store.write_lock:
         store.delete_paper_passages(paper_id)

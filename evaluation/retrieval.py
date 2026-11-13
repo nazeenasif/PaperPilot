@@ -19,7 +19,7 @@ from pathlib import Path
 
 from rank_bm25 import BM25Okapi
 
-from evaluation import experiments
+from evaluation import experiments, libraries
 from evaluation import golden as golden_module
 from evaluation.experiments import Experiment
 from paperpilot import library, store
@@ -159,7 +159,12 @@ def is_retrieval_experiment(experiment: Experiment) -> bool:
 def experiment_library(experiment: Experiment) -> Iterator[None]:
     """The library an experiment searches: the researcher's, unless it changes how passages are
     embedded (the prefix experiment's own library, research R6)."""
-    yield
+    if not experiment.changes.get("embed_prefix"):
+        yield
+        return
+    root = libraries.build_prefix_library()
+    with libraries.using_library(root, embed_prefix=True):
+        yield
 
 
 def load_cross_encoder(name: str, revision: str):

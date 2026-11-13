@@ -121,6 +121,9 @@ def evaluate(golden: golden_module.GoldenSet, retrieve: Retriever, threshold: fl
     paper_ids = golden_papers(golden)
     arxiv_of = {pid: arxiv for arxiv, pid in paper_ids.items()}
     rows, seconds = [], 0.0
+    if golden.questions:  # untimed warm-up: loads the embedding model and any reranker
+        first = golden.questions[0]
+        retrieve(query_text(first), scope_paper_ids(first, paper_ids))
     for q in golden.questions:
         start = time.perf_counter()
         got = retrieve(query_text(q), scope_paper_ids(q, paper_ids))

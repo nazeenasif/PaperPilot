@@ -1,7 +1,9 @@
 """Local embeddings and the persistent passage store (research R9, R10, ADR-0001)."""
 
 import logging
+import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +23,9 @@ COLLECTION = "passages"
 
 _model = None  # SentenceTransformer, loaded on first use
 _collections: dict[Path, chromadb.Collection] = {}  # one per library folder
+# Held by every library write (upsert, delete, replacing a paper's passages); searches don't
+# take it. Reentrant so a caller can hold it across a delete and an upsert (research R3).
+write_lock = threading.RLock()
 
 
 @dataclass(frozen=True)
@@ -49,13 +54,27 @@ def load_model() -> float:
     return seconds
 
 
-def embed_passages(texts: list[str]) -> list[list[float]]:
-    """Embed passage texts as normalised vectors (no instruction prefix)."""
+def embed_passages(
+    texts: list[str], on_progress: Callable[[int, int], None] | None = None
+) -> list[list[float]]:
+    """Embed passage texts as normalised vectors (no instruction prefix).
+
+    `on_progress(done, total)`, if given, is called after each batch (upload progress, FR-017).
+    """
     load_model()
     start = time.perf_counter()
-    vectors = _model.encode(texts, batch_size=BATCH_SIZE, normalize_embeddings=True, show_progress_bar=False)
+    if on_progress is None:
+        vectors = _model.encode(texts, batch_size=BATCH_SIZE, normalize_embeddings=True, show_progress_bar=False)
+        result = vectors.tolist()
+    else:
+        result = []
+        for first in range(0, len(texts), BATCH_SIZE):
+            batch = texts[first : first + BATCH_SIZE]
+            vectors = _model.encode(batch, batch_size=BATCH_SIZE, normalize_embeddings=True, show_progress_bar=False)
+            result.extend(vectors.tolist())
+            on_progress(first + len(batch), len(texts))
     logger.info("Embedded %d passages in %.2fs", len(texts), time.perf_counter() - start)
-    return vectors.tolist()
+    return result
 
 
 def embed_query(text: str) -> list[float]:
@@ -109,6 +128,12 @@ def upsert_passages(
 ) -> None:
     """Write a paper's passages and embeddings in one operation."""
     start = time.perf_counter()
+    with write_lock:
+        _upsert(passages, embeddings, source_file, page_count)
+    logger.info("Stored %d passages in %.2fs", len(passages), time.perf_counter() - start)
+
+
+def _upsert(passages: list[Passage], embeddings: list[list[float]], source_file: str, page_count: int) -> None:
     get_collection().upsert(
         ids=[p.passage_id for p in passages],
         embeddings=embeddings,
@@ -128,16 +153,33 @@ def upsert_passages(
             for p in passages
         ],
     )
-    logger.info("Stored %d passages in %.2fs", len(passages), time.perf_counter() - start)
 
 
 def delete_paper_passages(paper_id: str) -> int:
     """Delete every passage of a paper; return how many were removed."""
-    collection = get_collection()
-    ids = collection.get(where={"paper_id": paper_id})["ids"]
-    if ids:
-        collection.delete(ids=ids)
+    with write_lock:
+        collection = get_collection()
+        ids = collection.get(where={"paper_id": paper_id})["ids"]
+        if ids:
+            collection.delete(ids=ids)
     return len(ids)
+
+
+def paper_passages(paper_id: str) -> list[tuple[str, str]]:
+    """Return (passage_id, text) for every stored passage of a paper, in reading order."""
+    result = get_collection().get(where={"paper_id": paper_id}, include=["documents", "metadatas"])
+    rows = sorted(
+        zip(result["ids"], result["documents"], result["metadatas"]), key=lambda row: row[2]["position"]
+    )
+    return [(passage_id, text) for passage_id, text, _ in rows]
+
+
+def get_passage(passage_id: str) -> tuple[str, dict] | None:
+    """Return (text, metadata) of one stored passage, or None if it is not stored."""
+    result = get_collection().get(ids=[passage_id], include=["documents", "metadatas"])
+    if not result["ids"]:
+        return None
+    return result["documents"][0], result["metadatas"][0]
 
 
 def query(embedding: list[float], k: int, paper_ids: list[str] | None = None) -> list[Hit]:
@@ -165,3 +207,9 @@ def query(embedding: list[float], k: int, paper_ids: list[str] | None = None) ->
 def all_metadata() -> list[dict]:
     """Return the metadata of every stored passage."""
     return get_collection().get(include=["metadatas"])["metadatas"]
+
+
+def all_passages() -> list[tuple[str, str, dict]]:
+    """Return (passage_id, text, metadata) for every stored passage."""
+    result = get_collection().get(include=["documents", "metadatas"])
+    return list(zip(result["ids"], result["documents"], result["metadatas"]))

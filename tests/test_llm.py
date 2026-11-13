@@ -47,8 +47,28 @@ def test_rate_limit_reset_header_in_epoch_ms():
     assert llm.retry_wait(error, attempt=1, now=NOW) == pytest.approx(10.0)
 
 
-def test_reset_in_the_past_waits_zero():
-    assert llm.retry_wait(f.rate_limited(reset_ms=int((NOW - 5) * 1000)), attempt=1, now=NOW) == 0.0
+def test_reset_in_the_past_is_ignored_and_backoff_applies():
+    # FR-023b: only a reset in the future (within 48 h) is trusted.
+    assert llm.retry_wait(f.rate_limited(reset_ms=int((NOW - 5) * 1000)), attempt=1, now=NOW) == 2.0
+
+
+def test_reset_beyond_48_hours_is_ignored():
+    assert llm.retry_wait(f.rate_limited(reset_ms=int((NOW + 49 * 3600) * 1000)), attempt=1, now=NOW) == 2.0
+
+
+def test_reset_given_in_seconds_is_ignored():
+    # Read as milliseconds, a seconds value lands in 1970: ignored, never a huge or zero wait.
+    assert llm.retry_wait(f.rate_limited(reset_ms=int(NOW + 30)), attempt=1, now=NOW) == 2.0
+
+
+def test_reset_within_48_hours_is_used():
+    assert llm.retry_wait(f.rate_limited(reset_ms=int((NOW + 30) * 1000)), attempt=1, now=NOW) == pytest.approx(30.0)
+
+
+def test_requested_wait_is_not_capped():
+    assert llm.requested_wait(f.rate_limited(retry_after="120"), now=NOW) == 120.0
+    assert llm.requested_wait(f.rate_limited(reset_ms=int((NOW + 5 * 3600) * 1000)), now=NOW) == pytest.approx(18000.0)
+    assert llm.requested_wait(f.rate_limited(), now=NOW) is None
 
 
 def test_wait_is_capped_at_60_seconds():
@@ -330,3 +350,145 @@ def test_persistent_timeouts_give_readable_error_naming_the_limit(fake):
     assert "LLM_TIMEOUT_SECONDS" in message
     assert "\n" not in message
     assert len(client.calls) == 4
+
+
+# --- on_retry: retry waits reported to the caller (web app countdown, FR-023) ---
+
+
+def test_on_retry_is_called_before_each_retry_wait(fake):
+    client = fake(f.rate_limited(retry_after="3"), f.ok("Answer [1]."))
+    events: list = client.sleeps  # the fake sleep appends to the same list, so order is visible
+    llm.generate("s", "p", on_retry=events.append)
+    notice, slept = events
+    assert notice == llm.RetryNotice(attempt=1, max_attempts=4, wait_seconds=3.0, reason="rate_limited")
+    assert slept == 3.0
+
+
+@pytest.mark.parametrize(
+    "error, reason",
+    [
+        (f.timeout(), "timeout"),
+        (f.status_error(502, "bad gateway"), "server_error"),
+        (f.error_body(503, "upstream overloaded"), "provider_error"),
+    ],
+)
+def test_on_retry_reports_the_reason(fake, error, reason):
+    fake(error, f.ok("Answer [1]."))
+    notices: list = []
+    llm.generate("s", "p", on_retry=notices.append)
+    assert [n.reason for n in notices] == [reason]
+    assert notices[0].attempt == 1 and notices[0].max_attempts == llm.MAX_ATTEMPTS
+
+
+def test_on_retry_is_not_called_on_first_try_success(fake):
+    fake(f.ok("Answer [1]."))
+    notices: list = []
+    llm.generate("s", "p", on_retry=notices.append)
+    assert notices == []
+
+
+def test_on_retry_is_not_called_for_the_final_failed_attempt(fake):
+    fake(*[f.rate_limited(retry_after="1")] * llm.MAX_ATTEMPTS)
+    notices: list = []
+    with pytest.raises(LLMError):
+        llm.generate("s", "p", on_retry=notices.append)
+    assert [n.attempt for n in notices] == [1, 2, 3]
+
+
+# --- long requested waits stop at once (FR-023a, ADR-0007) ---
+
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from paperpilot.errors import RateLimitedError  # noqa: E402
+
+CLOCK = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    monkeypatch.setattr(llm, "_utcnow", lambda: CLOCK)
+    monkeypatch.setattr(llm.time, "time", lambda: CLOCK.timestamp())
+    return CLOCK
+
+
+def test_a_wait_longer_than_the_cap_stops_after_one_request(fake, clock):
+    client = fake(f.rate_limited(retry_after="120"), f.ok("never sent [1]."))
+    with pytest.raises(RateLimitedError) as raised:
+        llm.generate("s", "p")
+    assert len(client.calls) == 1 and llm.request_counts().total == 1
+    assert client.sleeps == []
+    assert raised.value.until == CLOCK + timedelta(seconds=120)
+    assert str(raised.value).startswith("rate limited until ")
+    assert raised.value.reason == "rate_limited"
+
+
+def test_a_wait_of_exactly_the_cap_is_retried(fake, clock):
+    client = fake(f.rate_limited(retry_after="60"), f.ok("Answer [1]."))
+    assert llm.generate("s", "p").text == "Answer [1]."
+    assert client.sleeps == [60.0]
+
+
+def daily_429(reset_seconds: float, limit: str) -> object:
+    headers = {
+        "X-RateLimit-Limit": limit,
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": str(int((CLOCK.timestamp() + reset_seconds) * 1000)),
+    }
+    return f.status_error(429, "Rate limit exceeded: free-models-per-day", headers=headers)
+
+
+def test_a_daily_limit_429_is_marked_daily(fake, clock):
+    fake(daily_429(5 * 3600, "50"))
+    with pytest.raises(RateLimitedError) as raised:
+        llm.generate("s", "p")
+    assert raised.value.daily is True
+    assert raised.value.until == CLOCK + timedelta(hours=5)
+    assert llm.usage().used == llm.usage().limit  # the provider says the day is used up
+
+
+def test_a_long_per_minute_wait_is_not_daily_unless_the_provider_says_so(fake, clock, monkeypatch):
+    key_info = {"free_model_daily_requests": {"used": 30, "limit": 50, "remaining": 20}}
+    monkeypatch.setattr(llm, "_fetch_key_info", lambda settings: key_info)
+    fake(f.status_error(429, "slow down", headers={"X-RateLimit-Limit": "20", "Retry-After": "300"}))
+    with pytest.raises(RateLimitedError) as raised:
+        llm.generate("s", "p")
+    assert raised.value.daily is False
+
+    key_info["free_model_daily_requests"] = {"used": 50, "limit": 50, "remaining": 0}
+    fake(f.status_error(429, "slow down", headers={"X-RateLimit-Limit": "20", "Retry-After": "300"}))
+    with pytest.raises(RateLimitedError) as raised:
+        llm.generate("s", "p")
+    assert raised.value.daily is True
+
+
+def test_the_retry_warning_shows_the_raw_reset_header(fake, clock, caplog):
+    raw = str(int((CLOCK.timestamp() + 5) * 1000))
+    fake(f.rate_limited(reset_ms=int(raw)), f.ok("Answer [1]."))
+    with caplog.at_level("WARNING", logger="paperpilot.llm"):
+        llm.generate("s", "p")
+    assert any(f"X-RateLimit-Reset={raw}" in r.getMessage() for r in caplog.records)
+
+
+# --- every terminal LLMError says why ---
+
+
+@pytest.mark.parametrize(
+    "responses, reason",
+    [
+        ([f.status_error(401, "bad key")], "bad_key"),
+        ([f.status_error(403, "forbidden")], "bad_key"),
+        ([f.status_error(402, "no credits")], "out_of_credits"),
+        ([f.status_error(404, "no such model")], "unknown_model"),
+        ([f.status_error(400, "bad request")], "bad_request"),
+        ([f.rate_limited(retry_after="1")] * 4, "busy"),
+        ([f.status_error(503, "down")] * 4, "busy"),
+        ([f.timeout()] * 4, "timeout"),
+        ([f.length()], "cut_off"),
+        ([f.ok("   ")], "empty"),
+    ],
+)
+def test_terminal_errors_carry_a_reason(fake, clock, responses, reason):
+    fake(*responses)
+    with pytest.raises(LLMError) as raised:
+        llm.generate("s", "p")
+    assert raised.value.reason == reason

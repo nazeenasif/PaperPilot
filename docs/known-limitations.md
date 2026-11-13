@@ -126,3 +126,27 @@ or OCR. These are the cases the rules do not handle, as found on the five test p
 - **The uncited-sentence warning can be noisy.** Sentences are split with a simple rule, so
   abbreviations such as "et al." or "e.g." can split a sentence in two and report its first half
   as uncited. The warning never rejects an answer.
+
+## Web app
+
+- **Localhost only, with no sign-in.** The API and the frontend listen on 127.0.0.1 only and
+  accept requests from `http://127.0.0.1:3000` and `http://localhost:3000`. There is no
+  network access from other devices and no user accounts yet.
+- **Upload jobs live in memory.** Restarting the API forgets queued and running jobs and their
+  rows. The library itself is unaffected: a paper is stored only when its job finishes, so an
+  interrupted job leaves nothing behind. Drop the file again to retry.
+- **One upload is processed at a time.** Files wait in a queue and are parsed and embedded one
+  after another. Questions keep working meanwhile.
+- **Highlights depend on the chunk settings.** Highlight layouts match the passages made with
+  the current `CHUNK_WORDS`, `CHUNK_OVERLAP` and `MIN_CHUNK_WORDS`. A PDF attached to a paper
+  stored with other settings gets no exact highlights until it is re-processed, and
+  re-processing gives the paper new passage ids, so citations in earlier answers to that paper
+  show "This passage is no longer in your library".
+- **The usage count covers this key's free requests on OpenRouter only.** The figure comes from
+  OpenRouter's `free_model_daily_requests` for the configured key. With another provider it is
+  PaperPilot's own count, which misses requests made with the same key outside PaperPilot.
+- **The units of `X-RateLimit-Reset` are not confirmed yet.** It is read as epoch
+  milliseconds and trusted only within 48 hours, so a different unit falls back to normal
+  retries. Its raw value is logged with every retried 429, but no real 429 has been seen yet.
+- **The source viewer shows one page at a time.** Use the page buttons or "Open full PDF" to
+  read around a passage; a passage that continues onto the next page says so.

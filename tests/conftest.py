@@ -140,12 +140,27 @@ def fake_embedder(monkeypatch):
     """Replace the embedding model with `fake_vector` (no download, no torch)."""
     from paperpilot import store
 
+    def embed_passages(texts, on_progress=None):
+        vectors = [fake_vector(t) for t in texts]
+        if on_progress is not None and texts:
+            on_progress(len(texts), len(texts))
+        return vectors
+
     monkeypatch.setattr(store, "load_model", lambda: 0.0)
-    monkeypatch.setattr(store, "embed_passages", lambda texts: [fake_vector(t) for t in texts])
+    monkeypatch.setattr(store, "embed_passages", embed_passages)
     monkeypatch.setattr(store, "embed_query", fake_vector)
 
 
 TEST_API_KEY = "sk-test-key-123"
+
+
+@pytest.fixture(autouse=True)
+def isolated_library_dir(tmp_path_factory, monkeypatch):
+    """Every test gets its own LIBRARY_DIR, so nothing (e.g. usage.sqlite3) touches data/library.
+
+    library_env and other fixtures set their own folder on top of this.
+    """
+    monkeypatch.setenv("LIBRARY_DIR", str(tmp_path_factory.mktemp("library")))
 
 
 @pytest.fixture(autouse=True)
@@ -163,6 +178,12 @@ def no_real_llm_client(monkeypatch):
         return
     monkeypatch.setattr(llm, "_make_client", blocked)
 
+    def no_key_endpoint(*args, **kwargs):
+        raise AssertionError("the provider's key endpoint was called in a unit test")
+
+    # Usage refreshes read OpenRouter's key endpoint; tests that need it stub it (ADR-0007).
+    monkeypatch.setattr(llm, "_fetch_key_info", no_key_endpoint, raising=False)
+
 
 @pytest.fixture
 def llm_env(monkeypatch):
@@ -179,7 +200,11 @@ def llm_env(monkeypatch):
 
 
 class ScriptedLLM:
-    """Stands in for llm.generate: returns queued replies (str or LLMReply) or raises queued errors."""
+    """Stands in for llm.generate: returns queued replies (str or LLMReply) or raises queued errors.
+
+    A queued object with `wait_seconds` (an llm.RetryNotice) is passed to the caller's `on_retry`
+    instead, simulating a retry wait before the next queued reply.
+    """
 
     def __init__(self) -> None:
         self.queue: list = []
@@ -189,13 +214,19 @@ class ScriptedLLM:
         """Queue replies: a str becomes an LLMReply with 100 input and 40 output tokens."""
         self.queue.extend(items)
 
-    def __call__(self, system: str, prompt: str):
+    def __call__(self, system: str, prompt: str, on_retry=None):
         from paperpilot.llm import LLMReply
 
         self.calls.append((system, prompt))
         if not self.queue:
             raise AssertionError("no scripted LLM reply left")
         item = self.queue.pop(0)
+        while hasattr(item, "wait_seconds"):
+            if on_retry is not None:
+                on_retry(item)
+            if not self.queue:
+                raise AssertionError("no scripted LLM reply left after a retry notice")
+            item = self.queue.pop(0)
         if isinstance(item, BaseException):
             raise item
         if isinstance(item, str):

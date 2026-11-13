@@ -2,7 +2,7 @@
 
 > **Scope**: Document decision clusters, not individual technology choices. Group related decisions that work together (e.g., "Frontend Stack" not separate ADRs for framework, styling, deployment).
 
-- **Status:** Accepted
+- **Status:** Accepted; retry policy amended by ADR-0007 (2026-10-24)
 - **Date:** 2026-10-24
 - **Feature:** 002-grounded-qa-citations
 - **Context:** Feature 2 is the first to call a language model. The constitution requires a
@@ -36,6 +36,10 @@
   timeout, connection error, error in a 200 response with its code, or the status code) and
   the wait, never the key, prompt or provider message. First attempts and retries are counted
   separately (`request_counts()`) so checkpoints can budget them differently.
+  *Amended by ADR-0007*: a hinted wait longer than 60 s is no longer capped and retried. The
+  call stops at once with `RateLimitedError`. `X-RateLimit-Reset` is trusted only within 48
+  hours. Requests are blocked once the daily limit is reached, and every attempt is counted in a
+  shared daily counter.
 - **Cut-off output**: `finish_reason == "length"` or empty content raises `LLMError` with a
   hint (lower `LLM_REASONING_EFFORT` or change model); it is never returned as an answer and
   never retried.
@@ -87,6 +91,7 @@
 
 - Feature Spec: specs/002-grounded-qa-citations/spec.md (FR-013, FR-014, FR-014a, FR-015)
 - Implementation Plan: specs/002-grounded-qa-citations/plan.md
-- Related ADRs: ADR-0001 (Local Retrieval Stack), ADR-0004 (Grounding and Citation Validation)
+- Related ADRs: ADR-0001 (Local Retrieval Stack), ADR-0004 (Grounding and Citation Validation),
+  ADR-0007 (LLM Request Accounting and Long Waits — amends the retry policy)
 - Evaluator Evidence: specs/002-grounded-qa-citations/research.md R1–R4, R12;
   history/prompts/002-grounded-qa-citations/5-switch-to-openai-compatible-provider.plan.prompt.md

@@ -13,7 +13,7 @@ from typing import Sequence
 import pymupdf
 
 from paperpilot.config import Settings
-from paperpilot.errors import NoTextError, PdfReadError
+from paperpilot.errors import NoTextError, PasswordProtectedError, PdfReadError
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +22,35 @@ WIDE_FRACTION = 0.6
 
 
 @dataclass(frozen=True)
+class Word:
+    """One raw PDF word and its box in PDF points (origin top-left); line is block-relative."""
+
+    text: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+    line: int
+
+
+@dataclass(frozen=True)
+class Region:
+    """A rectangle to highlight on a 1-based page, in PDF points (origin top-left)."""
+
+    page: int
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+
+@dataclass(frozen=True)
 class Block:
-    """A paragraph-like piece of text and the page it starts on (1-based)."""
+    """A paragraph-like piece of text, the page it is on (1-based) and its raw word boxes."""
 
     text: str
     page: int
+    words: tuple[Word, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -46,6 +70,8 @@ class ParsedPaper:
     source_file: str
     page_count: int
     sections: list[Section]
+    page_sizes: tuple[tuple[float, float], ...] = ()  # (width, height) in points, per page
+    arxiv_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +87,9 @@ class Passage:
     word_count: int
     text: str
     kind: str = "text"  # "text" or "table"
+    # Where the passage's words are on the page (not stored in ChromaDB; research R4).
+    regions: tuple[Region, ...] = ()
+    exact_regions: bool = False  # True when every word was located (no line-box fallback)
 
 
 @dataclass(frozen=True)
@@ -134,6 +163,26 @@ _WHITESPACE = re.compile(r"\s+")
 def clean(text: str) -> str:
     """Join words hyphenated across line breaks and normalise whitespace."""
     return _WHITESPACE.sub(" ", _HYPHEN_BREAK.sub("", text)).strip()
+
+
+def align_words(cleaned: list[str], raw: list[str]) -> list[list[int]] | None:
+    """Map each cleaned word to the raw PDF word(s) it came from; None if they don't match.
+
+    clean() only rejoins words hyphenated across line breaks ("repre-" + "sentation"), so a
+    cleaned word is either one raw word or a raw word ending in "-" joined with the next one.
+    """
+    mapping: list[list[int]] = []
+    j = 0
+    for word in cleaned:
+        if j < len(raw) and raw[j] == word:
+            mapping.append([j])
+            j += 1
+        elif j + 1 < len(raw) and raw[j].endswith("-") and raw[j][:-1] + raw[j + 1] == word:
+            mapping.append([j, j + 1])
+            j += 2
+        else:
+            return None
+    return mapping if j == len(raw) else None
 
 
 def paper_id_for(data: bytes) -> str:
@@ -236,7 +285,7 @@ def build_sections(blocks: list[Block]) -> list[Section]:
         ):
             heading = None
         if heading is None:
-            body = clean(block.text)
+            body, words = clean(block.text), block.words
         else:
             if heading.kind == "stop":
                 break
@@ -245,9 +294,10 @@ def build_sections(blocks: list[Block]) -> list[Section]:
             name, current = heading.name, []
             if heading.number is not None:
                 last_number = heading.number
-            body = clean(rest)
+            # The heading line(s) are raw words too: drop them so the body's words stay aligned.
+            body, words = clean(rest), block.words[len(first_line.split()) :]
         if len(body) >= MIN_BLOCK_CHARS:
-            current.append(Block(body, block.page))
+            current.append(Block(body, block.page, words))
     if current:
         sections.append(Section(name, current))
     return sections
@@ -332,6 +382,27 @@ def order_blocks(blocks: Sequence[tuple], page_width: float) -> list[tuple]:
     return ordered
 
 
+# "arXiv:2106.09685v2 [cs.CL] ..." stamps on page 1; the version is not part of the identifier.
+_ARXIV = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5})(?:v\d+)?")
+
+
+def find_arxiv_id(text: str) -> str | None:
+    """The arXiv identifier of an "arXiv:NNNN.NNNNN[vN]" stamp in the text, without the version."""
+    match = _ARXIV.search(text)
+    return match.group(1) if match else None
+
+
+def _words_by_block(page: pymupdf.Page) -> dict[int, tuple[Word, ...]]:
+    """A page's words grouped by PyMuPDF block number, in reading order within each block."""
+    grouped: dict[int, list[tuple]] = {}
+    for w in page.get_text("words"):  # (x0, y0, x1, y1, text, block_no, line_no, word_no)
+        grouped.setdefault(w[5], []).append(w)
+    return {
+        block_no: tuple(Word(w[4], w[0], w[1], w[2], w[3], w[6]) for w in sorted(ws, key=lambda w: (w[6], w[7])))
+        for block_no, ws in grouped.items()
+    }
+
+
 def parse_pdf(path: str | Path) -> ParsedPaper:
     """Read a PDF into a ParsedPaper with ordered, cleaned sections (References excluded).
 
@@ -351,14 +422,17 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
 
     with doc:
         if doc.needs_pass:
-            raise PdfReadError(f"{path.name} is password-protected")
+            raise PasswordProtectedError(f"{path.name} is password-protected")
         blocks: list[Block] = []
         page1_spans = page_spans(doc[0]) if doc.page_count else []
+        arxiv_id = find_arxiv_id(doc[0].get_text()) if doc.page_count else None
+        page_sizes = tuple((round(page.rect.width, 2), round(page.rect.height, 2)) for page in doc)
         for number, page in enumerate(doc, start=1):
             # Text blocks only (type 0); image blocks are skipped.
             raw = [b for b in page.get_text("blocks", sort=True) if b[6] == 0 and b[4].strip()]
             ordered = order_blocks(raw, page.rect.width)
-            blocks += [Block(b[4], number) for b in ordered]
+            words = _words_by_block(page)
+            blocks += [Block(b[4], number, words.get(b[5], ())) for b in ordered]
         meta_title = (doc.metadata or {}).get("title")
         page_count = doc.page_count
 
@@ -377,7 +451,9 @@ def parse_pdf(path: str | Path) -> ParsedPaper:
         page_count,
         len(sections),
     )
-    return ParsedPaper(paper_id_for(data), title, path.name, page_count, sections)
+    return ParsedPaper(
+        paper_id_for(data), title, path.name, page_count, sections, page_sizes, arxiv_id
+    )
 
 
 # A block is table-like if it has at least this many tokens and more than this fraction of
@@ -437,52 +513,152 @@ def chunk_sections(sections: list[Section], paper_id: str, title: str, settings:
     are split. Prose with fewer than `min_chunk_words` new words is dropped at the end of a
     section or before a table. Table-like blocks (with their captions) become their own
     "table" passages, split evenly if longer than the budget; overlap never crosses them.
-    Each passage records the page of its first new (non-overlap) word.
+    Each passage records the page of its first new (non-overlap) word, and the regions of
+    every word it contains, overlap included (research R4, ADR-0006).
     """
     budget, overlap = settings.chunk_words, settings.chunk_overlap
     passages: list[Passage] = []
+    locate = _WordLocator()
 
-    def emit(words: list[str], page: int, section: str, kind: str = "text") -> list[str]:
-        """Store a passage and return the overlap words that start the next one."""
+    def emit(
+        words: list[str], sources: list[tuple[Block, int]], page: int, section: str, kind: str = "text"
+    ) -> tuple[list[str], list[tuple[Block, int]]]:
+        """Store a passage and return the overlap words (and their sources) that start the next one."""
         n = len(passages)
+        regions, exact = locate.regions(sources)
         passages.append(
-            Passage(f"{paper_id}-{n}", paper_id, title, section, page, n, len(words), " ".join(words), kind)
+            Passage(
+                f"{paper_id}-{n}", paper_id, title, section, page, n, len(words), " ".join(words), kind, regions, exact
+            )
         )
-        return words[len(words) - overlap :] if overlap else []
+        if not overlap:
+            return [], []
+        return words[len(words) - overlap :], sources[len(sources) - overlap :]
 
     for section in sections:
+        # Each word in `current` has a source (block, index of the word in the block's text).
         current: list[str] = []
+        current_src: list[tuple[Block, int]] = []
         new_words, first_page = 0, 0
         for kind, blocks in _units(section.blocks):
             if kind == "table":
                 if new_words >= settings.min_chunk_words:
-                    emit(current, first_page, section.name)
-                current, new_words = [], 0
-                table_words = [w for b in blocks for w in b.text.split()]
+                    emit(current, current_src, first_page, section.name)
+                current, current_src, new_words = [], [], 0
+                table_words: list[str] = []
+                table_src: list[tuple[Block, int]] = []
+                for b in blocks:
+                    split = b.text.split()
+                    table_words += split
+                    table_src += [(b, k) for k in range(len(split))]
                 pieces = math.ceil(len(table_words) / budget)
                 size = math.ceil(len(table_words) / pieces)
                 for start in range(0, len(table_words), size):
-                    emit(table_words[start : start + size], blocks[0].page, section.name, "table")
+                    emit(table_words[start : start + size], table_src[start : start + size], blocks[0].page,
+                         section.name, "table")
                 continue
             block = blocks[0]
             pending = block.text.split()
+            pending_src = [(block, k) for k in range(len(pending))]
             while pending:
                 if len(current) + len(pending) <= budget or (new_words == 0 and len(pending) <= budget):
                     # Fits, or a paragraph within the budget that is never split.
                     if new_words == 0:
                         first_page = block.page
                     current += pending
+                    current_src += pending_src
                     new_words += len(pending)
-                    pending = []
+                    pending, pending_src = [], []
                 elif new_words > 0:
-                    current = emit(current, first_page, section.name)
+                    current, current_src = emit(current, current_src, first_page, section.name)
                     new_words = 0
                 else:
                     # Oversized paragraph: fill this passage and carry the rest.
                     take = budget - len(current)
                     current += pending[:take]
-                    pending = pending[take:]
-                    current = emit(current, block.page, section.name)
+                    current_src += pending_src[:take]
+                    pending, pending_src = pending[take:], pending_src[take:]
+                    current, current_src = emit(current, current_src, block.page, section.name)
         if new_words >= settings.min_chunk_words:
-            emit(current, first_page, section.name)
+            emit(current, current_src, first_page, section.name)
     return passages
+
+
+class _WordLocator:
+    """Turns (block, word index) sources into highlight regions, one per block line.
+
+    Each block's cleaned words are aligned to its raw PDF words once. If a block cannot be
+    aligned, all of its lines are used instead and the passage is marked inexact.
+    """
+
+    def __init__(self) -> None:
+        self._alignments: dict[int, tuple[Block, list[list[int]] | None]] = {}
+
+    def _alignment(self, block: Block) -> list[list[int]] | None:
+        cached = self._alignments.get(id(block))
+        if cached is None or cached[0] is not block:
+            cached = (block, align_words(block.text.split(), [w.text for w in block.words]))
+            self._alignments[id(block)] = cached
+        return cached[1]
+
+    def regions(self, sources: list[tuple[Block, int]]) -> tuple[tuple[Region, ...], bool]:
+        """Regions covering the source words, in reading order, and whether all were exact."""
+        boxes: dict[tuple[int, int], list[float]] = {}
+        pages: dict[tuple[int, int], int] = {}
+        whole_blocks: set[int] = set()
+        exact = bool(sources)
+
+        def add(block: Block, word: Word) -> None:
+            key = (id(block), word.line)
+            box = boxes.get(key)
+            if box is None:
+                boxes[key] = [word.x0, word.y0, word.x1, word.y1]
+                pages[key] = block.page
+            else:
+                box[0], box[1] = min(box[0], word.x0), min(box[1], word.y0)
+                box[2], box[3] = max(box[2], word.x1), max(box[3], word.y1)
+
+        for block, index in sources:
+            if not block.words:
+                exact = False
+                continue
+            mapping = self._alignment(block)
+            if mapping is None:
+                exact = False
+                if id(block) not in whole_blocks:
+                    whole_blocks.add(id(block))
+                    for word in block.words:
+                        add(block, word)
+                continue
+            for raw_index in mapping[index]:
+                add(block, block.words[raw_index])
+        regions = tuple(Region(pages[key], *box) for key, box in boxes.items())
+        return regions, exact and bool(regions)
+
+
+def build_layout(paper: ParsedPaper, passages: list[Passage], settings: Settings) -> dict:
+    """The layout-file document for a paper: page sizes and each passage's regions (data-model.md)."""
+
+    def point(value: float) -> float:
+        return round(float(value), 2)
+
+    return {
+        "version": 1,
+        "paper_id": paper.paper_id,
+        "chunking": {
+            "words": settings.chunk_words,
+            "overlap": settings.chunk_overlap,
+            "min_words": settings.min_chunk_words,
+        },
+        "pages": [
+            {"number": number, "width": point(width), "height": point(height)}
+            for number, (width, height) in enumerate(paper.page_sizes, start=1)
+        ],
+        "passages": {
+            p.passage_id: [
+                {"page": r.page, "x0": point(r.x0), "y0": point(r.y0), "x1": point(r.x1), "y1": point(r.y1)}
+                for r in p.regions
+            ]
+            for p in passages
+        },
+    }

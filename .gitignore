@@ -11,3 +11,13 @@ __pycache__/
 *.pdf
 papers/
 data/
+
+# Frontend (Feature 3)
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+frontend/public/pdf.worker.min.mjs
+frontend/.env.local

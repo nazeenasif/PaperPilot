@@ -23,6 +23,8 @@ _ENV_NAMES = {
     "relevance_threshold": "RELEVANCE_THRESHOLD",
     "llm_reasoning_effort": "LLM_REASONING_EFFORT",
     "llm_timeout_seconds": "LLM_TIMEOUT_SECONDS",
+    "daily_request_limit": "DAILY_REQUEST_LIMIT",
+    "frontend_origins": "FRONTEND_ORIGINS",
 }
 # Settings whose values must never be printed.
 _SECRET_FIELDS = {"llm_api_key"}
@@ -45,6 +47,9 @@ class Settings:
     relevance_threshold: float = 0.58  # calibrated for bge-small on the test library (research R8)
     llm_reasoning_effort: str = ""  # empty: the model's default
     llm_timeout_seconds: int = 60  # per model request (research R13)
+    daily_request_limit: int = 50  # free requests per UTC day; the provider's figure wins when known
+    # Browser origins the web API accepts (CORS and the Origin guard, research R11).
+    frontend_origins: tuple[str, ...] = ("http://127.0.0.1:3000", "http://localhost:3000")
 
     def describe(self) -> str:
         """Return one 'ENV_NAME = value' line per setting; secrets show only whether they are set."""
@@ -53,6 +58,8 @@ class Settings:
             value = getattr(self, f.name)
             if f.name in _SECRET_FIELDS:
                 value = "set (hidden)" if value else "not set"
+            elif isinstance(value, tuple):
+                value = ",".join(value)
             lines.append(f"{_ENV_NAMES[f.name]} = {value}")
         return "\n".join(lines)
 
@@ -88,6 +95,17 @@ def _read_fraction(name: str, default: float) -> float:
 def _read_text(name: str, default: str) -> str:
     """Read a text env var; empty or missing gives the default."""
     return (os.getenv(name) or "").strip() or default
+
+
+def _read_list(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    """Read a comma-separated env var; blank entries are ignored, at least one is required."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    items = tuple(item.strip() for item in raw.split(",") if item.strip())
+    if not items:
+        raise SettingsError(f"{name}={raw} lists no values; give at least one or remove the variable")
+    return items
 
 
 def load_settings() -> Settings:
@@ -128,4 +146,6 @@ def load_settings() -> Settings:
         relevance_threshold=_read_fraction("RELEVANCE_THRESHOLD", defaults.relevance_threshold),
         llm_reasoning_effort=_read_text("LLM_REASONING_EFFORT", defaults.llm_reasoning_effort),
         llm_timeout_seconds=_read_int("LLM_TIMEOUT_SECONDS", defaults.llm_timeout_seconds, 1),
+        daily_request_limit=_read_int("DAILY_REQUEST_LIMIT", defaults.daily_request_limit, 1),
+        frontend_origins=_read_list("FRONTEND_ORIGINS", defaults.frontend_origins),
     )

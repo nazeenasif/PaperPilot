@@ -6,7 +6,8 @@
 
 import logging
 import time
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 
 from paperpilot import library, llm, prompts
 from paperpilot.config import load_settings
@@ -99,12 +100,25 @@ def ask(
     paper_ids: list[str] | None = None,
     k: int | None = None,
     history: list[Turn] | None = None,
+    on_event: Callable[[str, dict], None] | None = None,
 ) -> Answer:
     """Answer a question from the library with [n] citations to the returned passages.
+
+    `on_event(kind, detail)`, if given, is told the progress (spec FR-006): "rewriting",
+    "searching", "reading" ({passages, papers}), "generating", "retry_wait" ({attempt,
+    max_attempts, wait_seconds, reason}) and "checking". Events never carry answer text.
 
     Raises EmptyQueryError for an empty question, UnknownPaperError for an unknown paper filter,
     SettingsError for missing LLM settings and LLMError when the model fails.
     """
+
+    def emit(kind: str, detail: dict | None = None) -> None:
+        if on_event is not None:
+            on_event(kind, detail or {})
+
+    def on_retry(notice: llm.RetryNotice) -> None:
+        emit("retry_wait", asdict(notice))
+
     if not question or not question.strip():
         raise EmptyQueryError("The question is empty")
     question = question.strip()
@@ -146,8 +160,11 @@ def ask(
     if history:
         # Turn a follow-up into a standalone question; fall back to the original (FR-010–FR-012).
         start = time.perf_counter()
+        emit("rewriting")
         try:
-            rewrite = llm.generate(prompts.REWRITE_INSTRUCTION, prompts.build_rewrite_prompt(history, question))
+            rewrite = llm.generate(
+                prompts.REWRITE_INSTRUCTION, prompts.build_rewrite_prompt(history, question), on_retry=on_retry
+            )
         except LLMError as error:
             logger.info("Rewrite failed, using the original question: %s", error)
             rewrite_fallback_reason = "rewrite_failed"
@@ -162,6 +179,7 @@ def ask(
         timings["rewrite"] = time.perf_counter() - start
 
     start = time.perf_counter()
+    emit("searching")
     results = library.search(standalone, k=k, paper_ids=paper_ids)
     timings["retrieve"] = time.perf_counter() - start
     passages: list[NumberedPassage] = []
@@ -172,13 +190,18 @@ def ask(
     if max(r.score for r in results) < settings.relevance_threshold:
         return finish(prompts.NOT_FOUND, NO_CITATIONS, "below_threshold")
     passages = _number(results)
+    emit("reading", {"passages": len(passages), "papers": len({p.paper_id for p in passages})})
 
     start = time.perf_counter()
-    reply = llm.generate(prompts.SYSTEM_INSTRUCTION, prompts.build_answer_prompt(standalone, passages))
+    emit("generating")
+    reply = llm.generate(
+        prompts.SYSTEM_INSTRUCTION, prompts.build_answer_prompt(standalone, passages), on_retry=on_retry
+    )
     timings["generate"] = time.perf_counter() - start
     llm_calls += 1
     _add_tokens(tokens, reply)
 
+    emit("checking")
     text, citations, warning, rejected_answer, fallback_reason = review_reply(reply.text, len(passages))
     if rejected_answer is not None:
         logger.warning("%s", warning)

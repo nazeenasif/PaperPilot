@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Header } from "@/components/app/Header";
 import { StatusGate, StatusProvider } from "@/components/app/StatusGate";
 import { UsageProvider } from "@/components/app/UsageMeter";
+import { ComparisonProvider } from "@/components/compare/ComparisonProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
@@ -27,7 +28,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <StatusProvider>
             <UsageProvider>
               <Header />
-              <StatusGate>{children}</StatusGate>
+              {/* Above the pages, so a comparison keeps running and stays shown across navigation. */}
+              <ComparisonProvider>
+                <StatusGate>{children}</StatusGate>
+              </ComparisonProvider>
             </UsageProvider>
           </StatusProvider>
         </TooltipProvider>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
+  <!-- The header mark: lucide's Navigation2 arrow turned 45°, teal on ink, in a teal ring. -->
+  <circle cx="12" cy="12" r="11" fill="#07090d" stroke="#5eead4" stroke-width="1.4"/>
+  <polygon points="12 2 19 21 12 17 5 21 12 2" fill="#5eead4" stroke="#5eead4" stroke-width="1.5"
+           stroke-linejoin="round" transform="translate(12 12) rotate(45) scale(0.5) translate(-12 -11.5)"/>
+</svg>

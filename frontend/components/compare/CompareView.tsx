@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useUsage } from "@/components/app/UsageMeter";
-import { ASPECTS, CompareForm, selectionProblem } from "@/components/compare/CompareForm";
+import { ComparisonProvider, useComparisonSession } from "@/components/compare/ComparisonProvider";
+import { ASPECTS, CompareForm } from "@/components/compare/CompareForm";
 import { CompareTable } from "@/components/compare/CompareTable";
 import { SourceViewer } from "@/components/source/SourceViewer";
 import { DailyLimit } from "@/components/states/DailyLimit";
@@ -13,7 +14,6 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { apiGet } from "@/lib/api";
 import { timeAgo } from "@/lib/time";
 import type { ComparisonAspect, NumberedPassage, PaperCard, StaleReason } from "@/lib/types";
-import { useComparison } from "@/lib/useComparison";
 
 const STALE: Record<StaleReason, string> = {
   model_changed: "Generated with an earlier model — regenerate for a current comparison.",
@@ -22,16 +22,27 @@ const STALE: Record<StaleReason, string> = {
 };
 
 /** The Compare screen: choose 2-4 papers and the aspects, see the cost, run, and read a table whose
- *  cell citations open the source viewer (User Story 3). */
+ *  cell citations open the source viewer (User Story 3). The papers, aspects and comparison live in
+ *  the layout's ComparisonProvider, so they survive visiting another page; outside one (e.g. a
+ *  test), the screen brings its own. */
 export function CompareView() {
+  const session = useComparisonSession();
+  if (!session) {
+    return (
+      <ComparisonProvider>
+        <CompareScreen />
+      </ComparisonProvider>
+    );
+  }
+  return <CompareScreen />;
+}
+
+function CompareScreen() {
   const usage = useUsage();
+  const { selected, setSelected, aspects, setAspects, compare } = useComparisonSession()!;
   const [library, setLibrary] = useState<PaperCard[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [aspects, setAspects] = useState<ComparisonAspect[]>(ASPECTS.map((a) => a.key));
   const [open, setOpen] = useState<NumberedPassage | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const valid = selectionProblem(selected.length, aspects.length) === null;
-  const compare = useComparison(selected, aspects, valid, () => void usage?.refresh());
 
   useEffect(() => {
     let cancelled = false;

@@ -66,6 +66,11 @@ test("US2 viewer", async ({ page }) => {
   const viewer = page.getByRole("dialog");
   await expect(viewer.getByText(/Our Method · page 1 of 1/)).toBeVisible();
   await expect(viewer.locator(".react-pdf__Page canvas")).toBeVisible({ timeout: 15_000 });
+  // The whole page fits inside the panel: neither side is cut off.
+  const panelBox = await viewer.boundingBox();
+  const canvasBox = await viewer.locator(".react-pdf__Page canvas").boundingBox();
+  expect(canvasBox!.x).toBeGreaterThanOrEqual(panelBox!.x);
+  expect(canvasBox!.x + canvasBox!.width).toBeLessThanOrEqual(panelBox!.x + panelBox!.width);
   const highlight = viewer.getByRole("img", { name: /highlighted passage/i });
   await expect(highlight).toBeVisible();
   await expect(highlight.locator("[data-region]")).toHaveCount(2);
@@ -738,4 +743,72 @@ test("F4 polish: keyboard only, a summary, a citation and a comparison", async (
   await tabTo(page, compare);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("table").getByText(/RAG retrieves passages/)).toBeVisible();
+});
+
+test("the browser tab shows PaperPilot's icon", async ({ page, request }) => {
+  await fakeBackend(page);
+  await page.goto("/");
+  const icon = page.locator('head link[rel="icon"][type="image/svg+xml"]');
+  await expect(icon).toHaveCount(1);
+  const response = await request.get((await icon.getAttribute("href"))!);
+  expect(response.status()).toBe(200);
+  expect(await response.text()).toContain("<svg");
+});
+
+test("a comparison keeps running and stays shown after visiting another page", async ({ page }) => {
+  test.setTimeout(60_000);
+  const cards = [
+    { ...LORA_CARD, paper_id: "bert", title: "BERT: Pre-training of Deep Bidirectional Transformers", arxiv_id: "1810.04805" },
+    { ...LORA_CARD, paper_id: "rag", title: "Retrieval-Augmented Generation for NLP Tasks", arxiv_id: "2005.11401" },
+  ];
+  const cells = ["method:bert", "method:rag"].map((name, i) =>
+    summaryPart(name, { text: `Claim about ${name} [${i + 1}].`, passages: [i + 1],
+                        citations: { valid: [i + 1], invalid: [], uncited_sentences: [] } }));
+  const finished = {
+    paper_ids: ["bert", "rag"],
+    papers: cards.map((card, i) => ({ paper_id: card.paper_id, title: card.title, arxiv_id: card.arxiv_id, label: `P${i + 1}` })),
+    aspects: ["method"],
+    rows: [{ aspect: "method", state: "ok", reason: null, cells, until: null, tokens: {} }],
+    passages: [1, 2].map((number) => ({ number, passage_id: `p-${number}`, paper_id: number === 1 ? "bert" : "rag",
+                                         title: cards[number - 1]!.title, section: "Methods", page: 1, score: 0.7, text: "Passage text." })),
+    plan: { max_requests: 1, parts: ["method"] }, requests: { planned: 1, retries: 0 }, model: "nvidia/x:free",
+    prompt_version: 8, created_at: new Date().toISOString(), status: "current", stale_reason: null, pending: null,
+    verified_cells: 2, total_cells: 2,
+  };
+  await streamPostInPage(page, "/api/comparisons", [
+    { afterMs: 50, event: "plan", data: finished.plan },
+    { afterMs: 50, event: "progress", data: { part: "method", step: "generating" } },
+    { afterMs: 6000, event: "part", data: cells[0] },
+    { afterMs: 50, event: "part", data: cells[1] },
+    { afterMs: 50, event: "comparison", data: finished },
+  ]);
+  await fakeBackend(page, {
+    routes: {
+      "/api/papers": async (route: import("@playwright/test").Route) =>
+        route.fulfill({ status: 200, headers: CORS, json: { papers: cards, total_passages: 80 } }),
+      "/api/comparisons": async (route: import("@playwright/test").Route) =>
+        route.fulfill({ status: 404, headers: CORS, json: { kind: "not_saved", plan: { max_requests: 1 } } }),
+    },
+  });
+
+  await page.goto("/library"); // compiled by the dev server now, so the visit below is quick
+  await expect(page).toHaveURL(/\/library$/, { timeout: 15_000 });
+  await page.goto("/compare");
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: cards[0]!.title }, { timeout: 30_000 });
+  await page.getByRole("combobox", { name: "Add paper" }).selectOption({ label: cards[1]!.title });
+  for (const name of ["Problem", "Datasets", "Results", "Limitations"]) await page.getByRole("checkbox", { name }).uncheck();
+  await page.getByRole("button", { name: "Compare papers" }).click();
+  await expect(page.getByText("Writing method").first()).toBeVisible();
+
+  // Leave while it runs, then come back through the header.
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Library" }).click();
+  await expect(page).toHaveURL(/\/library$/, { timeout: 15_000 });
+  await expect(page.getByText("Writing method")).toHaveCount(0); // really on another page, mid-run
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Compare" }).click();
+  await expect(page).toHaveURL(/\/compare$/, { timeout: 15_000 });
+
+  await expect(page.getByRole("button", { name: `Remove ${cards[0]!.title}` })).toBeVisible();
+  await expect(page.getByText(/2 of 2 cells verified/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Claim about method:rag", { exact: false })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __posts?: Record<string, number> }).__posts?.["/api/comparisons"])).toBe(1);
 });

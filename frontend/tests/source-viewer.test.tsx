@@ -208,3 +208,33 @@ describe("opening the viewer from the Ask screen", () => {
     await waitFor(() => expect(chip).toHaveFocus());
   });
 });
+
+describe("SourceViewer fits the PDF page to the side panel", () => {
+  it("widens the panel itself, overriding the sheet's narrow default", async () => {
+    mockPassage(view());
+    render(<SourceViewer citation={CITED} onClose={vi.fn()} />);
+    const panel = await screen.findByRole("dialog");
+    expect(panel.className).toContain("data-[side=right]:sm:max-w-xl");
+    expect(panel.className).not.toContain("data-[side=right]:sm:max-w-sm");
+    expect(panel.className).not.toContain("data-[side=right]:w-3/4");
+  });
+
+  it("draws the page at the width the panel has, and scales the highlight with it", async () => {
+    mockPassage(view());
+    class FakeResizeObserver {
+      constructor(private callback: ResizeObserverCallback) {}
+      observe() {
+        this.callback([{ contentRect: { width: 300 } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    render(<SourceViewer citation={CITED} onClose={vi.fn()} />);
+    const page = await screen.findByTestId("pdf-page");
+    await waitFor(() => expect(page.style.width).toBe("300px"));
+    const box = screen.getByRole("img", { name: /highlighted passage/i }).querySelector("[data-region]") as HTMLElement;
+    expect(parseFloat(box.style.left)).toBeCloseTo((100 * 300) / 612, 3);
+    vi.unstubAllGlobals();
+  });
+});

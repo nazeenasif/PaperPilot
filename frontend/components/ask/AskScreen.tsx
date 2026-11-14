@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { useStatus } from "@/components/app/StatusGate";
 import { useUsage } from "@/components/app/UsageMeter";
+import { AskWelcome } from "@/components/ask/AskWelcome";
 import { COMPOSER_ID, Composer } from "@/components/ask/Composer";
 import { Conversation } from "@/components/ask/Conversation";
 import { ScopePanel } from "@/components/library/ScopePanel";
@@ -26,12 +27,14 @@ export function AskScreen() {
   });
   const [openPassage, setOpenPassage] = useState<NumberedPassage | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [prefill, setPrefill] = useState<{ text: string; key: number } | undefined>(undefined);
   const connection = useStatus();
   const status = connection.kind === "status" ? connection.status : null;
   const rephrase = () => document.getElementById(COMPOSER_ID)?.focus();
   const askInScope = (question: string) => void ask(question, { paperIds: scope.paperIds });
   const noPapers = scope.papers !== null && scope.papers.length === 0;
   const scopeLabel = scope.papers ? `${scope.selected.length} of ${scope.papers.length}` : null;
+  const selectedPapers = scope.papers ? scope.papers.filter((p) => scope.selected.includes(p.paper_id)) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl gap-8 px-4 sm:px-6">
@@ -63,6 +66,13 @@ export function AskScreen() {
             </button>
           )}
         </div>
+        {turns.length === 0 && (
+          <AskWelcome
+            papers={selectedPapers}
+            libraryEmpty={noPapers}
+            onPick={(text) => setPrefill((previous) => ({ text, key: (previous?.key ?? 0) + 1 }))}
+          />
+        )}
         <Conversation
           turns={turns}
           canSearchAll={!scope.isAll}
@@ -77,7 +87,12 @@ export function AskScreen() {
           onOpenPassage={setOpenPassage}
         />
         <div className="sticky bottom-0 mt-8 bg-background pt-2">
-          <Composer busy={busy} blocked={noPapers ? "Add a paper in the Library first." : undefined} onAsk={askInScope} />
+          <Composer
+            busy={busy}
+            blocked={noPapers ? "Add a paper in the Library first." : undefined}
+            prefill={prefill}
+            onAsk={askInScope}
+          />
           <p className="mt-2 text-sm text-muted-foreground">
             Every answer cites the passage it came from. Click a number to see it in the paper.
           </p>

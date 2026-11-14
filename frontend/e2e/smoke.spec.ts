@@ -812,3 +812,74 @@ test("a comparison keeps running and stays shown after visiting another page", a
   await expect(page.getByText("Claim about method:rag", { exact: false })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __posts?: Record<string, number> }).__posts?.["/api/comparisons"])).toBe(1);
 });
+
+/** How many POSTs the page sent to a path (counted by streamPostInPage). */
+async function postsTo(page: Page, path: string): Promise<number | undefined> {
+  return page.evaluate((p) => (window as unknown as { __posts?: Record<string, number> }).__posts?.[p], path);
+}
+
+async function goByHeader(page: Page, name: string, url: RegExp) {
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name }).click();
+  await expect(page).toHaveURL(url, { timeout: 15_000 });
+}
+
+test("an answer keeps coming and the conversation stays after visiting another page", async ({ page }) => {
+  test.setTimeout(60_000);
+  await streamAskInPage(page, [
+    { afterMs: 50, event: "progress", data: { step: "searching" } },
+    { afterMs: 6000, event: "answer", data: ANSWER },
+  ]);
+  const library = fakeLibrary();
+  await fakeBackend(page, { routes: library.routes });
+  await page.goto("/library"); // compiled by the dev server now, so the visits below are quick
+  await page.goto("/");
+  await page.getByRole("textbox", { name: /ask about your papers/i }).fill("What is LoRA?");
+  await page.getByRole("textbox", { name: /ask about your papers/i }).press("Enter");
+
+  await goByHeader(page, "Library", /\/library$/);
+  await goByHeader(page, "Ask", /\/$/);
+  await expect(page.getByText("What is LoRA?", { exact: true })).toBeVisible();
+  await expect(page.getByText(/LoRA is an efficient adaptation strategy/)).toBeVisible({ timeout: 15_000 });
+  expect(await postsTo(page, "/api/ask")).toBe(1);
+});
+
+test("a summary keeps running and stays shown after visiting another page", async ({ page }) => {
+  test.setTimeout(60_000);
+  // Hold the method part back long enough to leave and come back mid-run.
+  const steps = SUMMARY_STEPS.map((step) =>
+    step.event === "part" && (step.data as { part?: string }).part === "method" ? { ...step, afterMs: 6000 } : step);
+  await streamPostInPage(page, "/api/summaries/lora", steps);
+  await fakeBackend(page, { routes: summaryRoutes(false) });
+  await page.goto("/library");
+  await page.goto("/summarize/lora");
+  await page.getByRole("button", { name: "Summarize this paper" }).click({ timeout: 30_000 });
+  await expect(page.getByText("Writing method")).toBeVisible();
+
+  await goByHeader(page, "Library", /\/library$/);
+  await expect(page.getByText("Writing method")).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/summarize\/lora$/, { timeout: 15_000 });
+  await expect(page.getByText(/LoRA freezes the pretrained model/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("All citations verified")).toBeVisible();
+  expect(await postsTo(page, "/api/summaries/lora")).toBe(1);
+});
+
+test("an upload keeps going and is shown after visiting another page", async ({ page }) => {
+  test.setTimeout(60_000);
+  const library = fakeLibrary();
+  await fakeBackend(page, { routes: library.routes });
+  await page.goto("/");
+  await page.goto("/library");
+  await dropFiles(page.getByRole("region", { name: /add papers/i }), [
+    { name: "new-paper.pdf", buffer: makePdf(["A Small Study of Grounded Answers"]) },
+  ]);
+  await expect(page.getByRole("list", { name: "Uploads" }).getByText("new-paper.pdf")).toBeVisible();
+
+  await goByHeader(page, "Ask", /\/$/);
+  await goByHeader(page, "Library", /\/library$/);
+  const uploads = page.getByRole("list", { name: "Uploads" });
+  await expect(uploads.getByText("new-paper.pdf")).toBeVisible();
+  await expect(uploads.getByText("Added to your library")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("3 papers, 78 searchable passages");
+  expect(library.uploads).toEqual([["new-paper.pdf"]]);
+});

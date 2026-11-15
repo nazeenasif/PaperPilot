@@ -4,7 +4,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
 import { useStatus } from "@/components/app/StatusGate";
-import { useUsage } from "@/components/app/UsageMeter";
+import { AskProvider, useAskSession } from "@/components/ask/AskProvider";
 import { AskWelcome } from "@/components/ask/AskWelcome";
 import { COMPOSER_ID, Composer } from "@/components/ask/Composer";
 import { Conversation } from "@/components/ask/Conversation";
@@ -12,19 +12,26 @@ import { ScopePanel } from "@/components/library/ScopePanel";
 import { SourceViewer } from "@/components/source/SourceViewer";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { NumberedPassage } from "@/lib/types";
-import { useAsk } from "@/lib/useAsk";
 import { useScope } from "@/lib/useScope";
 
 /** The Ask screen: the paper scope, the conversation, the composer and the source viewer
- *  opened from citation chips (User Stories 1, 2 and 4). */
+ *  opened from citation chips (User Stories 1, 2 and 4). The conversation and the unsent question
+ *  live in the layout's AskProvider, so they survive visiting another page; outside one (e.g. a
+ *  test), the screen brings its own. */
 export function AskScreen() {
-  const usage = useUsage();
+  if (!useAskSession()) {
+    return (
+      <AskProvider>
+        <AskScreenContent />
+      </AskProvider>
+    );
+  }
+  return <AskScreenContent />;
+}
+
+function AskScreenContent() {
   const scope = useScope();
-  const { turns, busy, ask, reset } = useAsk({
-    // The meter follows each answer's figure; after a failure it asks the server (FR-024).
-    onAnswer: (answer) => answer.usage && usage?.report(answer.usage),
-    onFailure: () => void usage?.refresh(),
-  });
+  const { turns, busy, ask, reset, draft, setDraft } = useAskSession()!;
   const [openPassage, setOpenPassage] = useState<NumberedPassage | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [prefill, setPrefill] = useState<{ text: string; key: number } | undefined>(undefined);
@@ -91,6 +98,8 @@ export function AskScreen() {
             busy={busy}
             blocked={noPapers ? "Add a paper in the Library first." : undefined}
             prefill={prefill}
+            value={draft}
+            onValueChange={setDraft}
             onAsk={askInScope}
           />
           <p className="mt-2 text-sm text-muted-foreground">

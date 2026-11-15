@@ -8,25 +8,35 @@ export const COMPOSER_ID = "ask-composer";
 
 /** The question box: Enter sends, Shift+Enter adds a line; disabled while answering (FR-010).
  *  `blocked` disables sending and says why (e.g. no paper to search). `prefill` puts a question in
- *  the box (a new `key` each time) and focuses it, without sending. */
+ *  the box (a new `key` each time) and focuses it, without sending. With `value` and
+ *  `onValueChange` the typed text is kept by the caller (e.g. across page visits). */
 export function Composer({
   busy,
   blocked,
   prefill,
+  value,
+  onValueChange,
   onAsk,
 }: {
   busy: boolean;
   blocked?: string;
   prefill?: { text: string; key: number };
+  value?: string;
+  onValueChange?: (text: string) => void;
   onAsk: (question: string) => void;
 }) {
-  const [text, setText] = useState("");
+  const [ownText, setOwnText] = useState("");
+  const text = value ?? ownText;
+  const setText = useRef(onValueChange ?? setOwnText);
+  useEffect(() => {
+    setText.current = onValueChange ?? setOwnText;
+  });
   const [hint, setHint] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!prefill) return;
-    setText(prefill.text);
+    setText.current(prefill.text);
     setHint(null);
     const element = box.current;
     if (element) {
@@ -44,7 +54,7 @@ export function Composer({
       return;
     }
     setHint(null);
-    setText("");
+    setText.current("");
     onAsk(question);
   }
 
@@ -68,7 +78,7 @@ export function Composer({
           value={text}
           disabled={busy}
           onChange={(event) => {
-            setText(event.target.value);
+            setText.current(event.target.value);
             if (hint) setHint(null);
           }}
           onKeyDown={onKeyDown}

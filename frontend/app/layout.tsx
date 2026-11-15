@@ -5,7 +5,9 @@ import type { ReactNode } from "react";
 import { Header } from "@/components/app/Header";
 import { StatusGate, StatusProvider } from "@/components/app/StatusGate";
 import { UsageProvider } from "@/components/app/UsageMeter";
+import { AskProvider } from "@/components/ask/AskProvider";
 import { ComparisonProvider } from "@/components/compare/ComparisonProvider";
+import { SummaryProvider } from "@/components/summary/SummaryProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
@@ -28,10 +30,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <StatusProvider>
             <UsageProvider>
               <Header />
-              {/* Above the pages, so a comparison keeps running and stays shown across navigation. */}
-              <ComparisonProvider>
-                <StatusGate>{children}</StatusGate>
-              </ComparisonProvider>
+              {/* Above the pages, so a conversation, summary or comparison keeps running and stays
+                  shown across navigation. */}
+              <AskProvider>
+                <SummaryProvider>
+                  <ComparisonProvider>
+                    <StatusGate>{children}</StatusGate>
+                  </ComparisonProvider>
+                </SummaryProvider>
+              </AskProvider>
             </UsageProvider>
           </StatusProvider>
         </TooltipProvider>
